@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Macro & Workout Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.292.0/dist/umd/lucide-react.js"></script>
+
+    <style>
+        @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastSlide { from { transform: translateX(-50%) translateY(100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
+        @keyframes flashRed { 0%, 100% { background-color: #fee2e2; color: #ef4444; } 50% { background-color: #ef4444; color: white; } }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; transition: 0.2s; }
+        input[type="time"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        body { -webkit-tap-highlight-color: transparent; }
+        .timer-done { animation: flashRed 1s infinite; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-emerald-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        try {
+            {/* Khởi tạo thư viện Icon */}
+            let IconLib = window.lucideReact;
+            
+            if (!IconLib) {
+                const E = (char) => ({ size, className }) => <span className={className} style={{ fontSize: size ? size * 0.8 : 'inherit', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{char}</span>;
+                IconLib = {
+                    Calendar: E("📅"), Plus: E("➕"), Trash2: E("🗑️"), Camera: E("📷"), Sparkles: E("✨"),
+                    Wheat: E("🌾"), Beef: E("🥩"), Pencil: E("✏️"), Sunrise: E("🌅"), Sunset: E("🌇"),
+                    Coffee: E("☕"), Dumbbell: E("🏋️"), X: E("❌"), ChevronLeft: E("◀️"), ChevronRight: E("▶️"),
+                    Utensils: E("🍽️"), Moon: E("🌙"), Flame: E("🔥"), Droplet: E("💧"), Sun: E("☀️"),
+                    Clock: E("🕒"), CheckCircle: E("✅"), Loader: E("⏳"), Activity: E("📈"), Image: E("🖼️"),
+                    Cloud: E("☁️"), Download: E("⬇️"), Upload: E("⬆️"), Skull: E("💀"), Bomb: E("💣"), Heart: E("💚"), AlertTriangle: E("❗"), XCircle: E("❌"),
+                    Timer: E("⏱️")
+                };
+            }
+
+            const {
+                Calendar: CalendarIcon, Plus: PlusIcon, Trash2: Trash2Icon, Camera: CameraIcon, Sparkles: SparklesIcon,
+                Wheat: WheatIcon, Beef: BeefIcon, Pencil: PencilIcon,
+                Sunrise: SunriseIcon, Sunset: SunsetIcon, Coffee: CoffeeIcon,
+                Dumbbell: DumbbellIcon, X: XIcon, ChevronLeft: ChevronLeftIcon, ChevronRight: ChevronRightIcon,
+                Utensils: UtensilsIcon, Moon: MoonIcon, Flame: FlameIcon, Droplet: DropletIcon, Sun: SunIcon,
+                Clock: ClockIcon, CheckCircle: CheckCircleIcon, Loader: LoaderIcon, Activity: ActivityIcon, Image: ImageIcon,
+                Cloud: CloudIcon, Download: DownloadIcon, Upload: UploadIcon, Skull: SkullIcon, Bomb: BombIcon, Heart: HeartIcon, AlertTriangle: AlertIcon, XCircle: XCircleIcon,
+                Timer: TimerIcon
+            } = IconLib;
+
+            const { useState, useEffect, useRef } = React;
+            
+            {/* Khởi tạo Helper Logic Ngày tháng và Màu sắc */}
+            const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+            
+            const formatDate = (date) => {
+                const d = String(date.getDate()).padStart(2, '0');
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                return `${d}/${m}/${date.getFullYear()}`;
+            };
+            const getStartOfWeek = (date) => {
+                const d = new Date(date);
+                const day = d.getDay();
+                const diff = d.getDate() - day + (day === 0 ? -6 : 1); 
+                return new Date(d.setDate(diff));
+            };
+            const getStartOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+            const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+
+            const getMacroStatus = (kcal, pro) => {
+                if (!kcal && !pro) return null;
+                let pScore = pro >= 115 ? 3 : (pro >= 90 ? 2 : 1);
+                let cScore = kcal <= 2100 ? 3 : (kcal <= 2500 ? 2 : 1);
+                let total = pScore + cScore;
+                
+                if (total === 6) return { bg: 'bg-emerald-500', border: 'border-emerald-600', text: 'text-white', dot: 'bg-emerald-500' };
+                if (total >= 4) return { bg: 'bg-yellow-400', border: 'border-yellow-500', text: 'text-slate-800', dot: 'bg-yellow-400' };
+                if (total === 3) return { bg: 'bg-red-500', border: 'border-red-600', text: 'text-white', dot: 'bg-red-500' };
+                return { bg: 'bg-slate-800', border: 'border-slate-900', text: 'text-white', dot: 'bg-slate-800' };
+            };
+
+            const getSleepStatus = (mins) => {
+                if (!mins || mins === 0) return null;
+                if (mins >= 450) return { bg: 'bg-emerald-500', border: 'border-emerald-600', text: 'text-white', dot: 'bg-emerald-500' };
+                if (mins >= 360) return { bg: 'bg-yellow-400', border: 'border-yellow-500', text: 'text-slate-800', dot: 'bg-yellow-400' };
+                return { bg: 'bg-red-500', border: 'border-red-600', text: 'text-white', dot: 'bg-red-500' };
+            };
+
+            const getWorkoutColor = (type) => {
+                switch(type) {
+                    case 'Upper': return { text: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-500', icon: 'text-orange-500', fill: 'bg-orange-500', textLight: 'text-white' };
+                    case 'Lower': return { text: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-500', icon: 'text-yellow-500', fill: 'bg-yellow-400', textLight: 'text-slate-800' };
+                    case 'Push': return { text: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-500', icon: 'text-emerald-500', fill: 'bg-emerald-500', textLight: 'text-white' };
+                    case 'Pull': return { text: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-500', icon: 'text-blue-500', fill: 'bg-blue-500', textLight: 'text-white' };
+                    case 'Leg': return { text: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-500', icon: 'text-purple-500', fill: 'bg-purple-500', textLight: 'text-white' };
+                    default: return { text: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-500', icon: 'text-slate-500', fill: 'bg-slate-500', textLight: 'text-white' };
+                }
+            };
+
+            // Khởi tạo Logic Phân tích Nhịp Sinh Học
+            const getCircadianWarning = (sleeps) => {
+                if (!sleeps || sleeps.length === 0) return null;
+                const mainSleep = sleeps[sleeps.length - 1];
+                if (!mainSleep.sleepTime || !mainSleep.wakeTime) return null;
+
+                const [sH, sM] = mainSleep.sleepTime.split(':').map(Number);
+                const [wH, wM] = mainSleep.wakeTime.split(':').map(Number);
+
+                let isLateSleep = false;
+                if (sH >= 0 && sH <= 5) {
+                    if (sH === 0 && sM === 0) isLateSleep = false; 
+                    else isLateSleep = true;
+                }
+                const isLateWake = (wH > 7) || (wH === 7 && wM > 0);
+
+                if (isLateSleep && isLateWake) return 'bomb';
+                if (isLateSleep) return 'late_sleep';
+                if (isLateWake) return 'late_wake';
+                return 'heart';
+            };
+
+            const renderCircadianIcon = (type, size = 14) => {
+                const baseClass = "bg-white backdrop-blur-sm rounded-full p-0.5 shadow-sm inline-flex items-center justify-center border border-slate-200 z-20";
+                if (type === 'bomb') return <div className={baseClass}><BombIcon size={size} className="text-slate-800" /></div>;
+                if (type === 'late_sleep') return <div className={baseClass}><AlertIcon size={size} className="text-red-500" /></div>;
+                if (type === 'late_wake') return <div className={baseClass}><XCircleIcon size={size} className="text-red-500" /></div>;
+                if (type === 'heart') return <div className={baseClass}><HeartIcon size={size} className="text-emerald-500" /></div>;
+                return null;
+            };
+
+            // Khởi tạo Component App Chính
+            const App = () => {
+                const [appMode, setAppMode] = useState('macro'); 
+                const [currentView, setCurrentView] = useState('day'); 
+                const [selectedDate, setSelectedDate] = useState(new Date());
+                const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
+                const [currentMonthStart, setCurrentMonthStart] = useState(getStartOfMonth(new Date()));
+                
+                const loadSafeJSON = (key) => {
+                    try { 
+                        const item = localStorage.getItem(key); 
+                        let obj = item && item !== "undefined" && item !== "null" ? JSON.parse(item) : {}; 
+                        const newObj = {};
+                        for(let k in obj) {
+                            const parts = k.split('/');
+                            if(parts.length === 3) {
+                                const newK = `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+                                newObj[newK] = obj[k];
+                            } else { newObj[k] = obj[k]; }
+                        }
+                        return newObj;
+                    } catch (e) { return {}; }
+                };
+
+                const [foodsByDate, setFoodsByDate] = useState(() => loadSafeJSON('macro_foods'));
+                const [sleepByDate, setSleepByDate] = useState(() => loadSafeJSON('macro_sleeps'));
+                const [workoutsByDate, setWorkoutsByDate] = useState(() => loadSafeJSON('macro_workouts'));
+
+                useEffect(() => { localStorage.setItem('macro_foods', JSON.stringify(foodsByDate)); }, [foodsByDate]);
+                useEffect(() => { localStorage.setItem('macro_sleeps', JSON.stringify(sleepByDate)); }, [sleepByDate]);
+                useEffect(() => { localStorage.setItem('macro_workouts', JSON.stringify(workoutsByDate)); }, [workoutsByDate]);
+
+                const [toast, setToast] = useState(null);
+                const showToast = (msg, type = 'success') => {
+                    setToast({ msg, type });
+                    setTimeout(() => setToast(null), 5000);
+                };
+
+                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbz9yBoYEskm3tju3V6dN_-e3rowjv9TE4Sjw_iflWqe5snheQxXqpRVcdU8knRalust/exec';
+                const [showSettings, setShowSettings] = useState(false);
+                const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_url') || defaultScriptUrl);
+                const [isSyncing, setIsSyncing] = useState(false);
+                useEffect(() => { localStorage.setItem('gas_url', gasUrl); }, [gasUrl]);
+
+                // State form Nhập Dinh dưỡng & AI
+                const [isAddingFood, setIsAddingFood] = useState(false);
+                const [addingMeal, setAddingMeal] = useState('Sáng');
+                const [entryMode, setEntryMode] = useState('quick'); 
+                const [formData, setFormData] = useState({ name: '', kcal: '', carbs: '', fat: '', protein: '' });
+                const [editingFoodId, setEditingFoodId] = useState(null);
+                const [editFoodName, setEditFoodName] = useState('');
+                
+                // State AI Scanner
+                const [imagePreview, setImagePreview] = useState(null);
+                const [imageBase64, setImageBase64] = useState(null);
+                const [foodDescription, setFoodDescription] = useState('');
+                const [isScanning, setIsScanning] = useState(false);
+
+                // Dọn dẹp trạng thái AI khi đóng form
+                useEffect(() => {
+                    if (!isAddingFood) {
+                        setImagePreview(null);
+                        setImageBase64(null);
+                        setFoodDescription('');
+                    }
+                }, [isAddingFood]);
+
+                const [isAddingSleep, setIsAddingSleep] = useState(false);
+                const [sleepFormData, setSleepFormData] = useState({ sleepTime: '', wakeTime: '' });
+
+                const [isAddingWorkout, setIsAddingWorkout] = useState(false);
+                const [workoutAddStep, setWorkoutAddStep] = useState(1);
+                const [workoutType, setWorkoutType] = useState(''); 
+                const [workoutNote, setWorkoutNote] = useState('');
+                const [currentExercises, setCurrentExercises] = useState([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
+                const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+                const [timerSeconds, setTimerSeconds] = useState(null);
+                const timerRef = useRef(null);
+
+                const startRestTimer = (seconds) => {
+                    if (timerRef.current) clearInterval(timerRef.current);
+                    setTimerSeconds(seconds);
+                    timerRef.current = setInterval(() => {
+                        setTimerSeconds((prev) => {
+                            if (prev <= 1) {
+                                clearInterval(timerRef.current);
+                                if (navigator.vibrate) navigator.vibrate([300, 100, 300]); 
+                                return 0; 
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                };
+
+                const stopRestTimer = () => {
+                    if (timerRef.current) clearInterval(timerRef.current);
+                    setTimerSeconds(null);
+                };
+
+                useEffect(() => {
+                    if (!isAddingWorkout) { stopRestTimer(); }
+                }, [isAddingWorkout]);
+
+                const dateKey = formatDate(selectedDate);
+                const currentFoods = foodsByDate[dateKey] || [];
+                const currentSleeps = sleepByDate[dateKey] || [];
+                const currentWorkout = workoutsByDate[dateKey] || null;
+                const currentCircadian = getCircadianWarning(currentSleeps);
+
+                const calculateTotals = (foods) => {
+                    return foods.reduce((acc, food) => {
+                        acc.carbs += Number(food.carbs) || 0;
+                        acc.fat += Number(food.fat) || 0;
+                        acc.protein += Number(food.protein) || 0;
+                        if (food.kcal !== undefined) {
+                            acc.kcal += Number(food.kcal);
+                        } else {
+                            acc.kcal += (Number(food.carbs || 0) * 4) + (Number(food.protein || 0) * 4) + (Number(food.fat || 0) * 9);
+                        }
+                        return acc;
+                    }, { carbs: 0, fat: 0, protein: 0, kcal: 0 });
+                };
+                const currentTotals = calculateTotals(currentFoods);
+                const totalKcal = Math.round(currentTotals.kcal);
+
+                const calculateSleepDuration = (sleep, wake) => {
+                    if (!sleep || !wake) return 0;
+                    const [sH, sM] = sleep.split(':').map(Number);
+                    const [wH, wM] = wake.split(':').map(Number);
+                    let sTotal = sH * 60 + sM;
+                    let wTotal = wH * 60 + wM;
+                    if (wTotal < sTotal) wTotal += 24 * 60; 
+                    return wTotal - sTotal; 
+                };
+
+                const formatDuration = (minutes) => {
+                    if (!minutes) return '0h';
+                    const h = Math.floor(minutes / 60);
+                    const m = minutes % 60;
+                    return `${h}h${m > 0 ? ` ${m}m` : ''}`;
+                };
+                const currentTotalSleepMins = currentSleeps.reduce((acc, curr) => acc + curr.duration, 0);
+
+                const findPreviousExerciseHistory = (exerciseName, currentDateKey) => {
+                    if (!exerciseName.trim()) return null;
+                    const [cd, cm, cy] = currentDateKey.split('/').map(Number);
+                    const currentObjDate = new Date(cy, cm - 1, cd);
+
+                    const pastDates = Object.keys(workoutsByDate).filter(key => {
+                        const [d, m, y] = key.split('/').map(Number);
+                        return new Date(y, m - 1, d) < currentObjDate;
+                    }).sort((a, b) => {
+                        const [da, ma, ya] = a.split('/').map(Number);
+                        const [db, mb, yb] = b.split('/').map(Number);
+                        return new Date(yb, mb - 1, db) - new Date(ya, ma - 1, da); 
+                    });
+
+                    const histories = [];
+                    for (const date of pastDates) {
+                        const workout = workoutsByDate[date];
+                        if (workout && workout.exercises) {
+                            const prevEx = workout.exercises.find(ex => ex.name.toLowerCase().trim() === exerciseName.toLowerCase().trim());
+                            if (prevEx && (prevEx.rawText || (prevEx.sets && prevEx.sets.length > 0))) {
+                                const [d, m, y] = date.split('/');
+                                const dayName = VN_DAYS[new Date(y, m - 1, d).getDay()];
+                                histories.push({ dateStr: `${dayName}-${date}`, sets: prevEx.sets, rawText: prevEx.rawText });
+                                if (histories.length >= 2) break;
+                            }
+                        }
+                    }
+                    return histories.length > 0 ? histories : null;
+                };
+
+                // Logic AI Scanner Fetch Call
+                const handleImageUpload = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            setImagePreview(reader.result);
+                            setImageBase64(reader.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+
+                const handleScanFood = async () => {
+                    if (!imageBase64 && !foodDescription) {
+                        showToast('Vui lòng chọn ảnh hoặc nhập mô tả món ăn!', 'error');
+                        return;
+                    }
+                    setIsScanning(true);
+                    try {
+                        let parts = [];
+                        const promptText = `Phân tích món ăn sau và ước lượng calo, protein (g), carbs (g), fat (g). Dựa vào hình ảnh (nếu có) và mô tả: "${foodDescription || 'Không có mô tả thêm'}". BẮT BUỘC chỉ trả về 1 object JSON thuần túy (không markdown) với định dạng: {"name": "Tên món", "kcal": số, "protein": số, "carbs": số, "fat": số}`;
+                        parts.push({ text: promptText });
+
+                        if (imageBase64) {
+                            const base64Data = imageBase64.split(',')[1];
+                            const mimeType = imageBase64.match(/[^:]\w+\/[\w-+\d.]+(?=;|,)/)[0];
+                            parts.push({
+                                inlineData: { mimeType: mimeType, data: base64Data }
+                            });
+                        }
+
+                        const payload = {
+                            contents: [{ role: "user", parts: parts }],
+                            generationConfig: {
+                                responseMimeType: "application/json",
+                                responseSchema: {
+                                    type: "OBJECT",
+                                    properties: {
+                                        "name": { type: "STRING" }, "kcal": { type: "NUMBER" },
+                                        "protein": { type: "NUMBER" }, "carbs": { type: "NUMBER" }, "fat": { type: "NUMBER" }
+                                    },
+                                    required: ["name", "kcal", "protein", "carbs", "fat"]
+                                }
+                            }
+                        };
+
+                        // ĐÃ FIX: Chèn trực tiếp API Key và sửa model thành gemini-1.5-flash
+                        const apiKey = "AQ.Ab8RN6JMQLEX9Gd43dL5ETrGwkAumHKVS4OmYYNMNbJF9Y2yow"; 
+                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                        
+                        const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        
+                        // FIX: Thêm bắt lỗi chi tiết từ Google API
+                        if (!response.ok) {
+                            const errData = await response.json();
+                            throw new Error(errData.error?.message || `Lỗi kết nối API (${response.status})`);
+                        }
+
+                        const result = await response.json();
+                        
+                        if (result.candidates && result.candidates.length > 0) {
+                            const jsonText = result.candidates[0].content.parts[0].text;
+                            const data = JSON.parse(jsonText);
+                            
+                            setFormData({
+                                name: data.name || foodDescription || 'Món ăn quét từ AI',
+                                kcal: data.kcal || 0,
+                                protein: data.protein || 0,
+                                carbs: data.carbs || 0,
+                                fat: data.fat || 0
+                            });
+                            setEntryMode('detail');
+                            showToast('✨ Quét thành công! Hãy kiểm tra lại số liệu.', 'success');
+                        } else {
+                            throw new Error("Không nhận được kết quả từ AI");
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        showToast('❌ Lỗi AI: ' + error.message, 'error');
+                    }
+                    setIsScanning(false);
+                };
+
+                // Logic Đồng bộ Google Sheet (Push/Pull)
+                const handleSyncPush = async () => {
+                    if(!gasUrl) { showToast('Vui lòng nhập link Script!', 'error'); return; }
+                    setIsSyncing(true);
+                    try {
+                        const allDates = Array.from(new Set([...Object.keys(foodsByDate), ...Object.keys(sleepByDate)]));
+                        const syncDataPayload = allDates.map(dKey => {
+                            const fDay = foodsByDate[dKey] || [];
+                            const sDay = sleepByDate[dKey] || [];
+
+                            const formatMeal = (mealName) => {
+                                const mFoods = fDay.filter(f => f.meal === mealName);
+                                if (mFoods.length === 0) return 'X';
+                                return mFoods.map(f => {
+                                    const kcal = f.kcal !== undefined ? f.kcal : Math.round(f.carbs*4 + f.protein*4 + f.fat*9);
+                                    return `${f.name}: ${kcal} kcal + ${f.protein} g protein`;
+                                }).join('\n');
+                            };
+
+                            let sleepStr = '';
+                            if (sDay.length > 0) {
+                                const lastSleep = sDay[sDay.length - 1];
+                                sleepStr = `${lastSleep.sleepTime}-${lastSleep.wakeTime}`;
+                            }
+
+                            return { date: dKey, sang: formatMeal('Sáng'), trua: formatMeal('Trưa'), chieu: formatMeal('Chiều'), ngoai_le: formatMeal('Ngoài lề'), ngu: sleepStr };
+                        });
+
+                        const finalPayload = syncDataPayload.filter(item => item.sang !== 'X' || item.trua !== 'X' || item.chieu !== 'X' || item.ngoai_le !== 'X' || item.ngu !== '');
+
+                        // TỔNG HỢP TOÀN BỘ WORKOUTS VÀ ÉP FORM GHI CHÚ TẠ THÔNG MINH
+                        let formattedWorkouts = [];
+                        Object.keys(workoutsByDate).forEach(wDate => {
+                            const wOut = workoutsByDate[wDate];
+                            if (["Upper", "Lower", "Push", "Pull", "Leg"].includes(wOut.type)) {
+                                const formattedExercises = wOut.exercises.map(ex => {
+                                    const validSets = ex.sets.filter(s => s.weight.trim() !== '' || s.reps.trim() !== '');
+                                    if (validSets.length === 0) return { name: ex.name, sets: [] };
+
+                                    let allSame = true;
+                                    const firstWeight = validSets[0].weight.trim();
+                                    const firstUnit = validSets[0].unit.toUpperCase() === 'LBS' ? 'LBS' : 'kg';
+
+                                    for (let i = 1; i < validSets.length; i++) {
+                                        const w = validSets[i].weight.trim();
+                                        const u = validSets[i].unit.toUpperCase() === 'LBS' ? 'LBS' : 'kg';
+                                        if (w !== firstWeight || u !== firstUnit) {
+                                            allSame = false;
+                                            break;
+                                        }
+                                    }
+
+                                    if (allSame) {
+                                        // Giống nhau: Truyền y nguyên, Script sẽ nối dạng "130LBS 5+5+5"
+                                        const cleanSets = validSets.map(s => {
+                                            let cUnit = s.unit.toUpperCase() === 'LBS' ? 'LBS' : 'kg';
+                                            return { reps: s.reps, weight: s.weight, unit: cUnit };
+                                        });
+                                        return { name: ex.name, sets: cleanSets };
+                                    } else {
+                                        // Khác nhau: Ép thành 1 set duy nhất chứa chuỗi "5(50kg)+6(70kg)+8(135LBS)"
+                                        const mixedStrArray = validSets.map(s => {
+                                            const w = s.weight.trim();
+                                            const u = s.unit.toUpperCase() === 'LBS' ? 'LBS' : 'kg';
+                                            const r = s.reps.trim() || '0';
+                                            if (w === '') return r;
+                                            return `${r}(${w}${u})`;
+                                        });
+                                        return { name: ex.name, sets: [{ reps: mixedStrArray.join('+'), weight: '', unit: '' }] };
+                                    }
+                                });
+                                formattedWorkouts.push({ type: wOut.type, date: wDate, note: wOut.note, exercises: formattedExercises });
+                            }
+                        });
+                        
+                        formattedWorkouts.sort((a,b) => {
+                           const [da, ma, ya] = a.date.split('/').map(Number);
+                           const [db, mb, yb] = b.date.split('/').map(Number);
+                           return new Date(ya, ma-1, da) - new Date(yb, mb-1, db);
+                        });
+
+                        const response = await fetch(gasUrl, { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                            body: JSON.stringify({ data: finalPayload, workoutsData: formattedWorkouts }) 
+                        });
+                        const res = await response.json();
+                        
+                        if(res.status === 'success') {
+                            showToast(`✅ Đã Upload! Ăn/Ngủ: +${res.macroAdded} | ↺${res.macroUpdated}. Tập luyện: ↺${res.workoutProcessed}. (Bảo vệ ${res.blockedOldData} ngày cũ)`, 'success');
+                        } else {
+                            showToast('❌ Lỗi: ' + res.error, 'error');
+                        }
+                    } catch (e) { showToast('❌ Lỗi kết nối: ' + e.message, 'error'); }
+                    setIsSyncing(false);
+                };
+
+                const handleSyncPull = async () => {
+                    if(!gasUrl) { showToast('Vui lòng nhập link Script!', 'error'); return; }
+                    setIsSyncing(true);
+                    try {
+                        const response = await fetch(gasUrl);
+                        const data = await response.json();
+                        
+                        if (data.status === 'success' && data.data) {
+                            let newWorkouts = { ...workoutsByDate };
+                            
+                            if (data.data.workouts) {
+                                Object.keys(data.data.workouts).forEach(wType => {
+                                    const sheetData = data.data.workouts[wType];
+                                    if (!sheetData || sheetData.length < 2) return;
+                                    
+                                    let currentHeader = [];
+                                    
+                                    for (let i = 0; i < sheetData.length; i++) {
+                                        const row = sheetData[i];
+                                        if (!row[0]) continue;
+                                        
+                                        if (row[0].toLowerCase().trim() === 'date') {
+                                            currentHeader = row;
+                                            continue;
+                                        }
+                                        
+                                        if (currentHeader.length > 1) {
+                                            const wDateRaw = row[0];
+                                            const parts = String(wDateRaw).split('/');
+                                            if (parts.length !== 3) continue;
+                                            const wDateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+                                            
+                                            let exercises = [];
+                                            let noteStr = '';
+                                            
+                                            for (let col = 1; col < currentHeader.length; col++) {
+                                                const headerName = currentHeader[col].trim();
+                                                if (!headerName || headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') {
+                                                    if (headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') noteStr = row[col] || '';
+                                                    continue;
+                                                }
+                                                
+                                                const cellData = String(row[col] || '').trim();
+                                                
+                                                if (cellData && cellData.toUpperCase() !== 'X') {
+                                                    exercises.push({
+                                                        id: Date.now().toString() + col,
+                                                        name: headerName,
+                                                        rawText: cellData,
+                                                        sets: [{ reps: '', weight: '', unit: 'KG' }]
+                                                    });
+                                                } else {
+                                                    exercises.push({
+                                                        id: Date.now().toString() + col,
+                                                        name: headerName,
+                                                        sets: [{ reps: '', weight: '', unit: 'KG' }]
+                                                    });
+                                                }
+                                            }
+                                            
+                                            newWorkouts[wDateClean] = { type: wType, note: noteStr, exercises: exercises };
+                                        }
+                                    }
+                                });
+                            }
+                            setWorkoutsByDate(newWorkouts);
+
+                            if (data.data.dailyTracking) {
+                                let newFoods = { ...foodsByDate };
+                                let newSleeps = { ...sleepByDate };
+                                const dt = data.data.dailyTracking;
+                                
+                                const parseMealString = (mealName, mealString) => {
+                                    if (!mealString || mealString === 'X' || mealString.trim() === '') return [];
+                                    const items = mealString.split('\n');
+                                    let parsedItems = [];
+                                    items.forEach(item => {
+                                        if(item.trim() === '') return;
+                                        const match = item.match(/^(.*?):\s*(\d+(?:\.\d+)?)\s*kcal\s*\+\s*(\d+(?:\.\d+)?)\s*g/i);
+                                        if (match) {
+                                            parsedItems.push({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), name: match[1].trim(), meal: mealName, kcal: Number(match[2]), protein: Number(match[3]), carbs: 0, fat: 0 });
+                                        } else {
+                                            parsedItems.push({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), name: item.trim(), meal: mealName, kcal: 0, protein: 0, carbs: 0, fat: 0 });
+                                        }
+                                    });
+                                    return parsedItems;
+                                };
+
+                                const parseSleepString = (sleepString) => {
+                                    if (!sleepString || sleepString.trim() === '' || sleepString === 'X') return [];
+                                    const parts = sleepString.split('-');
+                                    if (parts.length === 2) {
+                                        const sleepTime = parts[0].trim();
+                                        const wakeTime = parts[1].trim();
+                                        return [{ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), sleepTime: sleepTime, wakeTime: wakeTime, duration: calculateSleepDuration(sleepTime, wakeTime) }];
+                                    }
+                                    return [];
+                                };
+
+                                for (let i = 0; i < dt.length; i++) {
+                                    const row = dt[i];
+                                    if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
+                                    
+                                    const rawDate = String(row[0]).trim();
+                                    const parts = rawDate.split('/');
+                                    if (parts.length !== 3) continue;
+                                    const dateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+
+                                    let dayFoods = [];
+                                    dayFoods = dayFoods.concat(parseMealString('Sáng', row[1]));
+                                    dayFoods = dayFoods.concat(parseMealString('Trưa', row[2]));
+                                    dayFoods = dayFoods.concat(parseMealString('Chiều', row[3]));
+                                    dayFoods = dayFoods.concat(parseMealString('Ngoài lề', row[4]));
+                                    if (dayFoods.length > 0) newFoods[dateClean] = dayFoods;
+
+                                    let daySleeps = parseSleepString(row[8]);
+                                    if (daySleeps.length > 0) newSleeps[dateClean] = daySleeps;
+                                }
+                                setFoodsByDate(newFoods);
+                                setSleepByDate(newSleeps);
+                            }
+
+                            showToast('☁️ Đã kéo toàn bộ dữ liệu từ Sheet về thành công!', 'success');
+                        } else {
+                            showToast('❌ Lỗi tải dữ liệu', 'error');
+                        }
+                    } catch (e) { showToast('❌ Lỗi kết nối: ' + e.message, 'error'); }
+                    setIsSyncing(false);
+                };
+
+                const handleAddFood = (e) => {
+                    e.preventDefault();
+                    if (!formData.name) return;
+                    if (entryMode === 'quick') {
+                        const k = Number(formData.kcal) || 0;
+                        const p = Number(formData.protein) || 0;
+                        if (k / 4 < p) { showToast('⚠️ Kcal chia 4 không thể nhỏ hơn lượng Protein!', 'error'); return; }
+                    }
+                    const newFood = { id: Date.now().toString(), name: formData.name, meal: addingMeal, protein: Number(formData.protein) || 0 };
+                    if (entryMode === 'quick') { newFood.kcal = Number(formData.kcal) || 0; newFood.carbs = 0; newFood.fat = 0; } 
+                    else { newFood.carbs = Number(formData.carbs) || 0; newFood.fat = Number(formData.fat) || 0; newFood.kcal = (newFood.carbs * 4) + (newFood.protein * 4) + (newFood.fat * 9); }
+                    setFoodsByDate(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), newFood] }));
+                    setFormData({ name: '', kcal: '', carbs: '', fat: '', protein: '' });
+                    setIsAddingFood(false);
+                };
+
+                const handleDeleteFood = (idToRemove) => setFoodsByDate(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(f => f.id !== idToRemove) }));
+                const handleStartEditFood = (food) => { setEditingFoodId(food.id); setEditFoodName(food.name); };
+                const handleSaveEditFood = (id) => {
+                    if (!editFoodName.trim()) { setEditingFoodId(null); return; }
+                    setFoodsByDate(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).map(f => f.id === id ? { ...f, name: editFoodName } : f) }));
+                    setEditingFoodId(null); setEditFoodName('');
+                };
+
+                const handleAddSleep = (e) => {
+                    e.preventDefault();
+                    if (!sleepFormData.sleepTime || !sleepFormData.wakeTime) return;
+                    const newSleep = { id: Date.now().toString(), sleepTime: sleepFormData.sleepTime, wakeTime: sleepFormData.wakeTime, duration: calculateSleepDuration(sleepFormData.sleepTime, sleepFormData.wakeTime) };
+                    setSleepByDate(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), newSleep] }));
+                    setSleepFormData({ sleepTime: '', wakeTime: '' }); setIsAddingSleep(false);
+                };
+                const handleDeleteSleep = (id) => setSleepByDate(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(s => s.id !== id) }));
+
+                const handleStartWorkout = (type) => { 
+                    setWorkoutType(type); 
+                    setWorkoutAddStep(2); 
+                    
+                    const pastDates = Object.keys(workoutsByDate).sort((a,b)=>{
+                        const [da, ma, ya] = a.split('/').map(Number);
+                        const [db, mb, yb] = b.split('/').map(Number);
+                        return new Date(yb, mb-1, db) - new Date(ya, ma-1, da);
+                    });
+                    
+                    let templateEx = [];
+                    for(let d of pastDates) {
+                        if(workoutsByDate[d].type === type) {
+                            templateEx = workoutsByDate[d].exercises.map((ex, idx) => ({
+                                id: Date.now().toString() + idx,
+                                name: ex.name,
+                                sets: [{ reps: '', weight: '', unit: 'KG' }]
+                            }));
+                            break;
+                        }
+                    }
+                    
+                    if (templateEx.length > 0) {
+                        setCurrentExercises(templateEx);
+                    } else {
+                        setCurrentExercises([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
+                    }
+                };
+
+                const handleSaveWorkout = () => {
+                    const validEx = currentExercises.filter(ex => ex.name.trim() !== '');
+                    if (validEx.length === 0) return;
+                    setWorkoutsByDate(prev => ({ ...prev, [dateKey]: { type: workoutType, note: workoutNote, exercises: validEx } }));
+                    handleCancelAddWorkout();
+                };
+                const handleCancelAddWorkout = () => { setIsAddingWorkout(false); setWorkoutAddStep(1); setWorkoutType(''); setWorkoutNote(''); setCurrentExercises([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]); stopRestTimer(); };
+                const handleDeleteWorkout = () => { setWorkoutsByDate(prev => { const n = {...prev}; delete n[dateKey]; return n; }); setShowDeleteConfirm(false); };
+                
+                const handleAddExerciseRow = () => setCurrentExercises(prev => [...prev, { id: Date.now().toString(), name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
+                const handleUpdateExerciseName = (id, name) => setCurrentExercises(prev => prev.map(ex => ex.id === id ? { ...ex, name } : ex));
+                const handleAddSet = (exId) => setCurrentExercises(prev => prev.map(ex => { if (exId === ex.id) { const ls = ex.sets[ex.sets.length - 1] || { reps: '', weight: '', unit: 'KG' }; return { ...ex, sets: [...ex.sets, { ...ls }] }; } return ex; }));
+                const handleUpdateSet = (exId, sIdx, field, val) => setCurrentExercises(prev => prev.map(ex => { if (ex.id === exId) { const ns = [...ex.sets]; ns[sIdx] = { ...ns[sIdx], [field]: val }; return { ...ex, sets: ns }; } return ex; }));
+                const handleToggleUnit = (exId, sIdx) => setCurrentExercises(prev => prev.map(ex => { if (ex.id === exId) { const ns = [...ex.sets]; ns[sIdx] = { ...ns[sIdx], unit: ns[sIdx].unit.toLowerCase() === 'kg' ? 'LBS' : 'KG' }; return { ...ex, sets: ns }; } return ex; }));
+                const handleRemoveSet = (exId, sIdx) => setCurrentExercises(prev => prev.map(ex => ex.id === exId ? { ...ex, sets: ex.sets.filter((_, i) => i !== sIdx) } : ex));
+
+                const changeDate = (o) => { const n = new Date(selectedDate); n.setDate(n.getDate() + o); setSelectedDate(n); };
+                const changeWeek = (o) => { const n = new Date(currentWeekStart); n.setDate(n.getDate() + (o * 7)); setCurrentWeekStart(n); };
+                const changeMonth = (o) => { const n = new Date(currentMonthStart); n.setMonth(n.getMonth() + o); setCurrentMonthStart(n); };
+
+                const weekDays = [...Array(7)].map((_, i) => { const d = new Date(currentWeekStart); d.setDate(d.getDate() + i); return d; });
+                const monthDays = [...Array(getDaysInMonth(currentMonthStart.getFullYear(), currentMonthStart.getMonth()))].map((_, i) => new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), i + 1));
+                const firstDayOfMonth = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 1).getDay();
+
+                {/* Tính toán thống kê Dashboard */}
+                let weekThieuDam = 0, weekCheatDay = 0, weekLateSleep = 0, weekLateWake = 0, weekWorkout = 0;
+                weekDays.forEach(day => {
+                    const dKey = formatDate(day);
+                    const fDay = foodsByDate[dKey] || [];
+                    if (fDay.length > 0) {
+                        const tots = calculateTotals(fDay);
+                        if (tots.protein < 115) weekThieuDam++;
+                        if (Math.round(tots.kcal) > 2500) weekCheatDay++;
+                    }
+                    const sDay = sleepByDate[dKey] || [];
+                    if (sDay.length > 0) {
+                        const cWarn = getCircadianWarning(sDay);
+                        if (cWarn === 'late_sleep' || cWarn === 'bomb') weekLateSleep++;
+                        if (cWarn === 'late_wake' || cWarn === 'bomb') weekLateWake++;
+                    }
+                    if (workoutsByDate[dKey]) weekWorkout++;
+                });
+
+                let monthThieuDam = 0, monthCheatDay = 0, monthLateSleep = 0, monthLateWake = 0, monthWorkout = 0, monthSleepDaysCount = 0;
+                monthDays.forEach(day => {
+                    const dKey = formatDate(day);
+                    const fDay = foodsByDate[dKey] || [];
+                    if (fDay.length > 0) {
+                        const tots = calculateTotals(fDay);
+                        if (tots.protein < 115) monthThieuDam++;
+                        if (Math.round(tots.kcal) > 2500) monthCheatDay++;
+                    }
+                    const sDay = sleepByDate[dKey] || [];
+                    if (sDay.length > 0) {
+                        monthSleepDaysCount++;
+                        const cWarn = getCircadianWarning(sDay);
+                        if (cWarn === 'late_sleep' || cWarn === 'bomb') monthLateSleep++;
+                        if (cWarn === 'late_wake' || cWarn === 'bomb') monthLateWake++;
+                    }
+                    if (workoutsByDate[dKey]) monthWorkout++;
+                });
+
+                const todayObj = new Date();
+                const todayOnlyDate = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
+                const monthViewStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 1);
+
+                let elapsedDays = 0;
+                if (monthViewStart.getFullYear() === todayOnlyDate.getFullYear() && monthViewStart.getMonth() === todayOnlyDate.getMonth()) {
+                    elapsedDays = todayOnlyDate.getDate();
+                } else if (monthViewStart < todayOnlyDate) {
+                    elapsedDays = getDaysInMonth(monthViewStart.getFullYear(), monthViewStart.getMonth());
+                } else {
+                    elapsedDays = 0; 
+                }
+                
+                const elapsedDenom = elapsedDays === 0 ? 1 : elapsedDays;
+                const sleepDenom = monthSleepDaysCount || 1;
+
+                const pctLateSleep = Math.round((monthLateSleep / sleepDenom) * 100) || 0;
+                const pctLateWake = Math.round((monthLateWake / sleepDenom) * 100) || 0;
+                const pctThieuDam = Math.round((monthThieuDam / elapsedDenom) * 100) || 0;
+                const pctCheatDay = Math.round((monthCheatDay / elapsedDenom) * 100) || 0;
+                const pctWorkout = Math.round((monthWorkout / elapsedDenom) * 100) || 0;
+
+                return (
+                    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-emerald-200">
+                        {toast && (
+                            <div className="fixed top-4 left-1/2 z-[200] w-max max-w-[90vw] animate-[toastSlide_0.3s_ease-out] flex justify-center" style={{ transform: 'translateX(-50%)' }}>
+                                <div className={`px-6 py-4 rounded-2xl shadow-xl border font-bold text-sm flex items-center gap-3 ${toast.type === 'error' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-800 text-white border-slate-700'}`}>
+                                    {toast.type === 'error' ? <XIcon size={20}/> : <CheckCircleIcon size={20} className="text-emerald-400"/>}
+                                    {toast.msg}
+                                </div>
+                            </div>
+                        )}
+
+                        <header className="bg-white px-4 py-4 rounded-b-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] sticky top-0 z-40 flex flex-col items-center">
+                            <div className="flex justify-between items-center w-full max-w-md mb-3 px-2">
+                                <h1 className="text-slate-800 font-black text-xl tracking-wide flex items-center gap-2">Calasu Tracker</h1>
+                                <button onClick={() => setShowSettings(true)} className="text-blue-500 p-2 rounded-full bg-blue-50 hover:bg-blue-100 transition-colors shadow-sm"><CloudIcon size={20} /></button>
+                            </div>
+                            <div className="flex w-full max-w-md gap-1.5 mb-4 bg-slate-100 p-1.5 rounded-2xl">
+                                <button onClick={() => setAppMode('macro')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${appMode === 'macro' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><UtensilsIcon size={16}/> <span className="hidden sm:inline">Eating</span><span className="sm:hidden">Ăn</span></button>
+                                <button onClick={() => setAppMode('sleep')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${appMode === 'sleep' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><MoonIcon size={16}/> <span className="hidden sm:inline">Sleeping</span><span className="sm:hidden">Ngủ</span></button>
+                                <button onClick={() => setAppMode('workout')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm ${appMode === 'workout' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><DumbbellIcon size={16}/> <span className="hidden sm:inline">Work Out</span><span className="sm:hidden">Tập</span></button>
+                            </div>
+                            <div className="flex bg-slate-50 p-1 rounded-xl w-full max-w-md border border-slate-100">
+                                {['day', 'week', 'month'].map(view => {
+                                    let aCls = ''; if (appMode === 'macro') aCls = 'bg-emerald-50 text-emerald-700'; else if (appMode === 'sleep') aCls = 'bg-indigo-50 text-indigo-700'; else if (appMode === 'workout') aCls = 'bg-orange-50 text-orange-700';
+                                    return (<button key={view} onClick={() => setCurrentView(view)} className={`flex-1 capitalize py-2 rounded-lg text-xs font-bold transition-all duration-300 ${currentView === view ? aCls : 'text-slate-400 hover:text-slate-600'}`}>{view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}</button>);
+                                })}
+                            </div>
+                        </header>
+
+                        <main className="p-4 max-w-md mx-auto mt-2">
+                            {currentView === 'day' && (
+                                <div className="animate-[fadeIn_0.3s_ease-out]">
+                                    <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
+                                        <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                        <div className="text-center"><p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">{VN_DAYS[selectedDate.getDay()]}</p><p className="text-lg font-black text-slate-800">{formatDate(selectedDate)}</p></div>
+                                        <button onClick={() => changeDate(1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                    </div>
+
+                                    {appMode === 'macro' && (
+                                        <>
+                                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                                <div className="col-span-2 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-[1.5rem] p-5 text-white shadow-lg shadow-emerald-200 relative overflow-hidden">
+                                                    <p className="text-emerald-50 font-medium text-sm mb-1 flex items-center gap-1.5"><FlameIcon size={16}/> Tổng Calories</p>
+                                                    <h2 className="text-4xl font-black">{totalKcal} <span className="text-lg font-medium opacity-80">kcal</span></h2>
+                                                </div>
+                                                <div className="bg-white rounded-[1.25rem] p-4 border border-slate-100 shadow-sm">
+                                                    <p className="text-slate-400 font-semibold text-xs mb-1 flex items-center gap-1.5"><WheatIcon size={14} className="text-blue-500"/> Carb</p>
+                                                    <p className="text-2xl font-black text-slate-700">{currentTotals.carbs}<span className="text-sm font-medium text-slate-400 ml-1">g</span></p>
+                                                </div>
+                                                <div className="bg-white rounded-[1.25rem] p-4 border border-slate-100 shadow-sm">
+                                                    <p className="text-slate-400 font-semibold text-xs mb-1 flex items-center gap-1.5"><DropletIcon size={14} className="text-yellow-500"/> Fat</p>
+                                                    <p className="text-2xl font-black text-slate-700">{currentTotals.fat}<span className="text-sm font-medium text-slate-400 ml-1">g</span></p>
+                                                </div>
+                                                <div className="col-span-2 bg-white rounded-[1.25rem] p-4 border border-slate-100 shadow-sm flex justify-between items-center">
+                                                    <span className="text-slate-400 font-semibold text-sm flex items-center gap-1.5"><BeefIcon size={16} className="text-red-500"/> Protein</span>
+                                                    <p className="text-2xl font-black text-slate-700">{currentTotals.protein}<span className="text-sm font-medium text-slate-400 ml-1">g</span></p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4 mb-6">
+                                                {['Sáng', 'Trưa', 'Chiều', 'Ngoài lề'].map(meal => {
+                                                    const mealFoods = currentFoods.filter(f => f.meal === meal);
+                                                    let MIcon = CoffeeIcon, icColor = "text-slate-500";
+                                                    if(meal==='Sáng'){ MIcon = SunriseIcon; icColor="text-amber-500"; }
+                                                    if(meal==='Trưa'){ MIcon = SunIcon; icColor="text-orange-500"; }
+                                                    if(meal==='Chiều'){ MIcon = SunsetIcon; icColor="text-indigo-500"; }
+
+                                                    return (
+                                                        <div key={meal} className="bg-white rounded-[1.5rem] p-4 border border-slate-100 shadow-sm">
+                                                            <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-50">
+                                                                <div className="flex items-center gap-2">
+                                                                    <MIcon size={20} className={icColor} />
+                                                                    <h4 className="font-black text-slate-700 text-lg">{meal}</h4>
+                                                                </div>
+                                                                <button onClick={() => { setAddingMeal(meal); setIsAddingFood(true); }} className="text-emerald-500 bg-emerald-50 hover:bg-emerald-100 p-2 rounded-xl"><PlusIcon size={18} /></button>
+                                                            </div>
+                                                            {mealFoods.length === 0 ? <p className="text-sm text-slate-400 italic py-2 text-center bg-slate-50/50 rounded-xl">Chưa có món</p> : (
+                                                                <div className="space-y-3">
+                                                                    {mealFoods.map(food => {
+                                                                        const foodKcal = food.kcal !== undefined ? food.kcal : (food.carbs*4 + food.protein*4 + food.fat*9);
+                                                                        return (
+                                                                            <div key={food.id} className="bg-slate-50 p-3.5 rounded-xl border border-slate-100/50 flex justify-between items-center group">
+                                                                                <div className="flex-1 mr-3">
+                                                                                    {editingFoodId === food.id ? (
+                                                                                        <input autoFocus value={editFoodName} onChange={e=>setEditFoodName(e.target.value)} onBlur={()=>handleSaveEditFood(food.id)} onKeyDown={e=>e.key==='Enter'&&handleSaveEditFood(food.id)} className="w-full bg-white border border-emerald-300 rounded px-2 py-1 outline-none mb-1 text-sm font-bold text-slate-800" />
+                                                                                    ) : (
+                                                                                        <div className="flex items-center gap-2 mb-1.5 cursor-pointer" onClick={() => handleStartEditFood(food)}>
+                                                                                            <p className="font-bold text-slate-700">{food.name}</p><PencilIcon size={12} className="text-slate-300 hover:text-emerald-500" />
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="flex gap-2 text-[11px] font-semibold flex-wrap">
+                                                                                        <span className="text-emerald-600 bg-emerald-50/50 px-2 py-0.5 rounded border border-emerald-100/50">{foodKcal} kcal</span>
+                                                                                        <span className="text-red-500 bg-red-50/50 px-2 py-0.5 rounded border border-red-100/50">Pro: {food.protein}g</span>
+                                                                                        {(food.carbs > 0 || food.fat > 0) && (
+                                                                                            <>
+                                                                                                <span className="text-blue-500 bg-blue-50/50 px-2 py-0.5 rounded border border-blue-100/50">Carb: {food.carbs}g</span>
+                                                                                                <span className="text-yellow-600 bg-yellow-50/50 px-2 py-0.5 rounded border border-yellow-100/50">Fat: {food.fat}g</span>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <button onClick={() => handleDeleteFood(food.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl"><Trash2Icon size={18} /></button>
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {appMode === 'sleep' && (
+                                        <>
+                                            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[1.5rem] p-6 text-white shadow-lg shadow-indigo-200 mb-6 text-center relative overflow-hidden flex flex-col items-center justify-center">
+                                                <MoonIcon size={80} className="absolute -right-4 -bottom-4 text-white opacity-10" />
+                                                <div className="flex items-center justify-center gap-2 mb-2 z-10">
+                                                    <p className="text-indigo-100 font-medium text-sm flex items-center gap-1.5"><MoonIcon size={16}/> Đã ngủ</p>
+                                                    {currentCircadian && <div className="animate-bounce">{renderCircadianIcon(currentCircadian, 16)}</div>}
+                                                </div>
+                                                <h2 className="text-5xl font-black tracking-tight z-10">{formatDuration(currentTotalSleepMins)}</h2>
+                                            </div>
+                                            <div className="mb-6">
+                                                {currentSleeps.length === 0 ? (
+                                                    <div className="text-center py-10 bg-slate-50 rounded-[1.5rem] border border-dashed border-slate-200">
+                                                        <ClockIcon className="text-slate-300 mx-auto mb-2" size={32} />
+                                                        <p className="text-slate-400 font-medium text-sm">Chưa ghi nhận giấc ngủ.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {currentSleeps.map(sleep => (
+                                                            <div key={sleep.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                                                                <div className="flex items-center gap-4">
+                                                                    <div className="bg-indigo-50 text-indigo-500 p-3 rounded-2xl"><ClockIcon size={20} /></div>
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2 text-slate-700 font-bold mb-1">
+                                                                            <span>{sleep.sleepTime}</span><span className="text-slate-300 text-xs">➔</span><span>{sleep.wakeTime}</span>
+                                                                        </div>
+                                                                        <p className="text-xs font-bold text-slate-400">Thời lượng: <span className="text-indigo-500">{formatDuration(sleep.duration)}</span></p>
+                                                                    </div>
+                                                                </div>
+                                                                <button onClick={() => handleDeleteSleep(sleep.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl"><Trash2Icon size={18} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {appMode === 'workout' && (
+                                        <>
+                                            {currentWorkout ? (
+                                                <div className="mb-6">
+                                                    <div className={`bg-gradient-to-br from-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-400 to-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-600 rounded-[1.5rem] p-5 text-white shadow-lg shadow-slate-200 mb-6 relative overflow-hidden flex justify-between items-center`}>
+                                                        <div>
+                                                            <p className="font-medium text-sm mb-1 flex items-center gap-1.5 opacity-90"><DumbbellIcon size={16}/> Hôm nay tập</p>
+                                                            <h2 className="text-3xl font-black">{currentWorkout.type}</h2>
+                                                        </div>
+                                                        <div className="bg-white/20 px-4 py-2 rounded-2xl text-center backdrop-blur-sm z-10">
+                                                            <span className="text-2xl font-black block leading-none">{currentWorkout.exercises.length}</span>
+                                                            <span className="text-[10px] font-bold uppercase">Bài</span>
+                                                        </div>
+                                                        <DumbbellIcon size={100} className="absolute -right-4 -bottom-8 text-white opacity-10 transform -rotate-12" />
+                                                    </div>
+                                                    
+                                                    {currentWorkout.note && (
+                                                        <div className="bg-slate-100 p-4 rounded-[1.25rem] border border-slate-200 mb-4 text-sm text-slate-800"><span className="font-bold">Ghi chú:</span> {currentWorkout.note}</div>
+                                                    )}
+                                                    
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="font-bold text-slate-800">Chi tiết</h3>
+                                                        <button onClick={() => setShowDeleteConfirm(true)} className="text-xs text-red-500 font-bold bg-red-50 px-3 py-2 rounded-lg">Xóa buổi tập</button>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-4">
+                                                        {currentWorkout.exercises.map((ex, idx) => (
+                                                            <div key={idx} className="bg-white p-4 rounded-[1.25rem] shadow-sm border border-slate-100">
+                                                                <h4 className="font-black text-slate-700 text-lg mb-3 border-b border-slate-50 pb-2">{ex.name}</h4>
+                                                                <div className="space-y-2">
+                                                                    {ex.sets.map((set, sIdx) => {
+                                                                        if(!set.weight && !set.reps) return null;
+                                                                        return (
+                                                                        <div key={sIdx} className="flex justify-between items-center text-sm font-medium bg-slate-50 px-4 py-2.5 rounded-xl">
+                                                                            <span className="text-slate-400 font-bold uppercase">S{sIdx + 1}</span>
+                                                                            <span className="text-slate-700 font-black bg-white px-3 py-1 rounded shadow-sm border border-slate-100 min-w-[70px] text-center uppercase">{set.weight || '-'} <span className="text-[10px] font-bold text-slate-400 uppercase">{set.unit}</span></span>
+                                                                            <span className="text-slate-300">x</span>
+                                                                            <span className="text-slate-700 font-black bg-white px-3 py-1 rounded shadow-sm border border-slate-100 min-w-[60px] text-center">{set.reps || '-'}</span>
+                                                                        </div>
+                                                                    )})}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                                                    <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><DumbbellIcon className="text-slate-400" size={32} /></div>
+                                                    <h3 className="font-black text-slate-700 text-lg mb-2">Chưa có lịch tập</h3>
+                                                    <p className="text-slate-400 text-sm mb-6 px-4">Hãy ghi nhận nỗ lực của bạn ngày hôm nay!</p>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
+                            {currentView === 'week' && (
+                                <div className="animate-[fadeIn_0.3s_ease-out]">
+                                    <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
+                                        <button onClick={() => changeWeek(-1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                        <div className="text-center"><p className="text-sm font-black text-slate-800">{formatDate(currentWeekStart)} - {formatDate(new Date(new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 6)))}</p></div>
+                                        <button onClick={() => changeWeek(1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {weekDays.map(day => {
+                                            const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                            
+                                            if (appMode === 'macro') {
+                                                const dTot = calculateTotals(foodsByDate[dKey] || []);
+                                                const dKc = Math.round(dTot.kcal);
+                                                const mStatus = getMacroStatus(dKc, dTot.protein);
+                                                
+                                                return (
+                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-100'}`}>
+                                                        <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800' : 'text-slate-500'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
+                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${mStatus ? mStatus.bg + ' ' + mStatus.border : 'bg-slate-50 border-slate-100/50'}`}>
+                                                            <span className={`text-2xl font-black ${mStatus ? mStatus.text : 'text-slate-700'}`}>{dKc > 0 ? dKc : '-'}</span>
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${mStatus ? mStatus.text : 'text-slate-400'}`}>Kcal</span>
+                                                            <div className={`h-px w-12 mb-1 ${mStatus ? 'bg-white/30' : 'bg-slate-200'}`}></div>
+                                                            <span className={`text-sm font-black ${mStatus ? mStatus.text : 'text-slate-500'}`}>{dTot.protein > 0 ? `${dTot.protein}g Pro` : '-'}</span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            } else if (appMode === 'sleep') {
+                                                const daySleeps = sleepByDate[dKey] || [];
+                                                const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
+                                                const sStatus = getSleepStatus(sMins);
+                                                const circWarning = getCircadianWarning(daySleeps);
+                                                
+                                                return (
+                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-100'}`}>
+                                                        <p className={`text-sm font-bold mb-3 flex items-center justify-between ${isToday ? 'text-slate-800' : 'text-slate-500'}`}>
+                                                            <span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span>
+                                                            {circWarning && renderCircadianIcon(circWarning, 14)}
+                                                        </p>
+                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${sStatus ? sStatus.bg + ' ' + sStatus.border : 'bg-slate-50 border-slate-100/50'}`}>
+                                                            <span className={`text-xl font-black ${sStatus ? sStatus.text : 'text-slate-700'}`}>{sMins > 0 ? formatDuration(sMins) : '-'}</span>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            } else {
+                                                const wOut = workoutsByDate[dKey];
+                                                const wColor = wOut ? getWorkoutColor(wOut.type) : null;
+                                                return (
+                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-100'}`}>
+                                                        <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800' : 'text-slate-500'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
+                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${wOut ? wColor.fill + ' ' + wColor.border + ' ' + wColor.textLight + ' shadow-md' : 'bg-slate-50 border-slate-100/50'}`}>
+                                                            {wOut ? (
+                                                                <>
+                                                                    <DumbbellIcon size={24} className="mb-1 opacity-90" />
+                                                                    <span className="text-lg font-black">{wOut.type}</span>
+                                                                </>
+                                                            ) : <span className="text-2xl font-black opacity-30 text-slate-400">-</span>}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            }
+                                        })}
+                                    </div>
+                                    
+                                    <div className="mt-6 bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
+                                        <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tuần</h3>
+                                        {appMode === 'macro' && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
+                                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Thiếu đạm</p>
+                                                    <p className="text-3xl font-black text-red-600 leading-none">{weekThieuDam} <span className="text-sm font-bold text-red-400">ngày</span></p>
+                                                </div>
+                                                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
+                                                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-2">Cheatday</p>
+                                                    <p className="text-3xl font-black text-orange-600 leading-none">{weekCheatDay} <span className="text-sm font-bold text-orange-400">ngày</span></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {appMode === 'sleep' && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Thức khuya</p>
+                                                    <p className="text-3xl font-black text-slate-700 leading-none">{weekLateSleep} <span className="text-sm font-bold text-slate-400">lần</span></p>
+                                                </div>
+                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Ngủ nướng</p>
+                                                    <p className="text-3xl font-black text-slate-700 leading-none">{weekLateWake} <span className="text-sm font-bold text-slate-400">lần</span></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {appMode === 'workout' && (
+                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
+                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Số ngày tập luyện</p>
+                                                <p className="text-4xl font-black text-emerald-600 leading-none">{weekWorkout} <span className="text-sm font-bold text-emerald-500">ngày</span></p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {currentView === 'month' && (
+                                <div className="animate-[fadeIn_0.3s_ease-out]">
+                                    <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
+                                        <button onClick={() => changeMonth(-1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                        <div className="text-center"><p className="text-lg font-black text-slate-800">Tháng {String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, {currentMonthStart.getFullYear()}</p></div>
+                                        <button onClick={() => changeMonth(1)} className="p-3 text-slate-400 hover:bg-slate-50 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                    </div>
+                                    <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100 mb-6">
+                                        <div className="grid grid-cols-7 gap-1 mb-2">
+                                            {VN_DAYS.map(day => (<div key={day} className="text-center text-xs font-bold text-slate-400 py-2">{day}</div>))}
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-1">
+                                            {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-14"></div>))}
+                                            {monthDays.map(day => {
+                                                const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                                let hasData = false, isW = false;
+                                                
+                                                if (appMode === 'macro') hasData = (foodsByDate[dKey] || []).length > 0;
+                                                else if (appMode === 'sleep') hasData = (sleepByDate[dKey] || []).length > 0;
+                                                else { hasData = !!workoutsByDate[dKey]; isW = hasData; }
+
+                                                const wType = isW ? workoutsByDate[dKey].type : null;
+                                                const mStatus = appMode === 'macro' && hasData ? getMacroStatus(calculateTotals(foodsByDate[dKey]||[]).kcal, calculateTotals(foodsByDate[dKey]||[]).protein) : null;
+                                                
+                                                const daySleeps = sleepByDate[dKey] || [];
+                                                const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
+                                                const sStatus = appMode === 'sleep' && hasData ? getSleepStatus(sMins) : null;
+                                                const circWarning = appMode === 'sleep' ? getCircadianWarning(daySleeps) : null;
+
+                                                if (appMode === 'sleep') {
+                                                    let sleepCellClass = "bg-white border border-slate-100 hover:border-indigo-300";
+                                                    if (isToday) sleepCellClass += " ring-2 ring-indigo-500 ring-offset-1";
+
+                                                    return (
+                                                        <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
+                                                            className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all shadow-sm ${sleepCellClass}`}>
+                                                            <span className="absolute top-1 left-1.5 text-[10px] font-bold text-slate-400">{day.getDate()}</span>
+                                                            
+                                                            {sMins > 0 ? (
+                                                                <span className={`font-black text-[13px] z-10 ${sStatus ? (sStatus.bg === 'bg-emerald-500' ? 'text-emerald-500' : sStatus.bg === 'bg-yellow-400' ? 'text-yellow-500' : 'text-red-500') : 'text-slate-700'}`}>
+                                                                    {Math.floor(sMins / 60)}h{sMins % 60 > 0 ? sMins % 60 : ''}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="font-bold text-sm text-slate-200">-</span>
+                                                            )}
+
+                                                            {circWarning && (
+                                                                <div className="absolute bottom-0.5 right-0.5 z-20">
+                                                                    {renderCircadianIcon(circWarning, 12)}
+                                                                </div>
+                                                            )}
+                                                        </button>
+                                                    )
+                                                }
+
+                                                let cellClass = "bg-transparent text-slate-600 border border-transparent";
+                                                if (appMode === 'workout' && isW) {
+                                                    cellClass = `${getWorkoutColor(wType).fill} text-white font-bold shadow-sm`;
+                                                } else if (appMode === 'macro' && mStatus) {
+                                                    cellClass = `${mStatus.bg} ${mStatus.bg==='bg-yellow-400'?'text-slate-800':'text-white'} font-bold shadow-sm`;
+                                                }
+
+                                                return (
+                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
+                                                        className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all ${isToday ? 'ring-2 ring-slate-800 ring-offset-1' : ''} ${cellClass}`}>
+                                                        <span className="z-10 text-sm">{day.getDate()}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
+                                        <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tháng</h3>
+                                        
+                                        {appMode === 'macro' && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center relative overflow-hidden group">
+                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-red-100">
+                                                        <div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Thiếu đạm</p>
+                                                    <div className="flex items-end justify-center gap-1.5 mb-2">
+                                                        <span className="text-3xl font-black text-red-600 leading-none">{monthThieuDam}</span>
+                                                        <span className="text-[10px] font-bold text-red-400 mb-0.5">/ {elapsedDays} ngày</span>
+                                                    </div>
+                                                    <div className="bg-white px-3 py-1 rounded-lg inline-block shadow-sm border border-red-100">
+                                                        <span className="text-sm font-black text-red-500">{pctThieuDam}%</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center relative overflow-hidden group">
+                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-orange-100">
+                                                        <div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-2">Cheatday</p>
+                                                    <div className="flex items-end justify-center gap-1.5 mb-2">
+                                                        <span className="text-3xl font-black text-orange-600 leading-none">{monthCheatDay}</span>
+                                                        <span className="text-[10px] font-bold text-orange-400 mb-0.5">/ {elapsedDays} ngày</span>
+                                                    </div>
+                                                    <div className="bg-white px-3 py-1 rounded-lg inline-block shadow-sm border border-orange-100">
+                                                        <span className="text-sm font-black text-orange-500">{pctCheatDay}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {appMode === 'sleep' && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group">
+                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200">
+                                                        <div className="absolute bottom-0 w-full bg-slate-800 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Thức khuya</p>
+                                                    <div className="flex items-end justify-center gap-1.5 mb-2">
+                                                        <span className="text-3xl font-black text-slate-700 leading-none">{monthLateSleep}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 mb-0.5">/ {monthSleepDaysCount} ngày</span>
+                                                    </div>
+                                                    <div className="bg-white px-3 py-1 rounded-lg border border-slate-100 inline-block shadow-sm">
+                                                        <span className="text-sm font-black text-slate-600">{pctLateSleep}%</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group">
+                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200">
+                                                        <div className="absolute bottom-0 w-full bg-slate-800 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Ngủ nướng</p>
+                                                    <div className="flex items-end justify-center gap-1.5 mb-2">
+                                                        <span className="text-3xl font-black text-slate-700 leading-none">{monthLateWake}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400 mb-0.5">/ {monthSleepDaysCount} ngày</span>
+                                                    </div>
+                                                    <div className="bg-white px-3 py-1 rounded-lg border border-slate-100 inline-block shadow-sm">
+                                                        <span className="text-sm font-black text-slate-600">{pctLateWake}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {appMode === 'workout' && (
+                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center relative overflow-hidden group">
+                                                <div className="absolute right-0 top-0 bottom-0 w-3 bg-emerald-100">
+                                                    <div className="absolute bottom-0 w-full bg-emerald-500 transition-all duration-1000 rounded-t" style={{height: `${pctWorkout}%`}}></div>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Tần suất tập luyện</p>
+                                                <div className="flex items-end justify-center gap-1.5 mb-2">
+                                                    <span className="text-4xl font-black text-emerald-600 leading-none">{monthWorkout}</span>
+                                                    <span className="text-xs font-bold text-emerald-500 mb-1">/ {elapsedDays} ngày</span>
+                                                </div>
+                                                <div className="bg-white px-4 py-1.5 rounded-xl border border-emerald-50 inline-block shadow-sm">
+                                                    <span className="text-base font-black text-emerald-600">{pctWorkout}%</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+
+                        {currentView === 'day' && (
+                            <div className="fixed bottom-6 inset-x-0 flex justify-center z-20 pointer-events-none">
+                                {appMode === 'sleep' && (
+                                    <button onClick={() => setIsAddingSleep(true)} className="pointer-events-auto bg-indigo-600 text-white rounded-full px-6 py-4 flex items-center gap-2 font-bold shadow-xl hover:scale-105 transition-all"><PlusIcon size={20} /> Add Sleeping</button>
+                                )}
+                                {appMode === 'workout' && !currentWorkout && (
+                                    <button onClick={() => setIsAddingWorkout(true)} className="pointer-events-auto bg-slate-800 text-white rounded-full px-6 py-4 flex items-center gap-2 font-black shadow-xl hover:scale-105 transition-all"><DumbbellIcon size={20} /> Add Work Out</button>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Render Modal Thêm Món Ăn với AI */}
+                        {isAddingFood && appMode === 'macro' && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
+                                <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-xl font-black text-slate-800">Thêm {addingMeal}</h2>
+                                        <button onClick={() => setIsAddingFood(false)} className="text-slate-400 bg-slate-100 p-2 rounded-full hover:bg-slate-200"><XIcon size={20} /></button>
+                                    </div>
+                                    
+                                    <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 mb-4 shrink-0">
+                                        <h3 className="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1.5"><SparklesIcon size={14}/> AI Nhận diện món ăn</h3>
+                                        
+                                        <div className="flex gap-2 mb-2">
+                                            <label className="flex-1 cursor-pointer bg-white border border-emerald-200 rounded-xl px-3 py-2 flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors">
+                                                <CameraIcon size={16} className="text-emerald-500" />
+                                                <span className="text-xs font-bold text-slate-600">{imagePreview ? 'Đổi ảnh' : 'Chụp/Tải ảnh'}</span>
+                                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
+                                            </label>
+                                            {imagePreview && (
+                                                <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-slate-200 shrink-0">
+                                                    <img src={imagePreview} className="w-full h-full object-cover" />
+                                                    <button onClick={() => {setImagePreview(null); setImageBase64(null);}} className="absolute top-0 right-0 bg-red-500 text-white rounded-bl-lg p-0.5"><XIcon size={10}/></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                            <input type="text" value={foodDescription} onChange={(e) => setFoodDescription(e.target.value)} disabled={isScanning} placeholder="Mô tả/Khối lượng (Vd: 300g ức gà)" className="flex-1 w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 outline-none focus:border-emerald-400 text-xs font-medium text-slate-700 disabled:opacity-50" />
+                                            <button type="button" onClick={handleScanFood} disabled={isScanning || (!imagePreview && !foodDescription.trim())} className="bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-sm hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-1 shrink-0">
+                                                {isScanning ? <LoaderIcon size={14} className="animate-spin" /> : <SparklesIcon size={14} />} Quét
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex bg-slate-100 p-1.5 rounded-xl mb-5 w-full shrink-0">
+                                        <button onClick={() => setEntryMode('quick')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${entryMode === 'quick' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Nhập Nhanh</button>
+                                        <button onClick={() => setEntryMode('detail')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${entryMode === 'detail' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Nhập Chi Tiết</button>
+                                    </div>
+                                    <div className="overflow-y-auto pb-4 no-scrollbar">
+                                        <form id="add-food-form" onSubmit={handleAddFood} className="space-y-4 px-1">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Tên món ăn</label>
+                                                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 outline-none focus:border-emerald-400 font-bold text-slate-800" required />
+                                            </div>
+                                            {entryMode === 'quick' ? (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-2 ml-1">Kcal</label>
+                                                        <input type="number" value={formData.kcal} onChange={(e) => setFormData({...formData, kcal: e.target.value})} className="w-full bg-emerald-50/50 border border-emerald-100 rounded-2xl px-3 py-3 outline-none focus:border-emerald-400 text-center font-black text-slate-700" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-red-500 uppercase mb-2 ml-1">Protein (g)</label>
+                                                        <input type="number" value={formData.protein} onChange={(e) => setFormData({...formData, protein: e.target.value})} className="w-full bg-red-50/50 border border-red-100 rounded-2xl px-3 py-3 outline-none focus:border-red-400 text-center font-black text-slate-700" />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-blue-500 uppercase mb-2 ml-1">Carb (g)</label>
+                                                        <input type="number" value={formData.carbs} onChange={(e) => setFormData({...formData, carbs: e.target.value})} className="w-full bg-blue-50/50 border border-blue-100 rounded-2xl px-3 py-3 outline-none focus:border-blue-400 text-center font-black text-slate-700" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-yellow-600 uppercase mb-2 ml-1">Fat (g)</label>
+                                                        <input type="number" value={formData.fat} onChange={(e) => setFormData({...formData, fat: e.target.value})} className="w-full bg-yellow-50/50 border border-yellow-100 rounded-2xl px-3 py-3 outline-none focus:border-yellow-400 text-center font-black text-slate-700" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-red-500 uppercase mb-2 ml-1">Protein (g)</label>
+                                                        <input type="number" value={formData.protein} onChange={(e) => setFormData({...formData, protein: e.target.value})} className="w-full bg-red-50/50 border border-red-100 rounded-2xl px-3 py-3 outline-none focus:border-red-400 text-center font-black text-slate-700" />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </form>
+                                    </div>
+                                    <div className="pt-4 border-t border-slate-100 mt-2 shrink-0">
+                                        <button type="submit" form="add-food-form" className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-lg flex justify-center items-center gap-2"><CheckCircleIcon size={20} /> Lưu món ăn</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Render Modal Thêm Giấc Ngủ */}
+                        {isAddingSleep && appMode === 'sleep' && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
+                                <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><MoonIcon className="text-indigo-500" size={24}/> Thêm bản ghi</h2>
+                                        <button onClick={() => setIsAddingSleep(false)} className="text-slate-400 bg-slate-100 p-2 rounded-full"><XIcon size={20} /></button>
+                                    </div>
+                                    <form id="add-sleep-form" onSubmit={handleAddSleep} className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2"><MoonIcon size={14} className="inline mr-1"/>Giờ ngủ</label>
+                                                <input type="time" value={sleepFormData.sleepTime} onChange={(e) => setSleepFormData({...sleepFormData, sleepTime: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 outline-none font-bold text-slate-700 text-lg" required />
+                                            </div>
+                                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2"><SunIcon size={14} className="inline mr-1"/>Giờ thức</label>
+                                                <input type="time" value={sleepFormData.wakeTime} onChange={(e) => setSleepFormData({...sleepFormData, wakeTime: e.target.value})} className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 outline-none font-bold text-slate-700 text-lg" required />
+                                            </div>
+                                        </div>
+                                        <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-lg flex justify-center items-center gap-2"><CheckCircleIcon size={20} /> Lưu</button>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Render Modal Thêm Buổi Tập có Đồng Hồ */}
+                        {isAddingWorkout && appMode === 'workout' && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
+                                <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
+                                    <div className="flex justify-between items-center mb-4 shrink-0">
+                                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                            <DumbbellIcon className="text-slate-800" size={24}/> {workoutAddStep === 1 ? 'Chọn Lịch' : workoutType}
+                                        </h2>
+                                        <button onClick={handleCancelAddWorkout} className="text-slate-400 bg-slate-100 p-2 rounded-full"><XIcon size={20} /></button>
+                                    </div>
+                                    
+                                    {workoutAddStep === 1 ? (
+                                        <div className="flex flex-col gap-3 pb-4">
+                                            {['Upper', 'Lower', 'Push', 'Pull', 'Leg'].map(t => {
+                                                const tCol = getWorkoutColor(t);
+                                                return (
+                                                    <button key={t} onClick={() => handleStartWorkout(t)} className={`w-full py-4 px-6 rounded-2xl font-black text-lg text-left border-2 border-slate-100 hover:${tCol.border} hover:${tCol.bg} text-slate-700 flex justify-between items-center group transition-colors`}>
+                                                        {t} <ChevronRightIcon size={20} className={`text-slate-300 group-hover:${tCol.text}`} />
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className={`bg-slate-100 p-2.5 rounded-2xl flex items-center justify-between gap-2 mb-4 shrink-0 transition-colors ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
+                                                <div className="flex gap-1.5">
+                                                    <button onClick={(e) => { e.preventDefault(); startRestTimer(60); }} className="px-3 py-1.5 bg-white rounded-xl shadow-sm text-[11px] font-black text-slate-700 active:scale-95 transition-transform">60s</button>
+                                                    <button onClick={(e) => { e.preventDefault(); startRestTimer(90); }} className="px-3 py-1.5 bg-white rounded-xl shadow-sm text-[11px] font-black text-slate-700 active:scale-95 transition-transform">90s</button>
+                                                    <button onClick={(e) => { e.preventDefault(); startRestTimer(120); }} className="px-3 py-1.5 bg-white rounded-xl shadow-sm text-[11px] font-black text-slate-700 active:scale-95 transition-transform">2m</button>
+                                                </div>
+                                                <div className="flex items-center gap-3 pr-1">
+                                                    <span className={`font-black text-xl tracking-wider ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-white' : 'text-slate-800')}`}>
+                                                        {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
+                                                    </span>
+                                                    {timerSeconds !== null && (
+                                                        <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-1.5 bg-red-100 text-red-500 rounded-lg hover:bg-red-200"><XIcon size={14}/></button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="mb-4 shrink-0">
+                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Ghi chú buổi tập</label>
+                                                <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:${getWorkoutColor(workoutType).border} font-bold text-slate-700 min-h-[60px] resize-none`} />
+                                            </div>
+                                            <div className="overflow-y-auto flex-1 pb-4 no-scrollbar space-y-4 px-1">
+                                                {currentExercises.map((ex) => {
+                                                    const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
+                                                    return (
+                                                        <div key={ex.id} className="bg-slate-50 border border-slate-100 p-4 rounded-3xl relative">
+                                                            <div className="mb-4">
+                                                                <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} className={`w-full bg-white border border-slate-200 rounded-xl px-4 py-3 outline-none focus:${getWorkoutColor(workoutType).border} font-black text-slate-800 text-lg`} />
+                                                                {prevHist && (
+                                                                    <div className={`${getWorkoutColor(workoutType).bg} p-3 rounded-xl border ${getWorkoutColor(workoutType).border}/30 mt-2`}>
+                                                                        <p className={`text-[10px] font-bold ${getWorkoutColor(workoutType).text} mb-1.5 uppercase tracking-wider`}>Lịch sử tập</p>
+                                                                        <div className="space-y-2">
+                                                                            {prevHist.map((h, i) => (
+                                                                                <div key={i} className="bg-white/80 backdrop-blur-sm p-2 rounded-lg border border-slate-200 shadow-sm">
+                                                                                    <p className="font-bold text-slate-800 mb-1 text-xs">{h.dateStr}</p>
+                                                                                    <div className="flex flex-wrap gap-2">
+                                                                                        {h.rawText && h.rawText.toUpperCase() !== 'X' ? (
+                                                                                            <span className="font-semibold text-slate-700 bg-white px-2 py-1 rounded border border-slate-200 text-xs whitespace-pre-wrap">{h.rawText}</span>
+                                                                                        ) : (
+                                                                                            h.sets.map((s, j) => (<span key={j} className="font-semibold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-xs">S{j+1}: {s.weight}{s.unit.toUpperCase()} x {s.reps}</span>))
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                {ex.sets.map((set, sIdx) => (
+                                                                    <div key={sIdx} className="flex items-center gap-2">
+                                                                        <span className="text-xs font-bold text-slate-400 w-6 uppercase">S{sIdx + 1}</span>
+                                                                        <div className={`relative flex-1 flex items-center bg-white border border-slate-200 rounded-xl focus-within:${getWorkoutColor(workoutType).border} focus-within:ring-2 focus-within:ring-slate-100 transition-all overflow-hidden`}>
+                                                                            <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className="w-full bg-transparent pl-3 pr-10 py-2.5 outline-none font-black text-slate-700 text-center uppercase" />
+                                                                            <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-2 text-[10px] font-bold ${getWorkoutColor(workoutType).text} uppercase bg-slate-50 px-2 py-1 rounded`}>{set.unit.toUpperCase()}</button>
+                                                                        </div>
+                                                                        <span className="text-slate-300 text-sm font-black mx-1">x</span>
+                                                                        <div className="flex-1">
+                                                                            <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full bg-white border border-slate-200 rounded-xl px-2 py-2.5 outline-none focus:${getWorkoutColor(workoutType).border} focus:ring-2 focus:ring-slate-100 text-center font-black text-slate-700`} />
+                                                                        </div>
+                                                                        {ex.sets.length > 1 && (<button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="p-2 text-slate-300 hover:text-red-500 bg-white border border-slate-200 rounded-xl ml-1 shadow-sm"><Trash2Icon size={16} /></button>)}
+                                                                    </div>
+                                                                ))}
+                                                                <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-2.5 ${getWorkoutColor(workoutType).bg} ${getWorkoutColor(workoutType).text} rounded-xl font-bold text-sm flex items-center justify-center gap-1 mt-3 transition-colors`}><PlusIcon size={16} /> Thêm hiệp</button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-full py-4 border-2 border-dashed border-slate-200 text-slate-500 hover:${getWorkoutColor(workoutType).border} hover:${getWorkoutColor(workoutType).bg} hover:${getWorkoutColor(workoutType).text} font-bold rounded-3xl flex items-center justify-center gap-2 transition-all`}><PlusIcon size={18} /> Thêm bài</button>
+                                            </div>
+                                            <div className="pt-4 border-t border-slate-100 mt-2 shrink-0 flex gap-2">
+                                                <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-4 bg-slate-100 text-slate-600 rounded-2xl font-bold flex items-center justify-center"><ChevronLeftIcon size={20} /></button>
+                                                <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${getWorkoutColor(workoutType).fill} text-white rounded-2xl font-black text-lg shadow-lg flex justify-center items-center gap-2`}><CheckCircleIcon size={20} /> Hoàn tất</button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Render Modal Xóa Buổi Tập */}
+                        {showDeleteConfirm && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
+                                <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center">
+                                    <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2Icon size={32} /></div>
+                                    <h3 className="text-xl font-black text-slate-800 mb-2">Xóa buổi tập?</h3>
+                                    <p className="text-slate-500 text-sm mb-6">Bạn có chắc chắn muốn xóa toàn bộ dữ liệu của buổi tập này không?</p>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-3.5 bg-slate-100 text-slate-700 rounded-xl font-bold">Hủy</button>
+                                        <button onClick={handleDeleteWorkout} className="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold shadow-lg">Xóa ngay</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Render Modal Cài Đặt */}
+                        {showSettings && (
+                            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
+                                <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><CloudIcon className="text-blue-500" /> Đồng bộ Dữ liệu</h2>
+                                        <button onClick={() => setShowSettings(false)} className="text-slate-400 bg-slate-100 p-2 rounded-full hover:bg-slate-200"><XIcon size={20} /></button>
+                                    </div>
+                                    <div className="space-y-5">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Link Apps Script (Web App URL)</label>
+                                            <input type="text" value={gasUrl} onChange={(e) => setGasUrl(e.target.value)} placeholder="https://script.google.com/macros/s/..." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-sm font-medium text-slate-700" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={handleSyncPush} disabled={isSyncing} className="py-3 bg-blue-500 text-white rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-blue-600 disabled:opacity-50"><UploadIcon size={20} /> <span className="text-xs">Đẩy lên Sheet</span></button>
+                                            <button onClick={handleSyncPull} disabled={isSyncing} className="py-3 bg-emerald-500 text-white rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-emerald-600 disabled:opacity-50"><DownloadIcon size={20} /> <span className="text-xs">Tải từ Sheet</span></button>
+                                        </div>
+                                        {isSyncing && <p className="text-center text-blue-500 text-sm font-bold flex items-center justify-center gap-2"><LoaderIcon className="animate-spin" size={16} /> Đang xử lý...</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+            
+        } catch (error) {
+            console.error(error);
+        }
+    </script>
+</body>
+</html>
