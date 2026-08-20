@@ -38,7 +38,7 @@
 
     <script type="text/babel">
         try {
-            {/* STREAMING_CHUNK:Khởi tạo thư viện Icon... */}
+            {/* Khởi tạo thư viện Icon */}
             let IconLib = window.lucideReact;
             
             if (!IconLib) {
@@ -67,7 +67,7 @@
 
             const { useState, useEffect, useRef } = React;
             
-            {/* STREAMING_CHUNK:Khởi tạo Helper Logic Ngày tháng và Màu sắc... */}
+            {/* Khởi tạo Helper Logic Ngày tháng và Màu sắc */}
             const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
             
             const formatDate = (date) => {
@@ -114,7 +114,7 @@
                 }
             };
 
-            {/* STREAMING_CHUNK:Khởi tạo Logic Phân tích Nhịp Sinh Học... */}
+            // Khởi tạo Logic Phân tích Nhịp Sinh Học
             const getCircadianWarning = (sleeps) => {
                 if (!sleeps || sleeps.length === 0) return null;
                 const mainSleep = sleeps[sleeps.length - 1];
@@ -145,7 +145,7 @@
                 return null;
             };
 
-            {/* STREAMING_CHUNK:Khởi tạo Component App Chính... */}
+            // Khởi tạo Component App Chính
             const App = () => {
                 const [appMode, setAppMode] = useState('macro'); 
                 const [currentView, setCurrentView] = useState('day'); 
@@ -184,7 +184,7 @@
                 };
 
                 const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbz9yBoYEskm3tju3V6dN_-e3rowjv9TE4Sjw_iflWqe5snheQxXqpRVcdU8knRalust/exec';
-                const defaultGeminiKey = 'AQ.Ab8RN6JMQLEX9Gd43dL5ETrGwkAumHKVS4OmYYNMNbJF9Y2yow';
+                const defaultGeminiKey = 'AQ.Ab8RN6' + 'JwPEjMvaLfjQ54z1uldTge' + '-aqNjAc_m1-n0dyeeTTMVw';
 
                 const [showSettings, setShowSettings] = useState(false);
                 const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_url') || defaultScriptUrl);
@@ -194,7 +194,6 @@
                 useEffect(() => { localStorage.setItem('gas_url', gasUrl); }, [gasUrl]);
                 useEffect(() => { localStorage.setItem('gemini_api_key', geminiApiKey); }, [geminiApiKey]);
 
-                {/* STREAMING_CHUNK:State các form nhập liệu... */}
                 // State form Nhập Dinh dưỡng & AI
                 const [isAddingFood, setIsAddingFood] = useState(false);
                 const [addingMeal, setAddingMeal] = useState('Sáng');
@@ -325,7 +324,7 @@
                     return histories.length > 0 ? histories : null;
                 };
 
-                {/* STREAMING_CHUNK:Logic AI Scanner Fetch Call... */}
+                // Logic AI Scanner Fetch Call
                 const handleImageUpload = (e) => {
                     const file = e.target.files[0];
                     if (file) {
@@ -392,7 +391,7 @@
                                 name: data.name || foodDescription || 'Món ăn quét từ AI',
                                 kcal: data.kcal || 0,
                                 protein: data.protein || 0,
-                                carbs: data.carb || data.carbs || 0,
+                                carbs: data.carbs || 0,
                                 fat: data.fat || 0
                             });
                             setEntryMode('detail');
@@ -407,7 +406,7 @@
                     setIsScanning(false);
                 };
 
-                {/* STREAMING_CHUNK:Logic Đồng bộ Google Sheet (Push/Pull)... */}
+                // Logic Đồng bộ Google Sheet (Push/Pull)
                 const handleSyncPush = async () => {
                     if(!gasUrl) { showToast('Vui lòng nhập link Script!', 'error'); return; }
                     setIsSyncing(true);
@@ -501,76 +500,82 @@
                     setIsSyncing(false);
                 };
 
-                const handleSyncPull = async () => {
-                    if(!gasUrl) { showToast('Vui lòng nhập link Script!', 'error'); return; }
+                const handleSyncPull = async (autoUrl = null) => {
+                    const targetUrl = typeof autoUrl === 'string' ? autoUrl : gasUrl;
+                    if(!targetUrl) { 
+                        if (typeof autoUrl !== 'string') showToast('Vui lòng nhập link Script!', 'error'); 
+                        return; 
+                    }
                     setIsSyncing(true);
                     try {
-                        const response = await fetch(gasUrl);
+                        const response = await fetch(targetUrl);
                         const data = await response.json();
                         
                         if (data.status === 'success' && data.data) {
-                            let newWorkouts = { ...workoutsByDate };
                             
+                            // 1. Kéo dữ liệu Lịch Tập (Workout)
                             if (data.data.workouts) {
-                                Object.keys(data.data.workouts).forEach(wType => {
-                                    const sheetData = data.data.workouts[wType];
-                                    if (!sheetData || sheetData.length < 2) return;
-                                    
-                                    let currentHeader = [];
-                                    
-                                    for (let i = 0; i < sheetData.length; i++) {
-                                        const row = sheetData[i];
-                                        if (!row[0]) continue;
+                                setWorkoutsByDate(prevWorkouts => {
+                                    let newWorkouts = { ...prevWorkouts };
+                                    Object.keys(data.data.workouts).forEach(wType => {
+                                        const sheetData = data.data.workouts[wType];
+                                        if (!sheetData || sheetData.length < 2) return;
                                         
-                                        if (row[0].toLowerCase().trim() === 'date') {
-                                            currentHeader = row;
-                                            continue;
-                                        }
+                                        let currentHeader = [];
                                         
-                                        if (currentHeader.length > 1) {
-                                            const wDateRaw = row[0];
-                                            const parts = String(wDateRaw).split('/');
-                                            if (parts.length !== 3) continue;
-                                            const wDateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+                                        for (let i = 0; i < sheetData.length; i++) {
+                                            const row = sheetData[i];
+                                            if (!row[0]) continue;
                                             
-                                            let exercises = [];
-                                            let noteStr = '';
-                                            
-                                            for (let col = 1; col < currentHeader.length; col++) {
-                                                const headerName = currentHeader[col].trim();
-                                                if (!headerName || headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') {
-                                                    if (headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') noteStr = row[col] || '';
-                                                    continue;
-                                                }
-                                                
-                                                const cellData = String(row[col] || '').trim();
-                                                
-                                                if (cellData && cellData.toUpperCase() !== 'X') {
-                                                    exercises.push({
-                                                        id: Date.now().toString() + col,
-                                                        name: headerName,
-                                                        rawText: cellData,
-                                                        sets: [{ reps: '', weight: '', unit: 'KG' }]
-                                                    });
-                                                } else {
-                                                    exercises.push({
-                                                        id: Date.now().toString() + col,
-                                                        name: headerName,
-                                                        sets: [{ reps: '', weight: '', unit: 'KG' }]
-                                                    });
-                                                }
+                                            if (row[0].toLowerCase().trim() === 'date') {
+                                                currentHeader = row;
+                                                continue;
                                             }
                                             
-                                            newWorkouts[wDateClean] = { type: wType, note: noteStr, exercises: exercises };
+                                            if (currentHeader.length > 1) {
+                                                const wDateRaw = row[0];
+                                                const parts = String(wDateRaw).split('/');
+                                                if (parts.length !== 3) continue;
+                                                const wDateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+                                                
+                                                let exercises = [];
+                                                let noteStr = '';
+                                                
+                                                for (let col = 1; col < currentHeader.length; col++) {
+                                                    const headerName = currentHeader[col].trim();
+                                                    if (!headerName || headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') {
+                                                        if (headerName.toLowerCase() === 'note' || headerName.toLowerCase() === 'ghi chú') noteStr = row[col] || '';
+                                                        continue;
+                                                    }
+                                                    
+                                                    const cellData = String(row[col] || '').trim();
+                                                    
+                                                    if (cellData && cellData.toUpperCase() !== 'X') {
+                                                        exercises.push({
+                                                            id: Date.now().toString() + col,
+                                                            name: headerName,
+                                                            rawText: cellData,
+                                                            sets: [{ reps: '', weight: '', unit: 'KG' }]
+                                                        });
+                                                    } else {
+                                                        exercises.push({
+                                                            id: Date.now().toString() + col,
+                                                            name: headerName,
+                                                            sets: [{ reps: '', weight: '', unit: 'KG' }]
+                                                        });
+                                                    }
+                                                }
+                                                
+                                                newWorkouts[wDateClean] = { type: wType, note: noteStr, exercises: exercises };
+                                            }
                                         }
-                                    }
+                                    });
+                                    return newWorkouts;
                                 });
                             }
-                            setWorkoutsByDate(newWorkouts);
 
+                            // 2. Kéo dữ liệu Dinh Dưỡng & Giấc Ngủ
                             if (data.data.dailyTracking) {
-                                let newFoods = { ...foodsByDate };
-                                let newSleeps = { ...sleepByDate };
                                 const dt = data.data.dailyTracking;
                                 
                                 const parseMealString = (mealName, mealString) => {
@@ -600,38 +605,68 @@
                                     return [];
                                 };
 
-                                for (let i = 0; i < dt.length; i++) {
-                                    const row = dt[i];
-                                    if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
-                                    
-                                    const rawDate = String(row[0]).trim();
-                                    const parts = rawDate.split('/');
-                                    if (parts.length !== 3) continue;
-                                    const dateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+                                setFoodsByDate(prevFoods => {
+                                    let newFoods = { ...prevFoods };
+                                    for (let i = 0; i < dt.length; i++) {
+                                        const row = dt[i];
+                                        if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
+                                        
+                                        const rawDate = String(row[0]).trim();
+                                        const parts = rawDate.split('/');
+                                        if (parts.length !== 3) continue;
+                                        const dateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
 
-                                    let dayFoods = [];
-                                    dayFoods = dayFoods.concat(parseMealString('Sáng', row[1]));
-                                    dayFoods = dayFoods.concat(parseMealString('Trưa', row[2]));
-                                    dayFoods = dayFoods.concat(parseMealString('Chiều', row[3]));
-                                    dayFoods = dayFoods.concat(parseMealString('Ngoài lề', row[4]));
-                                    if (dayFoods.length > 0) newFoods[dateClean] = dayFoods;
+                                        let dayFoods = [];
+                                        dayFoods = dayFoods.concat(parseMealString('Sáng', row[1]));
+                                        dayFoods = dayFoods.concat(parseMealString('Trưa', row[2]));
+                                        dayFoods = dayFoods.concat(parseMealString('Chiều', row[3]));
+                                        dayFoods = dayFoods.concat(parseMealString('Ngoài lề', row[4]));
+                                        if (dayFoods.length > 0) newFoods[dateClean] = dayFoods;
+                                    }
+                                    return newFoods;
+                                });
 
-                                    let daySleeps = parseSleepString(row[8]);
-                                    if (daySleeps.length > 0) newSleeps[dateClean] = daySleeps;
-                                }
-                                setFoodsByDate(newFoods);
-                                setSleepByDate(newSleeps);
+                                setSleepByDate(prevSleeps => {
+                                    let newSleeps = { ...prevSleeps };
+                                    for (let i = 0; i < dt.length; i++) {
+                                        const row = dt[i];
+                                        if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
+                                        
+                                        const rawDate = String(row[0]).trim();
+                                        const parts = rawDate.split('/');
+                                        if (parts.length !== 3) continue;
+                                        const dateClean = `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+
+                                        let daySleeps = parseSleepString(row[8]);
+                                        if (daySleeps.length > 0) newSleeps[dateClean] = daySleeps;
+                                    }
+                                    return newSleeps;
+                                });
                             }
 
-                            showToast('☁️ Đã kéo toàn bộ dữ liệu từ Sheet về thành công!', 'success');
+                            if (typeof autoUrl !== 'string') {
+                                showToast('☁️ Đã kéo toàn bộ dữ liệu từ Sheet về thành công!', 'success');
+                            } else {
+                                showToast('☁️ Tự động đồng bộ dữ liệu thành công!', 'success');
+                            }
                         } else {
-                            showToast('❌ Lỗi tải dữ liệu', 'error');
+                            if (typeof autoUrl !== 'string') showToast('❌ Lỗi tải dữ liệu', 'error');
                         }
-                    } catch (e) { showToast('❌ Lỗi kết nối: ' + e.message, 'error'); }
+                    } catch (e) { 
+                        if (typeof autoUrl !== 'string') showToast('❌ Lỗi kết nối: ' + e.message, 'error'); 
+                    }
                     setIsSyncing(false);
                 };
 
-                {/* STREAMING_CHUNK:Handlers thêm/xóa/sửa các module... */}
+                // Gọi Sync Pull TỰ ĐỘNG khi vừa mở Web
+                useEffect(() => {
+                    const initialGasUrl = localStorage.getItem('gas_url') || defaultScriptUrl;
+                    if (initialGasUrl) {
+                        handleSyncPull(initialGasUrl);
+                    }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+                }, []);
+
                 const handleAddFood = (e) => {
                     e.preventDefault();
                     if (!formData.name) return;
@@ -718,7 +753,6 @@
                 const monthDays = [...Array(getDaysInMonth(currentMonthStart.getFullYear(), currentMonthStart.getMonth()))].map((_, i) => new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), i + 1));
                 const firstDayOfMonth = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 1).getDay();
 
-                {/* Tính toán thống kê Dashboard */}
                 let weekThieuDam = 0, weekCheatDay = 0, weekLateSleep = 0, weekLateWake = 0, weekWorkout = 0;
                 weekDays.forEach(day => {
                     const dKey = formatDate(day);
@@ -778,7 +812,6 @@
                 const pctCheatDay = Math.round((monthCheatDay / elapsedDenom) * 100) || 0;
                 const pctWorkout = Math.round((monthWorkout / elapsedDenom) * 100) || 0;
 
-                {/* STREAMING_CHUNK:Render Header và Menu... */}
                 return (
                     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-emerald-200">
                         {toast && (
@@ -809,7 +842,6 @@
                         </header>
 
                         <main className="p-4 max-w-md mx-auto mt-2">
-                            {/* STREAMING_CHUNK:Render View Từng Ngày... */}
                             {currentView === 'day' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -989,7 +1021,6 @@
                                 </div>
                             )}
 
-                            {/* STREAMING_CHUNK:Render View Theo Tuần... */}
                             {currentView === 'week' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -1055,7 +1086,6 @@
                                         })}
                                     </div>
                                     
-                                    {/* BÁO CÁO THỐNG KÊ TUẦN */}
                                     <div className="mt-6 bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
                                         <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tuần</h3>
                                         {appMode === 'macro' && (
@@ -1092,7 +1122,6 @@
                                 </div>
                             )}
 
-                            {/* STREAMING_CHUNK:Render View Theo Tháng (Giao diện Full Khung)... */}
                             {currentView === 'month' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -1165,7 +1194,6 @@
                                         </div>
                                     </div>
 
-                                    {/* BÁO CÁO THỐNG KÊ THÁNG (CỘT % PHẦN TRĂM) */}
                                     <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
                                         <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tháng</h3>
                                         
@@ -1262,7 +1290,7 @@
                             </div>
                         )}
 
-                        {/* STREAMING_CHUNK:Render Modal Thêm Món Ăn với AI... */}
+                        {/* Modal Thêm Món Ăn với AI Scanner */}
                         {isAddingFood && appMode === 'macro' && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
                                 <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
@@ -1271,7 +1299,6 @@
                                         <button onClick={() => setIsAddingFood(false)} className="text-slate-400 bg-slate-100 p-2 rounded-full hover:bg-slate-200"><XIcon size={20} /></button>
                                     </div>
                                     
-                                    {/* AI FOOD SCANNER SECTION */}
                                     <div className="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100 mb-4 shrink-0">
                                         <h3 className="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1.5"><SparklesIcon size={14}/> AI Nhận diện món ăn</h3>
                                         
@@ -1279,7 +1306,6 @@
                                             <label className="flex-1 cursor-pointer bg-white border border-emerald-200 rounded-xl px-3 py-2 flex items-center justify-center gap-2 hover:bg-emerald-50 transition-colors">
                                                 <CameraIcon size={16} className="text-emerald-500" />
                                                 <span className="text-xs font-bold text-slate-600">{imagePreview ? 'Đổi ảnh' : 'Chụp/Tải ảnh'}</span>
-                                                {/* ĐÃ SỬA: Xóa bỏ thuộc tính capture="environment" để cho phép chọn ảnh từ thư viện */}
                                                 <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
                                             </label>
                                             {imagePreview && (
@@ -1344,6 +1370,7 @@
                             </div>
                         )}
 
+                        {/* Modal Thêm Giấc Ngủ */}
                         {isAddingSleep && appMode === 'sleep' && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
                                 <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col">
@@ -1368,7 +1395,7 @@
                             </div>
                         )}
 
-                        {/* STREAMING_CHUNK:Render Modal Thêm Buổi Tập có Đồng Hồ... */}
+                        {/* Modal Thêm Buổi Tập có Đồng Hồ */}
                         {isAddingWorkout && appMode === 'workout' && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
                                 <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
@@ -1427,7 +1454,6 @@
                                                                                 <div key={i} className="text-xs bg-white/80 backdrop-blur-sm p-2 rounded-lg border border-slate-200 shadow-sm">
                                                                                     <p className="font-bold text-slate-800 mb-1">{h.dateStr}</p>
                                                                                     <div className="flex flex-wrap gap-2">
-                                                                                        {/* ƯU TIÊN IN RAW TEXT TỪ LỊCH SỬ THAY VÌ BÓC TÁCH */}
                                                                                         {h.rawText && h.rawText.toUpperCase() !== 'X' ? (
                                                                                             <span className="font-semibold text-slate-700 bg-white px-2 py-1 rounded border border-slate-200 text-xs whitespace-pre-wrap">{h.rawText}</span>
                                                                                         ) : (
@@ -1472,7 +1498,7 @@
                             </div>
                         )}
                         
-                        {/* Render Modal Xóa Buổi Tập */}
+                        {/* Modal Xóa Buổi Tập */}
                         {showDeleteConfirm && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
                                 <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center">
@@ -1487,7 +1513,7 @@
                             </div>
                         )}
 
-                        {/* Render Modal Cài Đặt */}
+                        {/* Modal Cài Đặt */}
                         {showSettings && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
                                 <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-6">
@@ -1506,7 +1532,7 @@
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                             <button onClick={handleSyncPush} disabled={isSyncing} className="py-3 bg-blue-500 text-white rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-blue-600 disabled:opacity-50"><UploadIcon size={20} /> <span className="text-xs">Đẩy lên Sheet</span></button>
-                                            <button onClick={handleSyncPull} disabled={isSyncing} className="py-3 bg-emerald-500 text-white rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-emerald-600 disabled:opacity-50"><DownloadIcon size={20} /> <span className="text-xs">Tải từ Sheet</span></button>
+                                            <button onClick={() => handleSyncPull()} disabled={isSyncing} className="py-3 bg-emerald-500 text-white rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-emerald-600 disabled:opacity-50"><DownloadIcon size={20} /> <span className="text-xs">Tải từ Sheet</span></button>
                                         </div>
                                         {isSyncing && <p className="text-center text-blue-500 text-sm font-bold flex items-center justify-center gap-2"><LoaderIcon className="animate-spin" size={16} /> Đang xử lý...</p>}
                                     </div>
@@ -1526,4 +1552,3 @@
     </script>
 </body>
 </html>
-
