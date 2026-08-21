@@ -114,7 +114,6 @@
                 }
             };
 
-            // Khởi tạo Logic Phân tích Nhịp Sinh Học
             const getCircadianWarning = (sleeps) => {
                 if (!sleeps || sleeps.length === 0) return null;
                 const mainSleep = sleeps[sleeps.length - 1];
@@ -152,6 +151,18 @@
                 const [selectedDate, setSelectedDate] = useState(new Date());
                 const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
                 const [currentMonthStart, setCurrentMonthStart] = useState(getStartOfMonth(new Date()));
+                
+                // Trạng thái Bộ lọc (Filter) cho Dashboard Tháng/Tuần
+                const [activeFilter, setActiveFilter] = useState(null);
+
+                // Reset filter khi đổi tab hoặc đổi view
+                useEffect(() => {
+                    setActiveFilter(null);
+                }, [appMode, currentView]);
+
+                const handleFilterClick = (filterName) => {
+                    setActiveFilter(prev => prev === filterName ? null : filterName);
+                };
                 
                 const loadSafeJSON = (key) => {
                     try { 
@@ -513,7 +524,6 @@
                         
                         if (data.status === 'success' && data.data) {
                             
-                            // 1. Kéo dữ liệu Lịch Tập (Workout)
                             if (data.data.workouts) {
                                 setWorkoutsByDate(prevWorkouts => {
                                     let newWorkouts = { ...prevWorkouts };
@@ -522,7 +532,6 @@
                                         if (!sheetData || sheetData.length < 2) return;
                                         
                                         let currentHeader = [];
-                                        
                                         for (let i = 0; i < sheetData.length; i++) {
                                             const row = sheetData[i];
                                             if (!row[0]) continue;
@@ -565,7 +574,6 @@
                                                         });
                                                     }
                                                 }
-                                                
                                                 newWorkouts[wDateClean] = { type: wType, note: noteStr, exercises: exercises };
                                             }
                                         }
@@ -574,10 +582,8 @@
                                 });
                             }
 
-                            // 2. Kéo dữ liệu Dinh Dưỡng & Giấc Ngủ
                             if (data.data.dailyTracking) {
                                 const dt = data.data.dailyTracking;
-                                
                                 const parseMealString = (mealName, mealString) => {
                                     if (!mealString || mealString === 'X' || mealString.trim() === '') return [];
                                     const items = mealString.split('\n');
@@ -610,7 +616,6 @@
                                     for (let i = 0; i < dt.length; i++) {
                                         const row = dt[i];
                                         if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
-                                        
                                         const rawDate = String(row[0]).trim();
                                         const parts = rawDate.split('/');
                                         if (parts.length !== 3) continue;
@@ -631,7 +636,6 @@
                                     for (let i = 0; i < dt.length; i++) {
                                         const row = dt[i];
                                         if (!row[0] || row[0].toString().toLowerCase() === 'date') continue;
-                                        
                                         const rawDate = String(row[0]).trim();
                                         const parts = rawDate.split('/');
                                         if (parts.length !== 3) continue;
@@ -646,8 +650,6 @@
 
                             if (typeof autoUrl !== 'string') {
                                 showToast('☁️ Đã kéo toàn bộ dữ liệu từ Sheet về thành công!', 'success');
-                            } else {
-                                showToast('☁️ Tự động đồng bộ dữ liệu thành công!', 'success');
                             }
                         } else {
                             if (typeof autoUrl !== 'string') showToast('❌ Lỗi tải dữ liệu', 'error');
@@ -658,7 +660,7 @@
                     setIsSyncing(false);
                 };
 
-                // Gọi Sync Pull TỰ ĐỘNG khi vừa mở Web
+                // Tự động tải dữ liệu khi khởi động
                 useEffect(() => {
                     const initialGasUrl = localStorage.getItem('gas_url') || defaultScriptUrl;
                     if (initialGasUrl) {
@@ -753,6 +755,7 @@
                 const monthDays = [...Array(getDaysInMonth(currentMonthStart.getFullYear(), currentMonthStart.getMonth()))].map((_, i) => new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), i + 1));
                 const firstDayOfMonth = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 1).getDay();
 
+                // Tính toán thống kê Dashboard
                 let weekThieuDam = 0, weekCheatDay = 0, weekLateSleep = 0, weekLateWake = 0, weekWorkout = 0;
                 weekDays.forEach(day => {
                     const dKey = formatDate(day);
@@ -842,6 +845,7 @@
                         </header>
 
                         <main className="p-4 max-w-md mx-auto mt-2">
+                            {/* Render View Ngày */}
                             {currentView === 'day' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -991,7 +995,7 @@
                                                     
                                                     <div className="space-y-4">
                                                         {currentWorkout.exercises.map((ex, idx) => (
-                                                            <div key={idx} className="bg-white p-4 rounded-[1.25rem] shadow-sm border border-slate-100">
+                                                            <div className="bg-white p-4 rounded-[1.25rem] shadow-sm border border-slate-100" key={idx}>
                                                                 <h4 className="font-black text-slate-700 text-lg mb-3 border-b border-slate-50 pb-2">{ex.name}</h4>
                                                                 <div className="space-y-2">
                                                                     {ex.sets.map((set, sIdx) => {
@@ -1021,6 +1025,7 @@
                                 </div>
                             )}
 
+                            {/* Render View Tuần Có Filter Động */}
                             {currentView === 'week' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -1036,33 +1041,106 @@
                                             if (appMode === 'macro') {
                                                 const dTot = calculateTotals(foodsByDate[dKey] || []);
                                                 const dKc = Math.round(dTot.kcal);
-                                                const mStatus = getMacroStatus(dKc, dTot.protein);
+                                                const hasData = (foodsByDate[dKey] || []).length > 0;
+                                                
+                                                let cellBg = 'bg-slate-50';
+                                                let cellBorder = 'border-slate-100/50';
+                                                let cellText = 'text-slate-700';
+                                                let mainTxt = dKc > 0 ? dKc : '-';
+                                                let subTxt = 'Kcal';
+                                                let botTxt = dTot.protein > 0 ? `${dTot.protein}g Pro` : '-';
+                                                
+                                                if (hasData) {
+                                                    if (activeFilter === 'protein') {
+                                                        if (dTot.protein >= 115) cellBg = 'bg-emerald-500';
+                                                        else if (dTot.protein >= 95) cellBg = 'bg-yellow-400';
+                                                        else cellBg = 'bg-red-500';
+                                                        
+                                                        cellBorder = cellBg.replace('bg-', 'border-');
+                                                        cellText = (dTot.protein >= 95 && dTot.protein < 115) ? 'text-slate-800' : 'text-white';
+                                                        mainTxt = dTot.protein;
+                                                        subTxt = 'g Pro';
+                                                        botTxt = '';
+                                                    } else if (activeFilter === 'calorie') {
+                                                        if (dKc <= 2100) cellBg = 'bg-emerald-500';
+                                                        else if (dKc <= 2500) cellBg = 'bg-yellow-400';
+                                                        else cellBg = 'bg-red-500';
+                                        
+                                                        cellBorder = cellBg.replace('bg-', 'border-');
+                                                        cellText = (dKc > 2100 && dKc <= 2500) ? 'text-slate-800' : 'text-white';
+                                                        mainTxt = dKc;
+                                                        subTxt = 'Kcal';
+                                                        botTxt = '';
+                                                    } else {
+                                                        const mStatus = getMacroStatus(dKc, dTot.protein);
+                                                        cellBg = mStatus.bg;
+                                                        cellBorder = mStatus.border;
+                                                        cellText = mStatus.text;
+                                                    }
+                                                }
                                                 
                                                 return (
                                                     <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-100'}`}>
                                                         <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800' : 'text-slate-500'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${mStatus ? mStatus.bg + ' ' + mStatus.border : 'bg-slate-50 border-slate-100/50'}`}>
-                                                            <span className={`text-2xl font-black ${mStatus ? mStatus.text : 'text-slate-700'}`}>{dKc > 0 ? dKc : '-'}</span>
-                                                            <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${mStatus ? mStatus.text : 'text-slate-400'}`}>Kcal</span>
-                                                            <div className={`h-px w-12 mb-1 ${mStatus ? 'bg-white/30' : 'bg-slate-200'}`}></div>
-                                                            <span className={`text-sm font-black ${mStatus ? mStatus.text : 'text-slate-500'}`}>{dTot.protein > 0 ? `${dTot.protein}g Pro` : '-'}</span>
+                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${cellBg} ${cellBorder}`}>
+                                                            <span className={`text-2xl font-black ${cellText}`}>{mainTxt}</span>
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${cellText}`}>{subTxt}</span>
+                                                            {activeFilter === null && <div className={`h-px w-12 mb-1 ${cellText === 'text-white' ? 'bg-white/30' : 'bg-slate-200'}`}></div>}
+                                                            {activeFilter === null && <span className={`text-sm font-black ${cellText}`}>{botTxt}</span>}
                                                         </div>
                                                     </button>
                                                 );
                                             } else if (appMode === 'sleep') {
                                                 const daySleeps = sleepByDate[dKey] || [];
                                                 const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
-                                                const sStatus = getSleepStatus(sMins);
                                                 const circWarning = getCircadianWarning(daySleeps);
+                                                const hasData = daySleeps.length > 0;
+                                                
+                                                let cellBg = 'bg-slate-50';
+                                                let cellBorder = 'border-slate-100/50';
+                                                let cellText = 'text-slate-700';
+                                                let mainTxt = sMins > 0 ? formatDuration(sMins) : '-';
+                                        
+                                                if (hasData) {
+                                                    const lastSleep = daySleeps[daySleeps.length - 1];
+                                                    if (activeFilter === 'late_sleep' && lastSleep) {
+                                                        const sTime = lastSleep.sleepTime;
+                                                        const [sH, sM] = sTime.split(':').map(Number);
+                                                        let isLate = false;
+                                                        if (sH >= 0 && sH <= 5) {
+                                                            if (sH === 0 && sM === 0) isLate = false; 
+                                                            else isLate = true;
+                                                        }
+                                                        cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500';
+                                                        cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
+                                                        cellText = 'text-white';
+                                                        mainTxt = sTime;
+                                                    } else if (activeFilter === 'late_wake' && lastSleep) {
+                                                        const wTime = lastSleep.wakeTime;
+                                                        const [wH, wM] = wTime.split(':').map(Number);
+                                                        const isLate = (wH > 7) || (wH === 7 && wM > 0);
+                                                        cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500';
+                                                        cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
+                                                        cellText = 'text-white';
+                                                        mainTxt = wTime;
+                                                    } else {
+                                                        const sStatus = getSleepStatus(sMins);
+                                                        if (sStatus) {
+                                                            cellBg = sStatus.bg;
+                                                            cellBorder = sStatus.border;
+                                                            cellText = sStatus.text;
+                                                        }
+                                                    }
+                                                }
                                                 
                                                 return (
                                                     <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-100'}`}>
                                                         <p className={`text-sm font-bold mb-3 flex items-center justify-between ${isToday ? 'text-slate-800' : 'text-slate-500'}`}>
                                                             <span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span>
-                                                            {circWarning && renderCircadianIcon(circWarning, 14)}
+                                                            {circWarning && activeFilter === null && renderCircadianIcon(circWarning, 14)}
                                                         </p>
-                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${sStatus ? sStatus.bg + ' ' + sStatus.border : 'bg-slate-50 border-slate-100/50'}`}>
-                                                            <span className={`text-xl font-black ${sStatus ? sStatus.text : 'text-slate-700'}`}>{sMins > 0 ? formatDuration(sMins) : '-'}</span>
+                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${cellBg} ${cellBorder}`}>
+                                                            <span className={`text-xl font-black ${cellText}`}>{mainTxt}</span>
                                                         </div>
                                                     </button>
                                                 );
@@ -1086,34 +1164,35 @@
                                         })}
                                     </div>
                                     
+                                    {/* BÁO CÁO THỐNG KÊ TUẦN (CÓ FILTER ĐỘNG) */}
                                     <div className="mt-6 bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
                                         <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tuần</h3>
                                         {appMode === 'macro' && (
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
+                                                <button onClick={() => handleFilterClick('protein')} className={`w-full bg-red-50 p-4 rounded-2xl border border-red-100 text-center transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-2">Thiếu đạm</p>
                                                     <p className="text-3xl font-black text-red-600 leading-none">{weekThieuDam} <span className="text-sm font-bold text-red-400">ngày</span></p>
-                                                </div>
-                                                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
+                                                </button>
+                                                <button onClick={() => handleFilterClick('calorie')} className={`w-full bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-2">Cheatday</p>
                                                     <p className="text-3xl font-black text-orange-600 leading-none">{weekCheatDay} <span className="text-sm font-bold text-orange-400">ngày</span></p>
-                                                </div>
+                                                </button>
                                             </div>
                                         )}
                                         {appMode === 'sleep' && (
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
+                                                <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Thức khuya</p>
                                                     <p className="text-3xl font-black text-slate-700 leading-none">{weekLateSleep} <span className="text-sm font-bold text-slate-400">lần</span></p>
-                                                </div>
-                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
+                                                </button>
+                                                <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Ngủ nướng</p>
                                                     <p className="text-3xl font-black text-slate-700 leading-none">{weekLateWake} <span className="text-sm font-bold text-slate-400">lần</span></p>
-                                                </div>
+                                                </button>
                                             </div>
                                         )}
                                         {appMode === 'workout' && (
-                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center">
+                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center cursor-default opacity-90">
                                                 <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Số ngày tập luyện</p>
                                                 <p className="text-4xl font-black text-emerald-600 leading-none">{weekWorkout} <span className="text-sm font-bold text-emerald-500">ngày</span></p>
                                             </div>
@@ -1122,6 +1201,7 @@
                                 </div>
                             )}
 
+                            {/* Render View Tháng Có Filter Động */}
                             {currentView === 'month' && (
                                 <div className="animate-[fadeIn_0.3s_ease-out]">
                                     <div className="flex justify-between items-center bg-white rounded-2xl p-2 shadow-sm border border-slate-100 mb-6">
@@ -1154,21 +1234,47 @@
                                                 if (appMode === 'sleep') {
                                                     let sleepCellClass = "bg-white border border-slate-100 hover:border-indigo-300";
                                                     if (isToday) sleepCellClass += " ring-2 ring-indigo-500 ring-offset-1";
-
+                                            
+                                                    let textClass = 'text-slate-700';
+                                                    let content = sMins > 0 ? `${Math.floor(sMins / 60)}h${sMins % 60 > 0 ? sMins % 60 : ''}` : '-';
+                                            
+                                                    if (hasData) {
+                                                        const lastSleep = daySleeps[daySleeps.length - 1];
+                                                        if (activeFilter === 'late_sleep' && lastSleep) {
+                                                            const sTime = lastSleep.sleepTime;
+                                                            const [sH, sM] = sTime.split(':').map(Number);
+                                                            let isLate = false;
+                                                            if (sH >= 0 && sH <= 5) {
+                                                                if (sH === 0 && sM === 0) isLate = false; 
+                                                                else isLate = true;
+                                                            }
+                                                            sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
+                                                            if (isToday) sleepCellClass += " ring-2 ring-slate-800 ring-offset-1";
+                                                            textClass = 'text-white';
+                                                            content = sTime;
+                                                        } else if (activeFilter === 'late_wake' && lastSleep) {
+                                                            const wTime = lastSleep.wakeTime;
+                                                            const [wH, wM] = wTime.split(':').map(Number);
+                                                            const isLate = (wH > 7) || (wH === 7 && wM > 0);
+                                                            sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
+                                                            if (isToday) sleepCellClass += " ring-2 ring-slate-800 ring-offset-1";
+                                                            textClass = 'text-white';
+                                                            content = wTime;
+                                                        } else {
+                                                            if (sStatus) {
+                                                                sleepCellClass = `${sStatus.bg} ${sStatus.bg==='bg-yellow-400'?'text-slate-800':'text-white'} font-bold shadow-sm`;
+                                                                if (isToday) sleepCellClass += " ring-2 ring-slate-800 ring-offset-1";
+                                                                textClass = sStatus.bg==='bg-yellow-400'?'text-slate-800':'text-white';
+                                                            }
+                                                        }
+                                                    }
+                                            
                                                     return (
                                                         <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
                                                             className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all shadow-sm ${sleepCellClass}`}>
-                                                            <span className="absolute top-1 left-1.5 text-[10px] font-bold text-slate-400">{day.getDate()}</span>
-                                                            
-                                                            {sMins > 0 ? (
-                                                                <span className={`font-black text-[13px] z-10 ${sStatus ? (sStatus.bg === 'bg-emerald-500' ? 'text-emerald-500' : sStatus.bg === 'bg-yellow-400' ? 'text-yellow-500' : 'text-red-500') : 'text-slate-700'}`}>
-                                                                    {Math.floor(sMins / 60)}h{sMins % 60 > 0 ? sMins % 60 : ''}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="font-bold text-sm text-slate-200">-</span>
-                                                            )}
-
-                                                            {circWarning && (
+                                                            <span className={`z-10 text-[11px] absolute top-1 left-1.5 ${hasData && activeFilter === null ? 'text-white/60' : 'text-slate-400'}`}>{day.getDate()}</span>
+                                                            <span className={`font-black text-[13px] z-10 ${textClass}`}>{content}</span>
+                                                            {circWarning && activeFilter === null && (
                                                                 <div className="absolute bottom-0.5 right-0.5 z-20">
                                                                     {renderCircadianIcon(circWarning, 12)}
                                                                 </div>
@@ -1178,28 +1284,48 @@
                                                 }
 
                                                 let cellClass = "bg-transparent text-slate-600 border border-transparent";
+                                                let content = "";
+                                                
                                                 if (appMode === 'workout' && isW) {
                                                     cellClass = `${getWorkoutColor(wType).fill} text-white font-bold shadow-sm`;
-                                                } else if (appMode === 'macro' && mStatus) {
-                                                    cellClass = `${mStatus.bg} ${mStatus.bg==='bg-yellow-400'?'text-slate-800':'text-white'} font-bold shadow-sm`;
+                                                } else if (appMode === 'macro' && hasData) {
+                                                    const dTot = calculateTotals(foodsByDate[dKey] || []);
+                                                    const dKc = Math.round(dTot.kcal);
+                                                    if (activeFilter === 'protein') {
+                                                        if (dTot.protein >= 115) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
+                                                        else if (dTot.protein >= 95) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
+                                                        else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
+                                                        content = dTot.protein + "g";
+                                                    } else if (activeFilter === 'calorie') {
+                                                        if (dKc <= 2100) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
+                                                        else if (dKc <= 2500) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
+                                                        else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
+                                                        content = dKc;
+                                                    } else {
+                                                        if (mStatus) {
+                                                            cellClass = `${mStatus.bg} ${mStatus.bg==='bg-yellow-400'?'text-slate-800':'text-white'} font-bold shadow-sm`;
+                                                        }
+                                                    }
                                                 }
 
                                                 return (
                                                     <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
                                                         className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all ${isToday ? 'ring-2 ring-slate-800 ring-offset-1' : ''} ${cellClass}`}>
                                                         <span className="z-10 text-sm">{day.getDate()}</span>
+                                                        {content && <span className="absolute bottom-1 font-bold text-[10px] opacity-90 leading-none">{content}</span>}
                                                     </button>
                                                 );
                                             })}
                                         </div>
                                     </div>
 
+                                    {/* BÁO CÁO THỐNG KÊ THÁNG (CÓ FILTER ĐỘNG) */}
                                     <div className="bg-white rounded-[1.5rem] p-4 shadow-sm border border-slate-100">
                                         <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tháng</h3>
                                         
                                         {appMode === 'macro' && (
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center relative overflow-hidden group">
+                                                <button onClick={() => handleFilterClick('protein')} className={`bg-red-50 p-4 rounded-2xl border border-red-100 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <div className="absolute right-0 top-0 bottom-0 w-2 bg-red-100">
                                                         <div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div>
                                                     </div>
@@ -1211,8 +1337,8 @@
                                                     <div className="bg-white px-3 py-1 rounded-lg inline-block shadow-sm border border-red-100">
                                                         <span className="text-sm font-black text-red-500">{pctThieuDam}%</span>
                                                     </div>
-                                                </div>
-                                                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center relative overflow-hidden group">
+                                                </button>
+                                                <button onClick={() => handleFilterClick('calorie')} className={`bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <div className="absolute right-0 top-0 bottom-0 w-2 bg-orange-100">
                                                         <div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div>
                                                     </div>
@@ -1224,13 +1350,13 @@
                                                     <div className="bg-white px-3 py-1 rounded-lg inline-block shadow-sm border border-orange-100">
                                                         <span className="text-sm font-black text-orange-500">{pctCheatDay}%</span>
                                                     </div>
-                                                </div>
+                                                </button>
                                             </div>
                                         )}
 
                                         {appMode === 'sleep' && (
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group">
+                                                <button onClick={() => handleFilterClick('late_sleep')} className={`bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200">
                                                         <div className="absolute bottom-0 w-full bg-slate-800 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div>
                                                     </div>
@@ -1242,8 +1368,8 @@
                                                     <div className="bg-white px-3 py-1 rounded-lg border border-slate-100 inline-block shadow-sm">
                                                         <span className="text-sm font-black text-slate-600">{pctLateSleep}%</span>
                                                     </div>
-                                                </div>
-                                                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group">
+                                                </button>
+                                                <button onClick={() => handleFilterClick('late_wake')} className={`bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
                                                     <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200">
                                                         <div className="absolute bottom-0 w-full bg-slate-800 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div>
                                                     </div>
@@ -1255,12 +1381,12 @@
                                                     <div className="bg-white px-3 py-1 rounded-lg border border-slate-100 inline-block shadow-sm">
                                                         <span className="text-sm font-black text-slate-600">{pctLateWake}%</span>
                                                     </div>
-                                                </div>
+                                                </button>
                                             </div>
                                         )}
 
                                         {appMode === 'workout' && (
-                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center relative overflow-hidden group">
+                                            <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 text-center relative overflow-hidden group w-full cursor-default opacity-90">
                                                 <div className="absolute right-0 top-0 bottom-0 w-3 bg-emerald-100">
                                                     <div className="absolute bottom-0 w-full bg-emerald-500 transition-all duration-1000 rounded-t" style={{height: `${pctWorkout}%`}}></div>
                                                 </div>
@@ -1290,7 +1416,7 @@
                             </div>
                         )}
 
-                        {/* Modal Thêm Món Ăn với AI Scanner */}
+                        {/* Modal Thêm Món Ăn với AI */}
                         {isAddingFood && appMode === 'macro' && (
                             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
                                 <div className="bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh]">
