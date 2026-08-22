@@ -24,7 +24,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
     
     <!-- Lucide Icons -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.292.0/dist/umd/lucide-react.js"></script>
+
 
     <style>
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -584,6 +584,19 @@
                     setSleepFormData({ sleepTime: '', wakeTime: '' }); setIsAddingSleep(false);
                 };
                 const handleDeleteSleep = (id) => setSleepByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).filter(s => s.id !== id) }));
+                const handleStartEditFood = (food) => {
+    setEditingFoodId(food.id);
+    setEditFoodName(food.name);
+};
+
+const handleCancelAddWorkout = () => {
+    setIsAddingWorkout(false);
+    setWorkoutAddStep(1);
+};
+
+const handleUpdateRawText = (id, val) => {
+    setCurrentExercises(prev => prev.map(ex => ex.id === id ? { ...ex, rawText: val } : ex));
+};
 
                 const handleStartWorkout = (t) => { 
                     setWorkoutType(t); setWorkoutAddStep(2); 
