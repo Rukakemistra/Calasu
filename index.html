@@ -17,7 +17,7 @@
     </script>
     
     <!-- React & ReactDOM -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    < crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     
     <!-- Babel -->
@@ -230,7 +230,7 @@ const App = () => {
                 const [toast, setToast] = useState(null);
                 const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 5000); };
 
-                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbx000ekmR8weYN6yqnVtF0epE0h93iV7P1_iU8MSuk1s8b7OSwpq6eZaqzOAm0IXQqI/exec';
+                const defaultScriptUrl = 'https://script.google.com/macros'+'/s/AKfycbw8VcbkelZ6JvB9VpZ9kz46hfI3rtGgI__EZyWdgetWLKa_3iLC0YjFUS_eQ9fR2jtY/exec';
                 const defaultGeminiKey = 'AQ.Ab8RN6' + 'JwPEjMvaLfjQ54z1uldTge' + '-aqNjAc_m1-n0dyeeTTMVw';
 
                 const [showSettings, setShowSettings] = useState(false);
