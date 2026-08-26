@@ -179,9 +179,7 @@
             };
 
             const cleanNum = (num) => Number(num).toFixed(1).replace(/\.0$/, '');
-
-            /* STREAMING_CHUNK:Khởi tạo Component App Chính */
-            const App = () => {
+const App = () => {
                 const [isDarkMode, setIsDarkMode] = useState(() => {
                     const saved = localStorage.getItem('theme_mode');
                     return saved !== null ? JSON.parse(saved) : true; 
@@ -232,7 +230,7 @@
                 const [toast, setToast] = useState(null);
                 const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 5000); };
 
-                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbw8VcbkelZ6JvB9VpZ9kz46hfI3rtGgI__EZyWdgetWLKa_3iLC0YjFUS_eQ9fR2jtY/exec';
+                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbx000ekmR8weYN6yqnVtF0epE0h93iV7P1_iU8MSuk1s8b7OSwpq6eZaqzOAm0IXQqI/exec';
                 const defaultGeminiKey = 'AQ.Ab8RN6' + 'JwPEjMvaLfjQ54z1uldTge' + '-aqNjAc_m1-n0dyeeTTMVw';
 
                 const [showSettings, setShowSettings] = useState(false);
@@ -395,7 +393,7 @@
                                 if (isNewEra) {
                                     return mFoods.map(f => {
                                         const kcal = Math.round(f.kcal !== undefined ? f.kcal : (f.carbs*4 + f.protein*4 + f.fat*9));
-                                        return `${f.name}: ${kcal} kcal | P: ${cleanNum(f.protein)}g | C: ${cleanNum(f.carbs)}g | F: ${cleanNum(f.fat)}g`;
+                                        return `${f.name}: ${kcal} kcal | P: ${Math.round(f.protein)}g | C: ${Math.round(f.carbs)}g | F: ${Math.round(f.fat)}g`;
                                     }).join('\n');
                                 } else {
                                     let tKc = 0, tPro = 0;
@@ -413,7 +411,7 @@
                                 date: dKey, 
                                 sang: formatMeal('Sáng'), trua: formatMeal('Trưa'), chieu: formatMeal('Chiều'), ngoai_le: formatMeal('Ngoài lề'), 
                                 ngu: sleepStr,
-                                totalKcal: Math.round(tAll.kcal), totalPro: cleanNum(tAll.protein)
+                                totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein)
                             };
                         });
 
@@ -576,6 +574,7 @@
                     setFormData({ name: '', kcal: '', carbs: '', fat: '', protein: '' }); setIsAddingFood(false);
                 };
                 const handleDeleteFood = (id) => setFoodsByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).filter(f => f.id !== id) }));
+                const handleStartEditFood = (food) => { setEditingFoodId(food.id); setEditFoodName(food.name); };
                 const handleSaveEditFood = (id) => { if (!editFoodName.trim()) { setEditingFoodId(null); return; } setFoodsByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).map(f => f.id === id ? { ...f, name: editFoodName } : f) })); setEditingFoodId(null); setEditFoodName(''); };
 
                 const handleAddSleep = (e) => {
@@ -599,6 +598,7 @@
                     if (tE.length > 0) setCurrentExercises(tE); else setCurrentExercises([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]); 
                 };
                 const handleSaveWorkout = () => { const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); if (vEx.length === 0) return; setWorkoutsByDate(p => ({ ...p, [dateKey]: { type: workoutType, note: workoutNote, exercises: vEx } })); setIsAddingWorkout(false); setWorkoutAddStep(1); };
+                const handleCancelAddWorkout = () => { setIsAddingWorkout(false); setWorkoutAddStep(1); };
                 const handleDeleteWorkout = () => { setWorkoutsByDate(p => { const n = {...p}; delete n[dateKey]; return n; }); setShowDeleteConfirm(false); };
                 const handleAddExerciseRow = () => setCurrentExercises(prev => [...prev, { id: Date.now().toString(), name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
                 const handleUpdateExerciseName = (id, name) => setCurrentExercises(prev => prev.map(ex => ex.id === id ? { ...ex, name } : ex));
@@ -650,109 +650,159 @@
                 const pctLateWake = Math.round((monthLateWake / (monthSleepDaysCount||1)) * 100) || 0;
                 const pctThieuDam = Math.round((monthThieuDam / (elapsedDays||1)) * 100) || 0;
                 const pctCheatDay = Math.round((monthCheatDay / (elapsedDays||1)) * 100) || 0;
-                const pctWorkout = Math.round((monthWorkout / (elapsedDays||1)) * 100) || 0;
+                const pctWorkout = Math.round((monthWorkout / (elapsedDays||1)) * 100) || 0;            /* STREAMING_CHUNK:Khung Layout Chính & DARK MODE Container */
+            return (
+                <div className={isDarkMode ? "dark" : ""}>
+                <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans pb-24 selection:bg-emerald-200 transition-colors duration-300">
+                    {toast && (
+                        <div className="fixed top-4 left-1/2 z-[200] w-max max-w-[90vw] animate-[toastSlide_0.3s_ease-out] flex justify-center" style={{ transform: 'translateX(-50%)' }}>
+                            <div className={`px-6 py-4 rounded-2xl shadow-xl border font-bold text-sm flex items-center gap-3 ${toast.type === 'error' ? 'bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800' : 'bg-slate-800 dark:bg-slate-800 text-white border-slate-700 dark:border-slate-700'}`}>
+                                {toast.type === 'error' ? <XIcon size={20}/> : <CheckCircleIcon size={20} className="text-emerald-400"/>}
+                                {toast.msg}
+                            </div>
+                        </div>
+                    )}
 
-                /* STREAMING_CHUNK:Khung Layout Chính & DARK MODE Container */
-                return (
-                    <div className={isDarkMode ? "dark" : ""}>
-                    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans pb-24 selection:bg-emerald-200 transition-colors duration-300">
-                        {toast && (
-                            <div className="fixed top-4 left-1/2 z-[200] w-max max-w-[90vw] animate-[toastSlide_0.3s_ease-out] flex justify-center" style={{ transform: 'translateX(-50%)' }}>
-                                <div className={`px-6 py-4 rounded-2xl shadow-xl border font-bold text-sm flex items-center gap-3 ${toast.type === 'error' ? 'bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800' : 'bg-slate-800 dark:bg-slate-800 text-white border-slate-700 dark:border-slate-700'}`}>
-                                    {toast.type === 'error' ? <XIcon size={20}/> : <CheckCircleIcon size={20} className="text-emerald-400"/>}
-                                    {toast.msg}
+                    <header className="bg-white dark:bg-slate-900 px-4 py-4 rounded-b-3xl shadow-sm border-b border-slate-100 dark:border-slate-800 sticky top-0 z-40 flex flex-col items-center transition-colors">
+                        <div className="flex justify-between items-center w-full max-w-md mb-3 px-2">
+                            <h1 className="text-slate-800 dark:text-slate-100 font-black text-xl tracking-wide flex items-center gap-2">Calasu Tracker</h1>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="text-slate-400 dark:text-slate-500 p-2 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                    {isDarkMode ? <SunIcon size={20}/> : <MoonIcon size={20}/>}
+                                </button>
+                                <button onClick={() => setShowSettings(true)} className="text-blue-500 p-2 rounded-full bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm"><CloudIcon size={20} /></button>
+                            </div>
+                        </div>
+                        <div className="flex w-full max-w-md gap-1.5 mb-4 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl overflow-x-auto no-scrollbar snap-x transition-colors">
+                            <button onClick={() => setAppMode('stat')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'stat' ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><BookIcon size={18}/> Nhật ký</button>
+                            <button onClick={() => setAppMode('macro')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'macro' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><UtensilsIcon size={18}/> Eating</button>
+                            <button onClick={() => setAppMode('sleep')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'sleep' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><MoonIcon size={18}/> Sleeping</button>
+                            <button onClick={() => setAppMode('workout')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'workout' ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><DumbbellIcon size={18}/> Work Out</button>
+                        </div>
+                        <div className="flex bg-slate-50 dark:bg-slate-900 p-1 rounded-xl w-full max-w-md border border-slate-100 dark:border-slate-800 transition-colors">
+                            {['day', 'week', 'month'].map(view => {
+                                let aCls = ''; 
+                                if (appMode === 'macro') aCls = 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'; 
+                                else if (appMode === 'sleep') aCls = 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'; 
+                                else if (appMode === 'workout') aCls = 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400';
+                                else if (appMode === 'stat') aCls = 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
+                                return (<button key={view} onClick={() => setCurrentView(view)} className={`flex-1 capitalize py-2 rounded-lg text-xs font-bold transition-all duration-300 ${currentView === view ? aCls : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>{view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}</button>);
+                            })}
+                        </div>
+                    </header>
+
+                    <main className="p-4 max-w-md mx-auto mt-2">
+                        
+                        {/* STREAMING_CHUNK:View Lịch Nhật Ký NGÀY */}
+                        {appMode === 'stat' && currentView === 'day' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{VN_DAYS[selectedDate.getDay()]}</p><p className="text-lg font-black text-slate-800 dark:text-slate-100">{formatDate(selectedDate)}</p></div>
+                                    <button onClick={() => changeDate(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                </div>
+
+                                {currentStat ? (
+                                    <div className="bg-white dark:bg-slate-900 p-5 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-5 transition-colors">
+                                        <div className="flex justify-between items-center pb-4 border-b border-slate-50 dark:border-slate-800/50">
+                                            <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${MOODS.find(m=>m.val===currentStat.mood)?.twBg || 'bg-slate-500'} text-white shadow-sm`}>{MOODS.find(m=>m.val===currentStat.mood)?.label || 'Không rõ'}</span>
+                                            <span className={`text-sm font-bold flex items-center gap-1.5 ${OUTINGS.find(o=>o.val===currentStat.outing)?.color || 'text-slate-500'}`}>{React.createElement(OUTINGS.find(o=>o.val===currentStat.outing)?.Icon || HomeIcon, {size: 16})} Ra ngoài: {currentStat.outing}</span>
+                                        </div>
+                                        
+                                        <div className={`p-4 rounded-xl border-2 ${getDopamineColor(currentStat.dopTotal).bg} ${getDopamineColor(currentStat.dopTotal).border}`}>
+                                            <p className={`text-sm font-black uppercase tracking-wider mb-2 flex justify-between ${getDopamineColor(currentStat.dopTotal).text}`}><span>Bẫy Dopamine</span> <span>ĐIỂM: {currentStat.dopTotal}</span></p>
+                                            <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+                                                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Lùng sục mới: <span className="text-red-500 dark:text-red-400">{currentStat.dop1}</span></div>
+                                                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Mở phản xạ: <span className="text-red-500 dark:text-red-400">{currentStat.dop2}</span></div>
+                                                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Giết thời gian: <span className="text-red-500 dark:text-red-400">{currentStat.dop3}</span></div>
+                                                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Quanh giờ ngủ: <span className="text-red-500 dark:text-red-400">{currentStat.dop4}</span></div>
+                                            </div>
+                                        </div>
+
+                                        {currentStat.summary && (
+                                            <div className="text-sm font-medium text-slate-700 dark:text-slate-300 italic border-l-4 border-slate-200 dark:border-slate-700 pl-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-r-xl">"{currentStat.summary}"</div>
+                                        )}
+                                        
+                                        <button onClick={() => { setIsAddingStat(true); setStatFormData(currentStat); }} className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><PencilIcon size={16}/> Sửa Nhật ký</button>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+                                        <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><BookIcon className="text-slate-400 dark:text-slate-500" size={32} /></div>
+                                        <h3 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-2">Chưa có nhật ký</h3>
+                                        <p className="text-slate-400 dark:text-slate-500 text-sm mb-6 px-4">Hãy dành 1 phút để đúc kết lại ngày hôm nay nhé!</p>
+                                        <button onClick={() => { setIsAddingStat(true); setStatFormData({ mood: 3, outing: 1, dop1: 0, dop2: 0, dop3: 0, dop4: 0, summary: '' }); }} className="bg-purple-600 text-white rounded-full px-6 py-3 font-bold shadow-md hover:bg-purple-700 transition-colors">Check-in Ngày Này</button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* STREAMING_CHUNK:View Lịch Nhật Ký TUẦN */}
+                        {appMode === 'stat' && currentView === 'week' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeWeek(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-sm font-black text-slate-800 dark:text-slate-100">{formatDate(currentWeekStart)} - {formatDate(new Date(new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 6)))}</p></div>
+                                    <button onClick={() => changeWeek(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {weekDays.map(day => {
+                                        const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                        const sDay = statsByDate[dKey];
+                                        
+                                        let cellBg = 'bg-slate-50 dark:bg-slate-800/50'; let cellBorder = 'border-slate-100/50 dark:border-slate-800'; let textColor = 'text-slate-400 dark:text-slate-500';
+                                        let moodColor = null, dopColor = null, outIcon = null;
+
+                                        if (sDay) {
+                                            moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3];
+                                            dopColor = getDopamineColor(sDay.dopTotal);
+                                            outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0];
+                                            
+                                            cellBg = moodColor.twBg; textColor = moodColor.twText;
+                                            cellBorder = `border-[3px] ${dopColor.border}`;
+                                        }
+
+                                        return (
+                                            <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'} transition-colors`}>
+                                                <p className={`text-sm font-bold mb-3 flex justify-between items-center ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}><span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span></p>
+                                                <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${cellBg} ${cellBorder}`}>
+                                                    <span className={`text-xl font-black ${textColor}`}>{sDay ? sDay.dopTotal : '-'}</span>
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${textColor}`}>{sDay ? 'Dopamine' : ''}</span>
+                                                    {sDay && outIcon && <div className="absolute bottom-1 right-1 bg-white/40 backdrop-blur rounded p-0.5"><outIcon.Icon size={12} className={outIcon.color} /></div>}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
 
-                        <header className="bg-white dark:bg-slate-900 px-4 py-4 rounded-b-3xl shadow-sm border-b border-slate-100 dark:border-slate-800 sticky top-0 z-40 flex flex-col items-center transition-colors">
-                            <div className="flex justify-between items-center w-full max-w-md mb-3 px-2">
-                                <h1 className="text-slate-800 dark:text-slate-100 font-black text-xl tracking-wide flex items-center gap-2">Calasu Tracker</h1>
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="text-slate-400 dark:text-slate-500 p-2 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                                        {isDarkMode ? <SunIcon size={20}/> : <MoonIcon size={20}/>}
-                                    </button>
-                                    <button onClick={() => setShowSettings(true)} className="text-blue-500 p-2 rounded-full bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors shadow-sm"><CloudIcon size={20} /></button>
+                        {/* STREAMING_CHUNK:View Lịch Nhật Ký THÁNG (Sạch 100%) */}
+                        {appMode === 'stat' && currentView === 'month' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeMonth(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-lg font-black text-slate-800 dark:text-slate-100">Tháng {String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, {currentMonthStart.getFullYear()}</p></div>
+                                    <button onClick={() => changeMonth(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
                                 </div>
-                            </div>
-                            <div className="flex w-full max-w-md gap-1.5 mb-4 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl overflow-x-auto no-scrollbar snap-x transition-colors">
-                                <button onClick={() => setAppMode('stat')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'stat' ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><BookIcon size={18}/> Nhật ký</button>
-                                <button onClick={() => setAppMode('macro')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'macro' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><UtensilsIcon size={18}/> Eating</button>
-                                <button onClick={() => setAppMode('sleep')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'sleep' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><MoonIcon size={18}/> Sleeping</button>
-                                <button onClick={() => setAppMode('workout')} className={`snap-center shrink-0 w-[85px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl font-bold transition-all text-[11px] ${appMode === 'workout' ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}><DumbbellIcon size={18}/> Work Out</button>
-                            </div>
-                            <div className="flex bg-slate-50 dark:bg-slate-900 p-1 rounded-xl w-full max-w-md border border-slate-100 dark:border-slate-800 transition-colors">
-                                {['day', 'week', 'month'].map(view => {
-                                    let aCls = ''; 
-                                    if (appMode === 'macro') aCls = 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'; 
-                                    else if (appMode === 'sleep') aCls = 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'; 
-                                    else if (appMode === 'workout') aCls = 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400';
-                                    else if (appMode === 'stat') aCls = 'bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400';
-                                    return (<button key={view} onClick={() => setCurrentView(view)} className={`flex-1 capitalize py-2 rounded-lg text-xs font-bold transition-all duration-300 ${currentView === view ? aCls : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'}`}>{view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}</button>);
-                                })}
-                            </div>
-                        </header>
 
-                        <main className="p-4 max-w-md mx-auto mt-2">
-                            
-                            {/* STREAMING_CHUNK:View Lịch Nhật Ký NGÀY */}
-                            {appMode === 'stat' && currentView === 'day' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{VN_DAYS[selectedDate.getDay()]}</p><p className="text-lg font-black text-slate-800 dark:text-slate-100">{formatDate(selectedDate)}</p></div>
-                                        <button onClick={() => changeDate(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
-                                    </div>
-
-                                    {currentStat ? (
-                                        <div className="bg-white dark:bg-slate-900 p-5 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 shadow-sm space-y-5 transition-colors">
-                                            <div className="flex justify-between items-center pb-4 border-b border-slate-50 dark:border-slate-800/50">
-                                                <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${MOODS.find(m=>m.val===currentStat.mood)?.twBg || 'bg-slate-500'} text-white shadow-sm`}>{MOODS.find(m=>m.val===currentStat.mood)?.label || 'Không rõ'}</span>
-                                                <span className={`text-sm font-bold flex items-center gap-1.5 ${OUTINGS.find(o=>o.val===currentStat.outing)?.color || 'text-slate-500'}`}>{React.createElement(OUTINGS.find(o=>o.val===currentStat.outing)?.Icon || HomeIcon, {size: 16})} Ra ngoài: {currentStat.outing}</span>
-                                            </div>
-                                            
-                                            <div className={`p-4 rounded-xl border-2 ${getDopamineColor(currentStat.dopTotal).bg} ${getDopamineColor(currentStat.dopTotal).border}`}>
-                                                <p className={`text-sm font-black uppercase tracking-wider mb-2 flex justify-between ${getDopamineColor(currentStat.dopTotal).text}`}><span>Bẫy Dopamine</span> <span>ĐIỂM: {currentStat.dopTotal}</span></p>
-                                                <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
-                                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Lùng sục mới: <span className="text-red-500 dark:text-red-400">{currentStat.dop1}</span></div>
-                                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Mở phản xạ: <span className="text-red-500 dark:text-red-400">{currentStat.dop2}</span></div>
-                                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Giết thời gian: <span className="text-red-500 dark:text-red-400">{currentStat.dop3}</span></div>
-                                                    <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">Quanh giờ ngủ: <span className="text-red-500 dark:text-red-400">{currentStat.dop4}</span></div>
-                                                </div>
-                                            </div>
-
-                                            {currentStat.summary && (
-                                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300 italic border-l-4 border-slate-200 dark:border-slate-700 pl-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-r-xl">"{currentStat.summary}"</div>
-                                            )}
-                                            
-                                            <button onClick={() => { setIsAddingStat(true); setStatFormData(currentStat); }} className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl flex justify-center items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"><PencilIcon size={16}/> Sửa Nhật ký</button>
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-                                            <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><BookIcon className="text-slate-400 dark:text-slate-500" size={32} /></div>
-                                            <h3 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-2">Chưa có nhật ký</h3>
-                                            <p className="text-slate-400 dark:text-slate-500 text-sm mb-6 px-4">Hãy dành 1 phút để đúc kết lại ngày hôm nay nhé!</p>
-                                            <button onClick={() => { setIsAddingStat(true); setStatFormData({ mood: 3, outing: 1, dop1: 0, dop2: 0, dop3: 0, dop4: 0, summary: '' }); }} className="bg-purple-600 text-white rounded-full px-6 py-3 font-bold shadow-md hover:bg-purple-700 transition-colors">Check-in Ngày Này</button>
-                                        </div>
-                                    )}
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
+                                    {[ {id:'all', label:'Tổng hợp'}, {id:'mood', label:'Tâm trạng'}, {id:'dopamine', label:'Dopamine'}, {id:'outing', label:'Ra ngoài'} ].map(v => (
+                                        <button key={v.id} onClick={() => setStatViewMode(v.id)} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${statViewMode === v.id ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>{v.label}</button>
+                                    ))}
                                 </div>
-                            )}
 
-                            {/* STREAMING_CHUNK:View Lịch Nhật Ký TUẦN */}
-                            {appMode === 'stat' && currentView === 'week' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeWeek(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-sm font-black text-slate-800 dark:text-slate-100">{formatDate(currentWeekStart)} - {formatDate(new Date(new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 6)))}</p></div>
-                                        <button onClick={() => changeWeek(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                                    <div className="grid grid-cols-7 gap-1 mb-2">
+                                        {VN_DAYS.map(day => (<div key={day} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">{day}</div>))}
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {weekDays.map(day => {
+                                    <div className="grid grid-cols-7 gap-1">
+                                        {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-16"></div>))}
+                                        {monthDays.map(day => {
                                             const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
                                             const sDay = statsByDate[dKey];
                                             
-                                            let cellBg = 'bg-slate-50 dark:bg-slate-800/50'; let cellBorder = 'border-slate-100/50 dark:border-slate-800'; let textColor = 'text-slate-400 dark:text-slate-500';
+                                            let cellBg = 'bg-slate-50 dark:bg-slate-800/50'; let cellBorder = 'border-transparent'; let textColor = 'text-slate-400 dark:text-slate-500';
                                             let moodColor = null, dopColor = null, outIcon = null;
 
                                             if (sDay) {
@@ -760,545 +810,492 @@
                                                 dopColor = getDopamineColor(sDay.dopTotal);
                                                 outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0];
                                                 
-                                                cellBg = moodColor.twBg; textColor = moodColor.twText;
-                                                cellBorder = `border-[3px] ${dopColor.border}`;
+                                                if (statViewMode === 'all' || statViewMode === 'mood') { cellBg = moodColor.twBg; textColor = moodColor.twText; }
+                                                if (statViewMode === 'all' || statViewMode === 'dopamine') cellBorder = `border-[3px] ${dopColor.border}`;
+                                                if (statViewMode === 'dopamine' && statViewMode !== 'all') { cellBg = dopColor.bg; textColor = dopColor.text; }
+                                                if (statViewMode === 'outing') { cellBg = 'bg-slate-100 dark:bg-slate-800'; textColor = 'text-slate-800 dark:text-slate-100'; }
                                             }
 
                                             return (
-                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'} transition-colors`}>
-                                                    <p className={`text-sm font-bold mb-3 flex justify-between items-center ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}><span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span></p>
-                                                    <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${cellBg} ${cellBorder}`}>
-                                                        <span className={`text-xl font-black ${textColor}`}>{sDay ? sDay.dopTotal : '-'}</span>
-                                                        <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${textColor}`}>{sDay ? 'Dopamine' : ''}</span>
-                                                        {sDay && outIcon && <div className="absolute bottom-1 right-1 bg-white/40 backdrop-blur rounded p-0.5"><outIcon.Icon size={12} className={outIcon.color} /></div>}
-                                                    </div>
+                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`h-16 w-full flex flex-col justify-center rounded-xl relative transition-all ${cellBg} ${cellBorder} ${isToday ? 'ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-2 dark:ring-offset-slate-950' : ''}`}>
+                                                    <span className={`absolute top-1 right-1.5 z-10 font-bold ${textColor} ${statViewMode==='all' && sDay ? 'text-[11px] opacity-90' : 'text-xs'}`}>{day.getDate()}</span>
+                                                    {(statViewMode === 'all' || statViewMode === 'outing') && sDay && outIcon && (
+                                                        <div className="absolute bottom-1 right-1 bg-white/40 dark:bg-black/40 backdrop-blur rounded p-0.5"><outIcon.Icon size={10} className={outIcon.color} /></div>
+                                                    )}
                                                 </button>
                                             );
                                         })}
                                     </div>
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {/* STREAMING_CHUNK:View Lịch Nhật Ký THÁNG (Sạch 100%) */}
-                            {appMode === 'stat' && currentView === 'month' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeMonth(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-lg font-black text-slate-800 dark:text-slate-100">Tháng {String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, {currentMonthStart.getFullYear()}</p></div>
-                                        <button onClick={() => changeMonth(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
-                                    </div>
+                        {/* STREAMING_CHUNK:Render View Ngày Dinh dưỡng/Ngủ/Tập... */}
+                        {currentView === 'day' && appMode !== 'stat' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{VN_DAYS[selectedDate.getDay()]}</p><p className="text-lg font-black text-slate-800 dark:text-slate-100">{formatDate(selectedDate)}</p></div>
+                                    <button onClick={() => changeDate(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                </div>
 
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4">
-                                        {[ {id:'all', label:'Tổng hợp'}, {id:'mood', label:'Tâm trạng'}, {id:'dopamine', label:'Dopamine'}, {id:'outing', label:'Ra ngoài'} ].map(v => (
-                                            <button key={v.id} onClick={() => setStatViewMode(v.id)} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${statViewMode === v.id ? 'bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>{v.label}</button>
-                                        ))}
-                                    </div>
-
-                                    <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                                        <div className="grid grid-cols-7 gap-1 mb-2">
-                                            {VN_DAYS.map(day => (<div key={day} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">{day}</div>))}
+                                {appMode === 'macro' && (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4 mb-6">
+                                            <div className="col-span-2 bg-gradient-to-br from-emerald-400 to-teal-500 dark:from-emerald-600 dark:to-teal-700 rounded-[1.5rem] p-5 text-white shadow-lg shadow-emerald-200 dark:shadow-none relative overflow-hidden transition-colors">
+                                                <p className="text-emerald-50 dark:text-emerald-100 font-medium text-sm mb-1 flex items-center gap-1.5"><FlameIcon size={16}/> Tổng Calories</p>
+                                                <h2 className="text-4xl font-black">{totalKcal} <span className="text-lg font-medium opacity-80">kcal</span></h2>
+                                            </div>
+                                            <div className="bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+                                                <p className="text-slate-400 dark:text-slate-500 font-semibold text-xs mb-1 flex items-center gap-1.5"><WheatIcon size={14} className="text-blue-500 dark:text-blue-400"/> Carb</p>
+                                                <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.carbs)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
+                                            </div>
+                                            <div className="bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+                                                <p className="text-slate-400 dark:text-slate-500 font-semibold text-xs mb-1 flex items-center gap-1.5"><DropletIcon size={14} className="text-yellow-500 dark:text-yellow-400"/> Fat</p>
+                                                <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.fat)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
+                                            </div>
+                                            <div className="col-span-2 bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex justify-between items-center transition-colors">
+                                                <span className="text-slate-400 dark:text-slate-500 font-semibold text-sm flex items-center gap-1.5"><BeefIcon size={16} className="text-red-500 dark:text-red-400"/> Protein</span>
+                                                <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.protein)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
+                                            </div>
                                         </div>
-                                        <div className="grid grid-cols-7 gap-1">
-                                            {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-16"></div>))}
-                                            {monthDays.map(day => {
-                                                const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                                const sDay = statsByDate[dKey];
-                                                
-                                                let cellBg = 'bg-slate-50 dark:bg-slate-800/50'; let cellBorder = 'border-transparent'; let textColor = 'text-slate-400 dark:text-slate-500';
-                                                let moodColor = null, dopColor = null, outIcon = null;
 
-                                                if (sDay) {
-                                                    moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3];
-                                                    dopColor = getDopamineColor(sDay.dopTotal);
-                                                    outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0];
-                                                    
-                                                    if (statViewMode === 'all' || statViewMode === 'mood') { cellBg = moodColor.twBg; textColor = moodColor.twText; }
-                                                    if (statViewMode === 'all' || statViewMode === 'dopamine') cellBorder = `border-[3px] ${dopColor.border}`;
-                                                    if (statViewMode === 'dopamine' && statViewMode !== 'all') { cellBg = dopColor.bg; textColor = dopColor.text; }
-                                                    if (statViewMode === 'outing') { cellBg = 'bg-slate-100 dark:bg-slate-800'; textColor = 'text-slate-800 dark:text-slate-100'; }
-                                                }
+                                        <div className="space-y-4 mb-6">
+                                            {['Sáng', 'Trưa', 'Chiều', 'Ngoài lề'].map(meal => {
+                                                const mealFoods = currentFoods.filter(f => f.meal === meal);
+                                                let MIcon = CoffeeIcon, icColor = "text-slate-500 dark:text-slate-400";
+                                                if(meal==='Sáng'){ MIcon = SunriseIcon; icColor="text-amber-500 dark:text-amber-400"; }
+                                                if(meal==='Trưa'){ MIcon = SunIcon; icColor="text-orange-500 dark:text-orange-400"; }
+                                                if(meal==='Chiều'){ MIcon = SunsetIcon; icColor="text-indigo-500 dark:text-indigo-400"; }
 
                                                 return (
-                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`h-16 w-full flex flex-col justify-center rounded-xl relative transition-all ${cellBg} ${cellBorder} ${isToday ? 'ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-2 dark:ring-offset-slate-950' : ''}`}>
-                                                        <span className={`absolute top-1 right-1.5 z-10 font-bold ${textColor} ${statViewMode==='all' && sDay ? 'text-[11px] opacity-90' : 'text-xs'}`}>{day.getDate()}</span>
-                                                        {(statViewMode === 'all' || statViewMode === 'outing') && sDay && outIcon && (
-                                                            <div className="absolute bottom-1 right-1 bg-white/40 dark:bg-black/40 backdrop-blur rounded p-0.5"><outIcon.Icon size={10} className={outIcon.color} /></div>
+                                                    <div key={meal} className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+                                                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-50 dark:border-slate-800/50">
+                                                            <div className="flex items-center gap-2">
+                                                                <MIcon size={20} className={icColor} />
+                                                                <h4 className="font-black text-slate-700 dark:text-slate-200 text-lg">{meal}</h4>
+                                                            </div>
+                                                            <button onClick={() => { setAddingMeal(meal); setIsAddingFood(true); }} className="text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 p-2 rounded-xl transition-colors"><PlusIcon size={18} /></button>
+                                                        </div>
+                                                        {mealFoods.length === 0 ? <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2 text-center bg-slate-50/50 dark:bg-slate-800/50 rounded-xl">Chưa có món</p> : (
+                                                            <div className="space-y-3">
+                                                                {mealFoods.map(food => {
+                                                                    const foodKcal = Math.round(food.kcal !== undefined ? food.kcal : (food.carbs*4 + food.protein*4 + food.fat*9));
+                                                                    return (
+                                                                        <div key={food.id} className="bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl border border-slate-100/50 dark:border-slate-700 flex justify-between items-center group transition-colors">
+                                                                            <div className="flex-1 mr-3">
+                                                                                {editingFoodId === food.id ? (
+                                                                                    <input autoFocus value={editFoodName} onChange={e=>setEditFoodName(e.target.value)} onBlur={()=>handleSaveEditFood(food.id)} onKeyDown={e=>e.key==='Enter'&&handleSaveEditFood(food.id)} className="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded px-2 py-1 outline-none mb-1 text-sm font-bold text-slate-800 dark:text-slate-100 transition-colors" />
+                                                                                ) : (
+                                                                                    <div className="flex items-center gap-2 mb-1.5 cursor-pointer" onClick={() => handleStartEditFood(food)}>
+                                                                                        <p className="font-bold text-slate-700 dark:text-slate-200">{food.name}</p><PencilIcon size={12} className="text-slate-300 dark:text-slate-600 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors" />
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="flex gap-2 text-[11px] font-semibold flex-wrap">
+                                                                                    <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/30 px-2 py-0.5 rounded border border-emerald-100/50 dark:border-emerald-800/50">{foodKcal} kcal</span>
+                                                                                    <span className="text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-900/30 px-2 py-0.5 rounded border border-red-100/50 dark:border-red-800/50">Pro: {cleanNum(food.protein)}g</span>
+                                                                                    {(food.carbs > 0 || food.fat > 0) && (
+                                                                                        <>
+                                                                                            <span className="text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-100/50 dark:border-blue-800/50">Carb: {cleanNum(food.carbs)}g</span>
+                                                                                            <span className="text-yellow-600 dark:text-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/30 px-2 py-0.5 rounded border border-yellow-100/50 dark:border-yellow-800/50">Fat: {cleanNum(food.fat)}g</span>
+                                                                                        </>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <button onClick={() => handleDeleteFood(food.id)} className="p-2 text-slate-300 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2Icon size={18} /></button>
+                                                                        </div>
+                                                                    )
+                                                                })}
+                                                            </div>
                                                         )}
-                                                    </button>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
-                                    </div>
-                                </div>
-                            )}
+                                    </>
+                                )}
 
-                            {/* STREAMING_CHUNK:Render View Ngày Dinh dưỡng/Ngủ/Tập... */}
-                            {currentView === 'day' && appMode !== 'stat' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-0.5">{VN_DAYS[selectedDate.getDay()]}</p><p className="text-lg font-black text-slate-800 dark:text-slate-100">{formatDate(selectedDate)}</p></div>
-                                        <button onClick={() => changeDate(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
-                                    </div>
-
-                                    {appMode === 'macro' && (
-                                        <>
-                                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                                <div className="col-span-2 bg-gradient-to-br from-emerald-400 to-teal-500 dark:from-emerald-600 dark:to-teal-700 rounded-[1.5rem] p-5 text-white shadow-lg shadow-emerald-200 dark:shadow-none relative overflow-hidden transition-colors">
-                                                    <p className="text-emerald-50 dark:text-emerald-100 font-medium text-sm mb-1 flex items-center gap-1.5"><FlameIcon size={16}/> Tổng Calories</p>
-                                                    <h2 className="text-4xl font-black">{totalKcal} <span className="text-lg font-medium opacity-80">kcal</span></h2>
-                                                </div>
-                                                <div className="bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-                                                    <p className="text-slate-400 dark:text-slate-500 font-semibold text-xs mb-1 flex items-center gap-1.5"><WheatIcon size={14} className="text-blue-500 dark:text-blue-400"/> Carb</p>
-                                                    <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.carbs)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
-                                                </div>
-                                                <div className="bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-                                                    <p className="text-slate-400 dark:text-slate-500 font-semibold text-xs mb-1 flex items-center gap-1.5"><DropletIcon size={14} className="text-yellow-500 dark:text-yellow-400"/> Fat</p>
-                                                    <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.fat)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
-                                                </div>
-                                                <div className="col-span-2 bg-white dark:bg-slate-900 rounded-[1.25rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex justify-between items-center transition-colors">
-                                                    <span className="text-slate-400 dark:text-slate-500 font-semibold text-sm flex items-center gap-1.5"><BeefIcon size={16} className="text-red-500 dark:text-red-400"/> Protein</span>
-                                                    <p className="text-2xl font-black text-slate-700 dark:text-slate-200">{cleanNum(currentTotals.protein)}<span className="text-sm font-medium text-slate-400 dark:text-slate-500 ml-1">g</span></p>
-                                                </div>
+                                {appMode === 'sleep' && (
+                                    <>
+                                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-indigo-600 dark:to-purple-800 rounded-[1.5rem] p-6 text-white shadow-lg shadow-indigo-200 dark:shadow-none mb-6 text-center relative overflow-hidden flex flex-col items-center justify-center transition-colors">
+                                            <MoonIcon size={80} className="absolute -right-4 -bottom-4 text-white opacity-10" />
+                                            <div className="flex items-center justify-center gap-2 mb-2 z-10">
+                                                <p className="text-indigo-100 font-medium text-sm flex items-center gap-1.5"><MoonIcon size={16}/> Đã ngủ</p>
+                                                {currentCircadian && <div className="animate-bounce">{renderCircadianIcon(currentCircadian, 16)}</div>}
                                             </div>
-
-                                            <div className="space-y-4 mb-6">
-                                                {['Sáng', 'Trưa', 'Chiều', 'Ngoài lề'].map(meal => {
-                                                    const mealFoods = currentFoods.filter(f => f.meal === meal);
-                                                    let MIcon = CoffeeIcon, icColor = "text-slate-500 dark:text-slate-400";
-                                                    if(meal==='Sáng'){ MIcon = SunriseIcon; icColor="text-amber-500 dark:text-amber-400"; }
-                                                    if(meal==='Trưa'){ MIcon = SunIcon; icColor="text-orange-500 dark:text-orange-400"; }
-                                                    if(meal==='Chiều'){ MIcon = SunsetIcon; icColor="text-indigo-500 dark:text-indigo-400"; }
-
-                                                    return (
-                                                        <div key={meal} className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-                                                            <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-50 dark:border-slate-800/50">
-                                                                <div className="flex items-center gap-2">
-                                                                    <MIcon size={20} className={icColor} />
-                                                                    <h4 className="font-black text-slate-700 dark:text-slate-200 text-lg">{meal}</h4>
-                                                                </div>
-                                                                <button onClick={() => { setAddingMeal(meal); setIsAddingFood(true); }} className="text-emerald-500 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 p-2 rounded-xl transition-colors"><PlusIcon size={18} /></button>
-                                                            </div>
-                                                            {mealFoods.length === 0 ? <p className="text-sm text-slate-400 dark:text-slate-500 italic py-2 text-center bg-slate-50/50 dark:bg-slate-800/50 rounded-xl">Chưa có món</p> : (
-                                                                <div className="space-y-3">
-                                                                    {mealFoods.map(food => {
-                                                                        const foodKcal = Math.round(food.kcal !== undefined ? food.kcal : (food.carbs*4 + food.protein*4 + food.fat*9));
-                                                                        return (
-                                                                            <div key={food.id} className="bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl border border-slate-100/50 dark:border-slate-700 flex justify-between items-center group transition-colors">
-                                                                                <div className="flex-1 mr-3">
-                                                                                    {editingFoodId === food.id ? (
-                                                                                        <input autoFocus value={editFoodName} onChange={e=>setEditFoodName(e.target.value)} onBlur={()=>handleSaveEditFood(food.id)} onKeyDown={e=>e.key==='Enter'&&handleSaveEditFood(food.id)} className="w-full bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 rounded px-2 py-1 outline-none mb-1 text-sm font-bold text-slate-800 dark:text-slate-100 transition-colors" />
-                                                                                    ) : (
-                                                                                        <div className="flex items-center gap-2 mb-1.5 cursor-pointer" onClick={() => handleStartEditFood(food)}>
-                                                                                            <p className="font-bold text-slate-700 dark:text-slate-200">{food.name}</p><PencilIcon size={12} className="text-slate-300 dark:text-slate-600 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors" />
-                                                                                        </div>
-                                                                                    )}
-                                                                                    <div className="flex gap-2 text-[11px] font-semibold flex-wrap">
-                                                                                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-900/30 px-2 py-0.5 rounded border border-emerald-100/50 dark:border-emerald-800/50">{foodKcal} kcal</span>
-                                                                                        <span className="text-red-500 dark:text-red-400 bg-red-50/50 dark:bg-red-900/30 px-2 py-0.5 rounded border border-red-100/50 dark:border-red-800/50">Pro: {cleanNum(food.protein)}g</span>
-                                                                                        {(food.carbs > 0 || food.fat > 0) && (
-                                                                                            <>
-                                                                                                <span className="text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-100/50 dark:border-blue-800/50">Carb: {cleanNum(food.carbs)}g</span>
-                                                                                                <span className="text-yellow-600 dark:text-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/30 px-2 py-0.5 rounded border border-yellow-100/50 dark:border-yellow-800/50">Fat: {cleanNum(food.fat)}g</span>
-                                                                                            </>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                                <button onClick={() => handleDeleteFood(food.id)} className="p-2 text-slate-300 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2Icon size={18} /></button>
-                                                                            </div>
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {appMode === 'sleep' && (
-                                        <>
-                                            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-indigo-600 dark:to-purple-800 rounded-[1.5rem] p-6 text-white shadow-lg shadow-indigo-200 dark:shadow-none mb-6 text-center relative overflow-hidden flex flex-col items-center justify-center transition-colors">
-                                                <MoonIcon size={80} className="absolute -right-4 -bottom-4 text-white opacity-10" />
-                                                <div className="flex items-center justify-center gap-2 mb-2 z-10">
-                                                    <p className="text-indigo-100 font-medium text-sm flex items-center gap-1.5"><MoonIcon size={16}/> Đã ngủ</p>
-                                                    {currentCircadian && <div className="animate-bounce">{renderCircadianIcon(currentCircadian, 16)}</div>}
-                                                </div>
-                                                <h2 className="text-5xl font-black tracking-tight z-10">{formatDuration(currentTotalSleepMins)}</h2>
-                                            </div>
-                                            <div className="mb-6">
-                                                {currentSleeps.length === 0 ? (
-                                                    <div className="text-center py-10 bg-slate-50 dark:bg-slate-900 rounded-[1.5rem] border border-dashed border-slate-200 dark:border-slate-800 transition-colors">
-                                                        <ClockIcon className="text-slate-300 dark:text-slate-600 mx-auto mb-2" size={32} />
-                                                        <p className="text-slate-400 dark:text-slate-500 font-medium text-sm">Chưa ghi nhận giấc ngủ.</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        {currentSleeps.map(sleep => (
-                                                            <div key={sleep.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex justify-between items-center transition-colors">
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 p-3 rounded-2xl"><ClockIcon size={20} /></div>
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-1">
-                                                                            <span>{sleep.sleepTime}</span><span className="text-slate-300 dark:text-slate-600 text-xs">➔</span><span>{sleep.wakeTime}</span>
-                                                                        </div>
-                                                                        <p className="text-xs font-bold text-slate-400 dark:text-slate-500">Thời lượng: <span className="text-indigo-500 dark:text-indigo-400">{formatDuration(sleep.duration)}</span></p>
-                                                                    </div>
-                                                                </div>
-                                                                <button onClick={() => handleDeleteSleep(sleep.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2Icon size={18} /></button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {appMode === 'workout' && (
-                                        <>
-                                            {currentWorkout ? (
-                                                <div className="mb-6">
-                                                    <div className={`bg-gradient-to-br from-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-400 to-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-600 rounded-[1.5rem] p-5 text-white shadow-lg shadow-slate-200 dark:shadow-none mb-6 relative overflow-hidden flex justify-between items-center transition-colors`}>
-                                                        <div>
-                                                            <p className="font-medium text-sm mb-1 flex items-center gap-1.5 opacity-90"><DumbbellIcon size={16}/> Hôm nay tập</p>
-                                                            <h2 className="text-3xl font-black">{currentWorkout.type}</h2>
-                                                        </div>
-                                                        <div className="bg-white/20 dark:bg-black/20 px-4 py-2 rounded-2xl text-center backdrop-blur-sm z-10">
-                                                            <span className="text-2xl font-black block leading-none">{currentWorkout.exercises?.length || 0}</span>
-                                                            <span className="text-[10px] font-bold uppercase">Bài</span>
-                                                        </div>
-                                                        <DumbbellIcon size={100} className="absolute -right-4 -bottom-8 text-white opacity-10 transform -rotate-12" />
-                                                    </div>
-                                                    
-                                                    {currentWorkout.note && (
-                                                        <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[1.25rem] border border-slate-200 dark:border-slate-700 mb-4 text-sm text-slate-800 dark:text-slate-200 transition-colors"><span className="font-bold">Ghi chú:</span> {currentWorkout.note}</div>
-                                                    )}
-                                                    
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <h3 className="font-bold text-slate-800 dark:text-slate-200">Chi tiết</h3>
-                                                        <button onClick={() => setShowDeleteConfirm(true)} className="text-xs text-red-500 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/30 px-3 py-2 rounded-lg transition-colors">Xóa buổi tập</button>
-                                                    </div>
-                                                    
-                                                    {/* FIX TRỌNG ĐIỂM: IN RAWTEXT TRONG VIEW NGÀY */}
-                                                    <div className="space-y-4">
-                                                        {currentWorkout.exercises?.map((ex, idx) => (
-                                                            <div className="bg-white dark:bg-slate-900 p-4 rounded-[1.25rem] shadow-sm border border-slate-100 dark:border-slate-800 transition-colors" key={idx}>
-                                                                <h4 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-3 border-b border-slate-50 dark:border-slate-800/50 pb-2">{ex.name}</h4>
-                                                                <div className="space-y-2">
-                                                                    {ex.rawText && ex.rawText.toUpperCase() !== 'X' ? (
-                                                                        <div className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-xl transition-colors whitespace-pre-wrap">{ex.rawText}</div>
-                                                                    ) : (
-                                                                        ex.sets?.map((set, sIdx) => {
-                                                                            if(!set.weight && !set.reps) return null;
-                                                                            return (
-                                                                            <div key={sIdx} className="flex justify-between items-center text-sm font-medium bg-slate-50 dark:bg-slate-800 px-4 py-2.5 rounded-xl transition-colors">
-                                                                                <span className="text-slate-400 dark:text-slate-500 font-bold uppercase">S{sIdx + 1}</span>
-                                                                                <span className="text-slate-700 dark:text-slate-200 font-black bg-white dark:bg-slate-900 px-3 py-1 rounded shadow-sm border border-slate-100 dark:border-slate-700 min-w-[70px] text-center uppercase transition-colors">{set.weight || '-'} <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{set.unit}</span></span>
-                                                                                <span className="text-slate-300 dark:text-slate-600">x</span>
-                                                                                <span className="text-slate-700 dark:text-slate-200 font-black bg-white dark:bg-slate-900 px-3 py-1 rounded shadow-sm border border-slate-100 dark:border-slate-700 min-w-[60px] text-center transition-colors">{set.reps || '-'}</span>
-                                                                            </div>
-                                                                        )})
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
+                                            <h2 className="text-5xl font-black tracking-tight z-10">{formatDuration(currentTotalSleepMins)}</h2>
+                                        </div>
+                                        <div className="mb-6">
+                                            {currentSleeps.length === 0 ? (
+                                                <div className="text-center py-10 bg-slate-50 dark:bg-slate-900 rounded-[1.5rem] border border-dashed border-slate-200 dark:border-slate-800 transition-colors">
+                                                    <ClockIcon className="text-slate-300 dark:text-slate-600 mx-auto mb-2" size={32} />
+                                                    <p className="text-slate-400 dark:text-slate-500 font-medium text-sm">Chưa ghi nhận giấc ngủ.</p>
                                                 </div>
                                             ) : (
-                                                <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
-                                                    <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><DumbbellIcon className="text-slate-400 dark:text-slate-500" size={32} /></div>
-                                                    <h3 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-2">Chưa có lịch tập</h3>
-                                                    <p className="text-slate-400 dark:text-slate-500 text-sm mb-6 px-4">Hãy ghi nhận nỗ lực của bạn ngày hôm nay!</p>
+                                                <div className="space-y-3">
+                                                    {currentSleeps.map(sleep => (
+                                                        <div key={sleep.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex justify-between items-center transition-colors">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 p-3 rounded-2xl"><ClockIcon size={20} /></div>
+                                                                <div>
+                                                                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold mb-1">
+                                                                        <span>{sleep.sleepTime}</span><span className="text-slate-300 dark:text-slate-600 text-xs">➔</span><span>{sleep.wakeTime}</span>
+                                                                    </div>
+                                                                    <p className="text-xs font-bold text-slate-400 dark:text-slate-500">Thời lượng: <span className="text-indigo-500 dark:text-indigo-400">{formatDuration(sleep.duration)}</span></p>
+                                                                </div>
+                                                            </div>
+                                                            <button onClick={() => handleDeleteSleep(sleep.id)} className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-colors"><Trash2Icon size={18} /></button>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
-                                        </>
+                                        </div>
+                                    </>
+                                )}
+
+                                {appMode === 'workout' && (
+                                    <>
+                                        {currentWorkout ? (
+                                            <div className="mb-6">
+                                                <div className={`bg-gradient-to-br from-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-400 to-${getWorkoutColor(currentWorkout.type).fill.split('-')[1]}-600 rounded-[1.5rem] p-5 text-white shadow-lg shadow-slate-200 dark:shadow-none mb-6 relative overflow-hidden flex justify-between items-center transition-colors`}>
+                                                    <div>
+                                                        <p className="font-medium text-sm mb-1 flex items-center gap-1.5 opacity-90"><DumbbellIcon size={16}/> Hôm nay tập</p>
+                                                        <h2 className="text-3xl font-black">{currentWorkout.type}</h2>
+                                                    </div>
+                                                    <div className="bg-white/20 dark:bg-black/20 px-4 py-2 rounded-2xl text-center backdrop-blur-sm z-10">
+                                                        <span className="text-2xl font-black block leading-none">{currentWorkout.exercises?.length || 0}</span>
+                                                        <span className="text-[10px] font-bold uppercase">Bài</span>
+                                                    </div>
+                                                    <DumbbellIcon size={100} className="absolute -right-4 -bottom-8 text-white opacity-10 transform -rotate-12" />
+                                                </div>
+                                                
+                                                {currentWorkout.note && (
+                                                    <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-[1.25rem] border border-slate-200 dark:border-slate-700 mb-4 text-sm text-slate-800 dark:text-slate-200 transition-colors"><span className="font-bold">Ghi chú:</span> {currentWorkout.note}</div>
+                                                )}
+                                                
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h3 className="font-bold text-slate-800 dark:text-slate-200">Chi tiết</h3>
+                                                    <button onClick={() => setShowDeleteConfirm(true)} className="text-xs text-red-500 dark:text-red-400 font-bold bg-red-50 dark:bg-red-900/30 px-3 py-2 rounded-lg transition-colors">Xóa buổi tập</button>
+                                                </div>
+                                                
+                                                {/* FIX TRỌNG ĐIỂM: IN RAWTEXT TRONG VIEW NGÀY */}
+                                                <div className="space-y-4">
+                                                    {currentWorkout.exercises?.map((ex, idx) => (
+                                                        <div className="bg-white dark:bg-slate-900 p-4 rounded-[1.25rem] shadow-sm border border-slate-100 dark:border-slate-800 transition-colors" key={idx}>
+                                                            <h4 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-3 border-b border-slate-50 dark:border-slate-800/50 pb-2">{ex.name}</h4>
+                                                            <div className="space-y-2">
+                                                                {ex.rawText && ex.rawText.toUpperCase() !== 'X' ? (
+                                                                    <div className="text-sm font-bold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 px-4 py-3 rounded-xl transition-colors whitespace-pre-wrap">{ex.rawText}</div>
+                                                                ) : (
+                                                                    ex.sets?.map((set, sIdx) => {
+                                                                        if(!set.weight && !set.reps) return null;
+                                                                        return (
+                                                                        <div key={sIdx} className="flex justify-between items-center text-sm font-medium bg-slate-50 dark:bg-slate-800 px-4 py-2.5 rounded-xl transition-colors">
+                                                                            <span className="text-slate-400 dark:text-slate-500 font-bold uppercase">S{sIdx + 1}</span>
+                                                                            <span className="text-slate-700 dark:text-slate-200 font-black bg-white dark:bg-slate-900 px-3 py-1 rounded shadow-sm border border-slate-100 dark:border-slate-700 min-w-[70px] text-center uppercase transition-colors">{set.weight || '-'} <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">{set.unit}</span></span>
+                                                                            <span className="text-slate-300 dark:text-slate-600">x</span>
+                                                                            <span className="text-slate-700 dark:text-slate-200 font-black bg-white dark:bg-slate-900 px-3 py-1 rounded shadow-sm border border-slate-100 dark:border-slate-700 min-w-[60px] text-center transition-colors">{set.reps || '-'}</span>
+                                                                        </div>
+                                                                    )})
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition-colors">
+                                                <div className="bg-slate-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><DumbbellIcon className="text-slate-400 dark:text-slate-500" size={32} /></div>
+                                                <h3 className="font-black text-slate-700 dark:text-slate-200 text-lg mb-2">Chưa có lịch tập</h3>
+                                                <p className="text-slate-400 dark:text-slate-500 text-sm mb-6 px-4">Hãy ghi nhận nỗ lực của bạn ngày hôm nay!</p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* STREAMING_CHUNK:Render View Tuần Dinh Dưỡng Có Filter */}
+                        {currentView === 'week' && appMode !== 'stat' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeWeek(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-sm font-black text-slate-800 dark:text-slate-100">{formatDate(currentWeekStart)} - {formatDate(new Date(new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 6)))}</p></div>
+                                    <button onClick={() => changeWeek(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    {weekDays.map(day => {
+                                        const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                        
+                                        if (appMode === 'macro') {
+                                            const dTot = calculateTotals(foodsByDate[dKey] || []);
+                                            const dKc = Math.round(dTot.kcal);
+                                            const hasData = (foodsByDate[dKey] || []).length > 0;
+                                            let cellBg = 'bg-slate-50 dark:bg-slate-800'; let cellBorder = 'border-slate-100/50 dark:border-slate-700'; let cellText = 'text-slate-700 dark:text-slate-200';
+                                            let mainTxt = dKc > 0 ? dKc : '-'; let subTxt = 'Kcal'; let botTxt = dTot.protein > 0 ? `${cleanNum(dTot.protein)}g Pro` : '-';
+                                            
+                                            if (hasData) {
+                                                if (activeFilter === 'protein') {
+                                                    if (dTot.protein >= 115) cellBg = 'bg-emerald-500'; else if (dTot.protein >= 95) cellBg = 'bg-yellow-400'; else cellBg = 'bg-red-500';
+                                                    cellBorder = cellBg.replace('bg-', 'border-');
+                                                    cellText = (dTot.protein >= 95 && dTot.protein < 115) ? 'text-slate-800 dark:text-slate-900' : 'text-white';
+                                                    mainTxt = cleanNum(dTot.protein); subTxt = 'g Pro'; botTxt = '';
+                                                } else if (activeFilter === 'calorie') {
+                                                    if (dKc <= 2100) cellBg = 'bg-emerald-500'; else if (dKc <= 2500) cellBg = 'bg-yellow-400'; else cellBg = 'bg-red-500';
+                                                    cellBorder = cellBg.replace('bg-', 'border-');
+                                                    cellText = (dKc > 2100 && dKc <= 2500) ? 'text-slate-800 dark:text-slate-900' : 'text-white';
+                                                    mainTxt = dKc; subTxt = 'Kcal'; botTxt = '';
+                                                } else {
+                                                    const mStatus = getMacroStatus(dKc, dTot.protein);
+                                                    cellBg = mStatus.bg; cellBorder = mStatus.border; cellText = mStatus.text;
+                                                }
+                                            }
+                                            
+                                            return (
+                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
+                                                    <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
+                                                    <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${cellBg} ${cellBorder}`}>
+                                                        <span className={`text-2xl font-black ${cellText}`}>{mainTxt}</span>
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${cellText}`}>{subTxt}</span>
+                                                        {activeFilter === null && <div className={`h-px w-12 mb-1 ${cellText === 'text-white' ? 'bg-white/30' : 'bg-slate-200 dark:bg-slate-700'}`}></div>}
+                                                        {activeFilter === null && <span className={`text-sm font-black ${cellText}`}>{botTxt}</span>}
+                                                    </div>
+                                                </button>
+                                            );
+                                        } else if (appMode === 'sleep') {
+                                            const daySleeps = sleepByDate[dKey] || [];
+                                            const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
+                                            const circWarning = getCircadianWarning(daySleeps);
+                                            const hasData = daySleeps.length > 0;
+                                            let cellBg = 'bg-slate-50 dark:bg-slate-800'; let cellBorder = 'border-slate-100/50 dark:border-slate-700'; let cellText = 'text-slate-700 dark:text-slate-200'; let mainTxt = sMins > 0 ? formatDuration(sMins) : '-';
+                                    
+                                            if (hasData) {
+                                                const lastSleep = daySleeps[daySleeps.length - 1];
+                                                if (activeFilter === 'late_sleep' && lastSleep) {
+                                                    const [sH, sM] = lastSleep.sleepTime.split(':').map(Number);
+                                                    let isLate = false; if (sH >= 0 && sH <= 5) { if (sH === 0 && sM === 0) isLate = false; else isLate = true; }
+                                                    cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500'; cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
+                                                    cellText = 'text-white'; mainTxt = lastSleep.sleepTime;
+                                                } else if (activeFilter === 'late_wake' && lastSleep) {
+                                                    const [wH, wM] = lastSleep.wakeTime.split(':').map(Number);
+                                                    const isLate = (wH > 7) || (wH === 7 && wM > 0);
+                                                    cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500'; cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
+                                                    cellText = 'text-white'; mainTxt = lastSleep.wakeTime;
+                                                } else {
+                                                    const sStatus = getSleepStatus(sMins);
+                                                    if (sStatus) { cellBg = sStatus.bg; cellBorder = sStatus.border; cellText = sStatus.text; }
+                                                }
+                                            }
+                                            return (
+                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
+                                                    <p className={`text-sm font-bold mb-3 flex items-center justify-between ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                                                        <span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span>
+                                                        {circWarning && activeFilter === null && renderCircadianIcon(circWarning, 14)}
+                                                    </p>
+                                                    <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${cellBg} ${cellBorder}`}>
+                                                        <span className={`text-xl font-black ${cellText}`}>{mainTxt}</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        } else {
+                                            const wOut = workoutsByDate[dKey]; const wColor = wOut ? getWorkoutColor(wOut.type) : null;
+                                            return (
+                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
+                                                    <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
+                                                    <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 transition-colors ${wOut ? wColor.fill + ' ' + wColor.border + ' ' + wColor.textLight + ' shadow-md' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100/50 dark:border-slate-700'}`}>
+                                                        {wOut ? ( <><DumbbellIcon size={24} className="mb-1 opacity-90" /><span className="text-lg font-black">{wOut.type}</span></> ) : <span className="text-2xl font-black opacity-30 text-slate-400 dark:text-slate-500">-</span>}
+                                                    </div>
+                                                </button>
+                                            );
+                                        }
+                                    })}
+                                </div>
+                                
+                                <div className="mt-6 bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                                    <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tuần</h3>
+                                    {appMode === 'macro' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => handleFilterClick('protein')} className={`w-full bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 text-center transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <p className="text-[10px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider mb-2">Thiếu đạm</p>
+                                                <p className="text-3xl font-black text-red-600 dark:text-red-400 leading-none">{weekThieuDam} <span className="text-sm font-bold text-red-400 dark:text-red-500">ngày</span></p>
+                                            </button>
+                                            <button onClick={() => handleFilterClick('calorie')} className={`w-full bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30 text-center transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <p className="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-2">Cheatday</p>
+                                                <p className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none">{weekCheatDay} <span className="text-sm font-bold text-orange-400 dark:text-orange-500">ngày</span></p>
+                                            </button>
+                                        </div>
+                                    )}
+                                    {appMode === 'sleep' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Thức khuya</p>
+                                                <p className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{weekLateSleep} <span className="text-sm font-bold text-slate-400 dark:text-slate-500">lần</span></p>
+                                            </button>
+                                            <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ngủ nướng</p>
+                                                <p className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{weekLateWake} <span className="text-sm font-bold text-slate-400 dark:text-slate-500">lần</span></p>
+                                            </button>
+                                        </div>
+                                    )}
+                                    {appMode === 'workout' && (
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 text-center cursor-default opacity-90 transition-colors">
+                                            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Số ngày tập luyện</p>
+                                            <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{weekWorkout} <span className="text-sm font-bold text-emerald-500 dark:text-emerald-600">ngày</span></p>
+                                        </div>
                                     )}
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {/* STREAMING_CHUNK:Render View Tuần Dinh Dưỡng Có Filter */}
-                            {currentView === 'week' && appMode !== 'stat' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeWeek(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-sm font-black text-slate-800 dark:text-slate-100">{formatDate(currentWeekStart)} - {formatDate(new Date(new Date(currentWeekStart).setDate(currentWeekStart.getDate() + 6)))}</p></div>
-                                        <button onClick={() => changeWeek(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                        {/* STREAMING_CHUNK:View Lịch Tháng Dinh Dưỡng Có Filter */}
+                        {currentView === 'month' && appMode !== 'stat' && (
+                            <div className="animate-[fadeIn_0.3s_ease-out]">
+                                <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <button onClick={() => changeMonth(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
+                                    <div className="text-center"><p className="text-lg font-black text-slate-800 dark:text-slate-100">Tháng {String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, {currentMonthStart.getFullYear()}</p></div>
+                                    <button onClick={() => changeMonth(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
+                                </div>
+                                <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
+                                    <div className="grid grid-cols-7 gap-1 mb-2">
+                                        {VN_DAYS.map(day => (<div key={day} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">{day}</div>))}
                                     </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {weekDays.map(day => {
+                                    <div className="grid grid-cols-7 gap-1">
+                                        {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-14"></div>))}
+                                        {monthDays.map(day => {
                                             const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                            let hasData = false, isW = false;
                                             
-                                            if (appMode === 'macro') {
-                                                const dTot = calculateTotals(foodsByDate[dKey] || []);
-                                                const dKc = Math.round(dTot.kcal);
-                                                const hasData = (foodsByDate[dKey] || []).length > 0;
-                                                let cellBg = 'bg-slate-50 dark:bg-slate-800'; let cellBorder = 'border-slate-100/50 dark:border-slate-700'; let cellText = 'text-slate-700 dark:text-slate-200';
-                                                let mainTxt = dKc > 0 ? dKc : '-'; let subTxt = 'Kcal'; let botTxt = dTot.protein > 0 ? `${cleanNum(dTot.protein)}g Pro` : '-';
-                                                
-                                                if (hasData) {
-                                                    if (activeFilter === 'protein') {
-                                                        if (dTot.protein >= 115) cellBg = 'bg-emerald-500'; else if (dTot.protein >= 95) cellBg = 'bg-yellow-400'; else cellBg = 'bg-red-500';
-                                                        cellBorder = cellBg.replace('bg-', 'border-');
-                                                        cellText = (dTot.protein >= 95 && dTot.protein < 115) ? 'text-slate-800 dark:text-slate-900' : 'text-white';
-                                                        mainTxt = cleanNum(dTot.protein); subTxt = 'g Pro'; botTxt = '';
-                                                    } else if (activeFilter === 'calorie') {
-                                                        if (dKc <= 2100) cellBg = 'bg-emerald-500'; else if (dKc <= 2500) cellBg = 'bg-yellow-400'; else cellBg = 'bg-red-500';
-                                                        cellBorder = cellBg.replace('bg-', 'border-');
-                                                        cellText = (dKc > 2100 && dKc <= 2500) ? 'text-slate-800 dark:text-slate-900' : 'text-white';
-                                                        mainTxt = dKc; subTxt = 'Kcal'; botTxt = '';
-                                                    } else {
-                                                        const mStatus = getMacroStatus(dKc, dTot.protein);
-                                                        cellBg = mStatus.bg; cellBorder = mStatus.border; cellText = mStatus.text;
-                                                    }
-                                                }
-                                                
-                                                return (
-                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
-                                                        <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 relative overflow-hidden ${cellBg} ${cellBorder}`}>
-                                                            <span className={`text-2xl font-black ${cellText}`}>{mainTxt}</span>
-                                                            <span className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${cellText}`}>{subTxt}</span>
-                                                            {activeFilter === null && <div className={`h-px w-12 mb-1 ${cellText === 'text-white' ? 'bg-white/30' : 'bg-slate-200 dark:bg-slate-700'}`}></div>}
-                                                            {activeFilter === null && <span className={`text-sm font-black ${cellText}`}>{botTxt}</span>}
-                                                        </div>
-                                                    </button>
-                                                );
-                                            } else if (appMode === 'sleep') {
-                                                const daySleeps = sleepByDate[dKey] || [];
-                                                const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
-                                                const circWarning = getCircadianWarning(daySleeps);
-                                                const hasData = daySleeps.length > 0;
-                                                let cellBg = 'bg-slate-50 dark:bg-slate-800'; let cellBorder = 'border-slate-100/50 dark:border-slate-700'; let cellText = 'text-slate-700 dark:text-slate-200'; let mainTxt = sMins > 0 ? formatDuration(sMins) : '-';
+                                            if (appMode === 'macro') hasData = (foodsByDate[dKey] || []).length > 0;
+                                            else if (appMode === 'sleep') hasData = (sleepByDate[dKey] || []).length > 0;
+                                            else { hasData = !!workoutsByDate[dKey]; isW = hasData; }
+
+                                            const wType = isW ? workoutsByDate[dKey]?.type : null;
+                                            const mStatus = appMode === 'macro' && hasData ? getMacroStatus(calculateTotals(foodsByDate[dKey]||[]).kcal, calculateTotals(foodsByDate[dKey]||[]).protein) : null;
+                                            
+                                            const daySleeps = sleepByDate[dKey] || [];
+                                            const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
+                                            const sStatus = appMode === 'sleep' && hasData ? getSleepStatus(sMins) : null;
+                                            const circWarning = appMode === 'sleep' ? getCircadianWarning(daySleeps) : null;
+
+                                            if (appMode === 'sleep') {
+                                                let sleepCellClass = "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700";
+                                                let textClass = 'text-slate-700 dark:text-slate-200';
+                                                let content = sMins > 0 ? `${Math.floor(sMins / 60)}h${sMins % 60 > 0 ? sMins % 60 : ''}` : '-';
                                         
                                                 if (hasData) {
                                                     const lastSleep = daySleeps[daySleeps.length - 1];
                                                     if (activeFilter === 'late_sleep' && lastSleep) {
                                                         const [sH, sM] = lastSleep.sleepTime.split(':').map(Number);
                                                         let isLate = false; if (sH >= 0 && sH <= 5) { if (sH === 0 && sM === 0) isLate = false; else isLate = true; }
-                                                        cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500'; cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
-                                                        cellText = 'text-white'; mainTxt = lastSleep.sleepTime;
+                                                        sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
+                                                        textClass = 'text-white'; content = lastSleep.sleepTime;
                                                     } else if (activeFilter === 'late_wake' && lastSleep) {
                                                         const [wH, wM] = lastSleep.wakeTime.split(':').map(Number);
                                                         const isLate = (wH > 7) || (wH === 7 && wM > 0);
-                                                        cellBg = isLate ? 'bg-red-500' : 'bg-emerald-500'; cellBorder = isLate ? 'border-red-600' : 'border-emerald-600';
-                                                        cellText = 'text-white'; mainTxt = lastSleep.wakeTime;
-                                                    } else {
-                                                        const sStatus = getSleepStatus(sMins);
-                                                        if (sStatus) { cellBg = sStatus.bg; cellBorder = sStatus.border; cellText = sStatus.text; }
+                                                        sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
+                                                        textClass = 'text-white'; content = lastSleep.wakeTime;
+                                                    } else if (sStatus) {
+                                                        sleepCellClass = `${sStatus.bg} border-transparent font-bold shadow-sm`;
+                                                        textClass = sStatus.text;
                                                     }
                                                 }
-                                                return (
-                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
-                                                        <p className={`text-sm font-bold mb-3 flex items-center justify-between ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                                                            <span>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span>
-                                                            {circWarning && activeFilter === null && renderCircadianIcon(circWarning, 14)}
-                                                        </p>
-                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 ${cellBg} ${cellBorder}`}>
-                                                            <span className={`text-xl font-black ${cellText}`}>{mainTxt}</span>
-                                                        </div>
-                                                    </button>
-                                                );
-                                            } else {
-                                                const wOut = workoutsByDate[dKey]; const wColor = wOut ? getWorkoutColor(wOut.type) : null;
-                                                return (
-                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`p-4 rounded-3xl text-left border shadow-sm transition-colors ${isToday ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
-                                                        <p className={`text-sm font-bold mb-3 ${isToday ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-normal">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                        <div className={`rounded-2xl p-3 border flex flex-col justify-center items-center h-24 transition-colors ${wOut ? wColor.fill + ' ' + wColor.border + ' ' + wColor.textLight + ' shadow-md' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100/50 dark:border-slate-700'}`}>
-                                                            {wOut ? ( <><DumbbellIcon size={24} className="mb-1 opacity-90" /><span className="text-lg font-black">{wOut.type}</span></> ) : <span className="text-2xl font-black opacity-30 text-slate-400 dark:text-slate-500">-</span>}
-                                                        </div>
-                                                    </button>
-                                                );
-                                            }
-                                        })}
-                                    </div>
-                                    
-                                    <div className="mt-6 bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                                        <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tuần</h3>
-                                        {appMode === 'macro' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('protein')} className={`w-full bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 text-center transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <p className="text-[10px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider mb-2">Thiếu đạm</p>
-                                                    <p className="text-3xl font-black text-red-600 dark:text-red-400 leading-none">{weekThieuDam} <span className="text-sm font-bold text-red-400 dark:text-red-500">ngày</span></p>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('calorie')} className={`w-full bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30 text-center transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <p className="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-2">Cheatday</p>
-                                                    <p className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none">{weekCheatDay} <span className="text-sm font-bold text-orange-400 dark:text-orange-500">ngày</span></p>
-                                                </button>
-                                            </div>
-                                        )}
-                                        {appMode === 'sleep' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Thức khuya</p>
-                                                    <p className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{weekLateSleep} <span className="text-sm font-bold text-slate-400 dark:text-slate-500">lần</span></p>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ngủ nướng</p>
-                                                    <p className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{weekLateWake} <span className="text-sm font-bold text-slate-400 dark:text-slate-500">lần</span></p>
-                                                </button>
-                                            </div>
-                                        )}
-                                        {appMode === 'workout' && (
-                                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 text-center cursor-default opacity-90 transition-colors">
-                                                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Số ngày tập luyện</p>
-                                                <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{weekWorkout} <span className="text-sm font-bold text-emerald-500 dark:text-emerald-600">ngày</span></p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* STREAMING_CHUNK:View Lịch Tháng Dinh Dưỡng Có Filter */}
-                            {currentView === 'month' && appMode !== 'stat' && (
-                                <div className="animate-[fadeIn_0.3s_ease-out]">
-                                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-2xl p-2 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <button onClick={() => changeMonth(-1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronLeftIcon size={24} /></button>
-                                        <div className="text-center"><p className="text-lg font-black text-slate-800 dark:text-slate-100">Tháng {String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, {currentMonthStart.getFullYear()}</p></div>
-                                        <button onClick={() => changeMonth(1)} className="p-3 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><ChevronRightIcon size={24} /></button>
-                                    </div>
-                                    <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 mb-6 transition-colors">
-                                        <div className="grid grid-cols-7 gap-1 mb-2">
-                                            {VN_DAYS.map(day => (<div key={day} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">{day}</div>))}
-                                        </div>
-                                        <div className="grid grid-cols-7 gap-1">
-                                            {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-14"></div>))}
-                                            {monthDays.map(day => {
-                                                const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                                let hasData = false, isW = false;
-                                                
-                                                if (appMode === 'macro') hasData = (foodsByDate[dKey] || []).length > 0;
-                                                else if (appMode === 'sleep') hasData = (sleepByDate[dKey] || []).length > 0;
-                                                else { hasData = !!workoutsByDate[dKey]; isW = hasData; }
-
-                                                const wType = isW ? workoutsByDate[dKey]?.type : null;
-                                                const mStatus = appMode === 'macro' && hasData ? getMacroStatus(calculateTotals(foodsByDate[dKey]||[]).kcal, calculateTotals(foodsByDate[dKey]||[]).protein) : null;
-                                                
-                                                const daySleeps = sleepByDate[dKey] || [];
-                                                const sMins = daySleeps.reduce((acc, curr) => acc + curr.duration, 0);
-                                                const sStatus = appMode === 'sleep' && hasData ? getSleepStatus(sMins) : null;
-                                                const circWarning = appMode === 'sleep' ? getCircadianWarning(daySleeps) : null;
-
-                                                if (appMode === 'sleep') {
-                                                    let sleepCellClass = "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700";
-                                                    let textClass = 'text-slate-700 dark:text-slate-200';
-                                                    let content = sMins > 0 ? `${Math.floor(sMins / 60)}h${sMins % 60 > 0 ? sMins % 60 : ''}` : '-';
-                                            
-                                                    if (hasData) {
-                                                        const lastSleep = daySleeps[daySleeps.length - 1];
-                                                        if (activeFilter === 'late_sleep' && lastSleep) {
-                                                            const [sH, sM] = lastSleep.sleepTime.split(':').map(Number);
-                                                            let isLate = false; if (sH >= 0 && sH <= 5) { if (sH === 0 && sM === 0) isLate = false; else isLate = true; }
-                                                            sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
-                                                            textClass = 'text-white'; content = lastSleep.sleepTime;
-                                                        } else if (activeFilter === 'late_wake' && lastSleep) {
-                                                            const [wH, wM] = lastSleep.wakeTime.split(':').map(Number);
-                                                            const isLate = (wH > 7) || (wH === 7 && wM > 0);
-                                                            sleepCellClass = isLate ? 'bg-red-500 border-red-600 text-white font-bold shadow-sm' : 'bg-emerald-500 border-emerald-600 text-white font-bold shadow-sm';
-                                                            textClass = 'text-white'; content = lastSleep.wakeTime;
-                                                        } else if (sStatus) {
-                                                            sleepCellClass = `${sStatus.bg} border-transparent font-bold shadow-sm`;
-                                                            textClass = sStatus.text;
-                                                        }
-                                                    }
-                                                    if (isToday) sleepCellClass += activeFilter ? " ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-1 dark:ring-offset-slate-950" : " ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-950";
-                                            
-                                                    return (
-                                                        <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
-                                                            className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all shadow-sm ${sleepCellClass}`}>
-                                                            <span className={`z-10 text-[11px] absolute top-1 left-1.5 ${hasData && activeFilter === null ? 'text-white/60 dark:text-black/50' : 'text-slate-400 dark:text-slate-500'}`}>{day.getDate()}</span>
-                                                            <span className={`font-black text-[13px] z-10 ${textClass}`}>{content}</span>
-                                                            {circWarning && activeFilter === null && <div className="absolute bottom-0.5 right-0.5 z-20">{renderCircadianIcon(circWarning, 12)}</div>}
-                                                        </button>
-                                                    )
-                                                }
-
-                                                let cellClass = "bg-transparent text-slate-600 dark:text-slate-400 border border-transparent";
-                                                let content = "";
-                                                
-                                                if (appMode === 'workout' && isW) {
-                                                    cellClass = `${getWorkoutColor(wType).fill} text-white font-bold shadow-sm`;
-                                                } else if (appMode === 'macro' && hasData) {
-                                                    const dTot = calculateTotals(foodsByDate[dKey] || []);
-                                                    const dKc = Math.round(dTot.kcal);
-                                                    if (activeFilter === 'protein') {
-                                                        if (dTot.protein >= 115) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
-                                                        else if (dTot.protein >= 95) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
-                                                        else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
-                                                        content = cleanNum(dTot.protein) + "g";
-                                                    } else if (activeFilter === 'calorie') {
-                                                        if (dKc <= 2100) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
-                                                        else if (dKc <= 2500) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
-                                                        else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
-                                                        content = dKc;
-                                                    } else if (mStatus) {
-                                                        cellClass = `${mStatus.bg} ${mStatus.text} font-bold shadow-sm`;
-                                                    }
-                                                }
-
+                                                if (isToday) sleepCellClass += activeFilter ? " ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-1 dark:ring-offset-slate-950" : " ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-950";
+                                        
                                                 return (
                                                     <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
-                                                        className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all ${isToday ? 'ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-1 dark:ring-offset-slate-950' : ''} ${cellClass}`}>
-                                                        <span className="z-10 text-sm">{day.getDate()}</span>
-                                                        {content && <span className="absolute bottom-1 font-bold text-[10px] opacity-90 leading-none">{content}</span>}
+                                                        className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all shadow-sm ${sleepCellClass}`}>
+                                                        <span className={`z-10 text-[11px] absolute top-1 left-1.5 ${hasData && activeFilter === null ? 'text-white/60 dark:text-black/50' : 'text-slate-400 dark:text-slate-500'}`}>{day.getDate()}</span>
+                                                        <span className={`font-black text-[13px] z-10 ${textClass}`}>{content}</span>
+                                                        {circWarning && activeFilter === null && <div className="absolute bottom-0.5 right-0.5 z-20">{renderCircadianIcon(circWarning, 12)}</div>}
                                                     </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                                                )
+                                            }
 
-                                    <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
-                                        <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tháng</h3>
-                                        
-                                        {appMode === 'macro' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('protein')} className={`bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-red-100 dark:bg-red-900/50"><div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div></div>
-                                                    <p className="text-[10px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider mb-2">Thiếu đạm</p>
-                                                    <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-red-600 dark:text-red-400 leading-none">{monthThieuDam}</span><span className="text-[10px] font-bold text-red-400 dark:text-red-500 mb-0.5">/ {elapsedDays} ngày</span></div>
-                                                    <div className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg inline-block shadow-sm border border-red-100 dark:border-red-800/50"><span className="text-sm font-black text-red-500 dark:text-red-400">{pctThieuDam}%</span></div>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('calorie')} className={`bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-orange-100 dark:bg-orange-900/50"><div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div></div>
-                                                    <p className="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-2">Cheatday</p>
-                                                    <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none">{monthCheatDay}</span><span className="text-[10px] font-bold text-orange-400 dark:text-orange-500 mb-0.5">/ {elapsedDays} ngày</span></div>
-                                                    <div className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg inline-block shadow-sm border border-orange-100 dark:border-orange-800/50"><span className="text-sm font-black text-orange-500 dark:text-orange-400">{pctCheatDay}%</span></div>
-                                                </button>
-                                            </div>
-                                        )}
+                                            let cellClass = "bg-transparent text-slate-600 dark:text-slate-400 border border-transparent";
+                                            let content = "";
+                                            
+                                            if (appMode === 'workout' && isW) {
+                                                cellClass = `${getWorkoutColor(wType).fill} text-white font-bold shadow-sm`;
+                                            } else if (appMode === 'macro' && hasData) {
+                                                const dTot = calculateTotals(foodsByDate[dKey] || []);
+                                                const dKc = Math.round(dTot.kcal);
+                                                if (activeFilter === 'protein') {
+                                                    if (dTot.protein >= 115) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
+                                                    else if (dTot.protein >= 95) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
+                                                    else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
+                                                    content = cleanNum(dTot.protein) + "g";
+                                                } else if (activeFilter === 'calorie') {
+                                                    if (dKc <= 2100) cellClass = 'bg-emerald-500 text-white font-bold shadow-sm';
+                                                    else if (dKc <= 2500) cellClass = 'bg-yellow-400 text-slate-800 font-bold shadow-sm';
+                                                    else cellClass = 'bg-red-500 text-white font-bold shadow-sm';
+                                                    content = dKc;
+                                                } else if (mStatus) {
+                                                    cellClass = `${mStatus.bg} ${mStatus.text} font-bold shadow-sm`;
+                                                }
+                                            }
 
-                                        {appMode === 'sleep' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('late_sleep')} className={`bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200 dark:bg-slate-700"><div className="absolute bottom-0 w-full bg-slate-800 dark:bg-slate-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
-                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Thức khuya</p>
-                                                    <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">/ {monthSleepDaysCount} ngày</span></div>
-                                                    <div className="bg-white dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-slate-400">{pctLateSleep}%</span></div>
+                                            return (
+                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
+                                                    className={`h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all ${isToday ? 'ring-2 ring-slate-800 dark:ring-slate-300 ring-offset-1 dark:ring-offset-slate-950' : ''} ${cellClass}`}>
+                                                    <span className="z-10 text-sm">{day.getDate()}</span>
+                                                    {content && <span className="absolute bottom-1 font-bold text-[10px] opacity-90 leading-none">{content}</span>}
                                                 </button>
-                                                <button onClick={() => handleFilterClick('late_wake')} className={`bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200 dark:bg-slate-700"><div className="absolute bottom-0 w-full bg-slate-800 dark:bg-slate-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
-                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ngủ nướng</p>
-                                                    <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">/ {monthSleepDaysCount} ngày</span></div>
-                                                    <div className="bg-white dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-slate-400">{pctLateWake}%</span></div>
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {appMode === 'workout' && (
-                                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 text-center relative overflow-hidden group w-full cursor-default opacity-90 transition-colors">
-                                                <div className="absolute right-0 top-0 bottom-0 w-3 bg-emerald-100 dark:bg-emerald-900/50"><div className="absolute bottom-0 w-full bg-emerald-500 transition-all duration-1000 rounded-t" style={{height: `${pctWorkout}%`}}></div></div>
-                                                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Tần suất tập luyện</p>
-                                                <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{monthWorkout}</span><span className="text-xs font-bold text-emerald-500 dark:text-emerald-600 mb-1">/ {elapsedDays} ngày</span></div>
-                                                <div className="bg-white dark:bg-slate-800 px-4 py-1.5 rounded-xl border border-emerald-50 dark:border-emerald-800/50 inline-block shadow-sm"><span className="text-base font-black text-emerald-600 dark:text-emerald-400">{pctWorkout}%</span></div>
-                                            </div>
-                                        )}
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                            )}
-                        </main>
 
-                        {/* STREAMING_CHUNK:Các Nút Floating Actions */}
+                                <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-4 shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+                                    <h3 className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-4"><ActivityIcon size={18} className="text-blue-500" /> Phân tích tháng</h3>
+                                    
+                                    {appMode === 'macro' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => handleFilterClick('protein')} className={`bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/30 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'protein' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <div className="absolute right-0 top-0 bottom-0 w-2 bg-red-100 dark:bg-red-900/50"><div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div></div>
+                                                <p className="text-[10px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider mb-2">Thiếu đạm</p>
+                                                <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-red-600 dark:text-red-400 leading-none">{monthThieuDam}</span><span className="text-[10px] font-bold text-red-400 dark:text-red-500 mb-0.5">/ {elapsedDays} ngày</span></div>
+                                                <div className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg inline-block shadow-sm border border-red-100 dark:border-red-800/50"><span className="text-sm font-black text-red-500 dark:text-red-400">{pctThieuDam}%</span></div>
+                                            </button>
+                                            <button onClick={() => handleFilterClick('calorie')} className={`bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'calorie' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <div className="absolute right-0 top-0 bottom-0 w-2 bg-orange-100 dark:bg-orange-900/50"><div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div></div>
+                                                <p className="text-[10px] font-bold text-orange-500 dark:text-orange-400 uppercase tracking-wider mb-2">Cheatday</p>
+                                                <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-orange-600 dark:text-orange-400 leading-none">{monthCheatDay}</span><span className="text-[10px] font-bold text-orange-400 dark:text-orange-500 mb-0.5">/ {elapsedDays} ngày</span></div>
+                                                <div className="bg-white dark:bg-slate-800 px-3 py-1 rounded-lg inline-block shadow-sm border border-orange-100 dark:border-orange-800/50"><span className="text-sm font-black text-orange-500 dark:text-orange-400">{pctCheatDay}%</span></div>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appMode === 'sleep' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => handleFilterClick('late_sleep')} className={`bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200 dark:bg-slate-700"><div className="absolute bottom-0 w-full bg-slate-800 dark:bg-slate-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
+                                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Thức khuya</p>
+                                                <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">/ {monthSleepDaysCount} ngày</span></div>
+                                                <div className="bg-white dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-slate-400">{pctLateSleep}%</span></div>
+                                            </button>
+                                            <button onClick={() => handleFilterClick('late_wake')} className={`bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden group w-full transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-slate-800 dark:ring-slate-300 scale-[1.02] shadow-md' : 'opacity-80 hover:opacity-100'}`}>
+                                                <div className="absolute right-0 top-0 bottom-0 w-2 bg-slate-200 dark:bg-slate-700"><div className="absolute bottom-0 w-full bg-slate-800 dark:bg-slate-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
+                                                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Ngủ nướng</p>
+                                                <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-3xl font-black text-slate-700 dark:text-slate-200 leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-0.5">/ {monthSleepDaysCount} ngày</span></div>
+                                                <div className="bg-white dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-100 dark:border-slate-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-slate-400">{pctLateWake}%</span></div>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appMode === 'workout' && (
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/30 text-center relative overflow-hidden group w-full cursor-default opacity-90 transition-colors">
+                                            <div className="absolute right-0 top-0 bottom-0 w-3 bg-emerald-100 dark:bg-emerald-900/50"><div className="absolute bottom-0 w-full bg-emerald-500 transition-all duration-1000 rounded-t" style={{height: `${pctWorkout}%`}}></div></div>
+                                            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Tần suất tập luyện</p>
+                                            <div className="flex items-end justify-center gap-1.5 mb-2"><span className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{monthWorkout}</span><span className="text-xs font-bold text-emerald-500 dark:text-emerald-600 mb-1">/ {elapsedDays} ngày</span></div>
+                                            <div className="bg-white dark:bg-slate-800 px-4 py-1.5 rounded-xl border border-emerald-50 dark:border-emerald-800/50 inline-block shadow-sm"><span className="text-base font-black text-emerald-600 dark:text-emerald-400">{pctWorkout}%</span></div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+{}
                         {currentView === 'day' && appMode !== 'stat' && (
                             <div className="fixed bottom-6 inset-x-0 flex justify-center z-20 pointer-events-none">
                                 {appMode === 'sleep' && (
@@ -1310,7 +1307,7 @@
                             </div>
                         )}
 
-                        {/* STREAMING_CHUNK:Tất cả các Modals Thêm Dữ Liệu */}
+                        {}
                         {/* Modal Thêm Món Ăn với AI Scanner */}
                         {isAddingFood && appMode === 'macro' && (
                             <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
