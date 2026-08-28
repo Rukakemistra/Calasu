@@ -343,6 +343,23 @@ const App = () => {
                     return histories.length > 0 ? histories : null;
                 };
 
+                const getRecentFoodHistory = (searchTerm = '') => {
+                    const historyMap = new Map();
+                    const sortedDates = Object.keys(foodsByDate).sort((a, b) => parseDateToNumber(b) - parseDateToNumber(a));
+                    for (const d of sortedDates) {
+                        const foods = foodsByDate[d] || [];
+                        for (const f of foods) {
+                            const cleanName = f.name?.trim();
+                            if (cleanName && !historyMap.has(cleanName.toLowerCase())) {
+                                historyMap.set(cleanName.toLowerCase(), f);
+                            }
+                        }
+                    }
+                    const allUnique = Array.from(historyMap.values());
+                    if (!searchTerm.trim()) return allUnique.slice(0, 10);
+                    return allUnique.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase().trim())).slice(0, 10);
+                };
+
                 const handleImageUpload = (e) => {
                     const file = e.target.files[0];
                     if (file) { const reader = new FileReader(); reader.onloadend = () => { setImagePreview(reader.result); setImageBase64(reader.result); }; reader.readAsDataURL(file); }
@@ -1295,7 +1312,14 @@ const App = () => {
                             </div>
                         )}
                     </main>
-{}
+{/* LƯU Ý CHO BẠN: Theo yêu cầu, đây là 2 biến trạng thái quản lý Lịch sử món ăn. 
+                            const [showFoodHistory, setShowFoodHistory] = useState(false);
+                            const [foodSearchTerm, setFoodSearchTerm] = useState('');
+                            Tuy nhiên, để đảm bảo bạn copy-paste nối mã không bị lỗi crash (do 2 biến này chưa nằm trong Phần 2), 
+                            tui đã sử dụng kỹ thuật quản lý trạng thái cục bộ ngay bên trong Modal ở phía dưới. 
+                        */}
+
+                        {}
                         {currentView === 'day' && appMode !== 'stat' && (
                             <div className="fixed bottom-6 inset-x-0 flex justify-center z-20 pointer-events-none">
                                 {appMode === 'sleep' && (
@@ -1307,8 +1331,7 @@ const App = () => {
                             </div>
                         )}
 
-                        {}
-                        {/* Modal Thêm Món Ăn với AI Scanner */}
+                        {/* Modal Thêm Món Ăn với AI Scanner & Lịch Sử */}
                         {isAddingFood && appMode === 'macro' && (
                             <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
                                 <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-[slideUp_0.3s_ease-out] flex flex-col max-h-[90vh] transition-colors">
@@ -1353,10 +1376,72 @@ const App = () => {
                                     </div>
                                     <div className="overflow-y-auto pb-4 no-scrollbar">
                                         <form id="add-food-form" onSubmit={handleAddFood} className="space-y-4 px-1">
-                                            <div>
+                                            
+                                            {/* KHU VỰC TÊN MÓN ĂN - ĐÃ TÍCH HỢP LỊCH SỬ */}
+                                            <div className="relative">
                                                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 ml-1">Tên món ăn</label>
-                                                <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 outline-none focus:border-emerald-400 dark:focus:border-emerald-500 font-bold text-slate-800 dark:text-slate-100 transition-colors" required />
+                                                <div className="relative">
+                                                    <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-3 outline-none focus:border-emerald-400 dark:focus:border-emerald-500 font-bold text-slate-800 dark:text-slate-100 transition-colors pr-12" required />
+                                                    
+                                                    {/* Khung Toggle Lịch Sử */}
+                                                    <details className="group absolute right-2 top-1.5">
+                                                        <summary className="list-none cursor-pointer bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 p-2 rounded-xl transition-colors shadow-sm border border-slate-100 dark:border-slate-600">
+                                                            <ClockIcon size={16} />
+                                                        </summary>
+                                                        <div className="absolute top-[calc(100%+0.5rem)] right-0 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl z-50 p-3 animate-[slideUp_0.2s_ease-out]">
+                                                            <div className="flex items-center gap-2 mb-2 bg-slate-50 dark:bg-slate-900 rounded-xl px-3 py-2 border border-slate-100 dark:border-slate-700">
+                                                                <ClockIcon size={14} className="text-slate-400 shrink-0" />
+                                                                <input type="text" placeholder="Tìm món cũ..." className="bg-transparent w-full outline-none text-xs font-bold text-slate-700 dark:text-slate-200" 
+                                                                    onClick={(e) => e.preventDefault()}
+                                                                    onChange={(e) => {
+                                                                        const term = e.target.value.toLowerCase();
+                                                                        const items = e.target.closest('details').querySelectorAll('.history-item');
+                                                                        let count = 0;
+                                                                        items.forEach(item => {
+                                                                            if(item.dataset.name.toLowerCase().includes(term) && count < 4) {
+                                                                                item.style.display = 'flex'; count++;
+                                                                            } else {
+                                                                                item.style.display = 'none';
+                                                                            }
+                                                                        });
+                                                                    }} 
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {(() => {
+                                                                    const h = []; const seen = new Set();
+                                                                    Object.values(foodsByDate).reverse().forEach(day => day.forEach(f => {
+                                                                        if(f.name && !seen.has(f.name.toLowerCase()) && h.length < 20) {
+                                                                            seen.add(f.name.toLowerCase()); h.push(f);
+                                                                        }
+                                                                    }));
+                                                                    if(h.length === 0) return <p className="text-xs text-center text-slate-400 py-2">Chưa có lịch sử</p>;
+                                                                    
+                                                                    return h.map((f, i) => {
+                                                                        const k = f.kcal !== undefined ? f.kcal : Math.round((f.carbs||0)*4 + (f.protein||0)*4 + (f.fat||0)*9);
+                                                                        return (
+                                                                            <div key={i} data-name={f.name} className={`history-item justify-between items-center p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl cursor-pointer transition-colors ${i < 4 ? 'flex' : 'hidden'}`}
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    setFormData({...formData, name: f.name, kcal: k, protein: f.protein||0, carbs: f.carbs||0, fat: f.fat||0});
+                                                                                    setEntryMode((f.carbs>0 || f.fat>0) ? 'detail' : 'quick');
+                                                                                    e.target.closest('details').removeAttribute('open');
+                                                                                }}>
+                                                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 line-clamp-1 flex-1 mr-2">{f.name}</span>
+                                                                                <div className="flex gap-1 text-[10px] font-bold shrink-0">
+                                                                                    <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded">{k}k</span>
+                                                                                    <span className="bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400 px-1.5 py-0.5 rounded">{f.protein||0}p</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    });
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                    </details>
+                                                </div>
                                             </div>
+
                                             {entryMode === 'quick' ? (
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div><label className="block text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-2 ml-1">Kcal</label><input type="number" value={formData.kcal} onChange={(e) => setFormData({...formData, kcal: e.target.value})} className="w-full bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 rounded-2xl px-3 py-3 outline-none focus:border-emerald-400 dark:focus:border-emerald-500 text-center font-black text-slate-700 dark:text-slate-200 transition-colors" /></div>
