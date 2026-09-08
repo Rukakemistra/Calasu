@@ -16,7 +16,7 @@
                         sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
                     },
                     colors: {
-                        zinc: { 900: '#18181b', 950: '#09090b' } // Deep dark tones
+                        zinc: { 900: '#18181b', 950: '#09090b' } 
                     }
                 },
             },
@@ -44,10 +44,9 @@
         body { 
             -webkit-tap-highlight-color: transparent; 
             background-color: #09090b; 
-            overscroll-behavior-y: none; /* Chống kéo quá đà trên mobile */
+            overscroll-behavior-y: none; 
         }
         
-        /* Hiệu ứng mượt mà mới */
         @keyframes slideUpSheet { 
             0% { transform: translateY(100%); opacity: 0; } 
             100% { transform: translateY(0); opacity: 1; } 
@@ -65,7 +64,6 @@
             100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
         }
         
-        /* Utilities App-like */
         .modal-overlay { animation: fadeInBlur 0.3s ease-out forwards; }
         .bottom-sheet { animation: slideUpSheet 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top-color: rgba(255,255,255,0.5); }
@@ -80,7 +78,6 @@
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input[type="number"] { -moz-appearance: textfield; }
         
-        /* Hiệu ứng Polaroid cũ (giữ lại tính năng) */
         .crossfade-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.5s; }
         .xfade-1 { opacity: 1 !important; }
         .xfade-2 { animation: xf2 6s infinite; } @keyframes xf2 { 0%, 45% { opacity: 1; z-index: 2; } 50%, 95% { opacity: 0; z-index: 1; } 100% { opacity: 1; z-index: 2; } }
@@ -109,7 +106,7 @@
                     Clock: E("🕒"), CheckCircle: E("✅"), Loader: E("⏳"), Activity: E("📈"), Image: E("🖼️"),
                     Cloud: E("☁️"), Download: E("⬇️"), Upload: E("⬆️"), Skull: E("💀"), Bomb: E("💣"), Heart: E("💚"), Alert: E("❗"), XCircle: E("❌"),
                     Timer: E("⏱️"), Book: E("📓"), Home: E("🏠"), Plane: E("✈️"), Smile: E("😊"), Frown: E("🙁"), Brain: E("🧠"), FileText: E("📝"), Menu: E("☰"),
-                    Check: E("✓"), Send: E("🚀") // Đã thêm nút Send
+                    Check: E("✓"), Send: E("🚀"), Music: E("🎵")
                 };
             }
 
@@ -121,12 +118,11 @@
                 Clock: ClockIcon, CheckCircle: CheckCircleIcon, Loader: LoaderIcon, Activity: ActivityIcon, Image: ImageIcon,
                 Cloud: CloudIcon, Download: DownloadIcon, Upload: UploadIcon, Skull: SkullIcon, Bomb: BombIcon, Heart: HeartIcon, Alert: AlertIcon, XCircle: XCircleIcon,
                 Timer: TimerIcon, Book: BookIcon, Home: HomeIcon, Plane: PlaneIcon, Smile: SmileIcon, Frown: FrownIcon, Brain: BrainIcon, FileText: FileTextIcon, Menu: MenuIcon,
-                Check: CheckIcon, Send: SendIcon
+                Check: CheckIcon, Send: SendIcon, Music: MusicIcon
             } = IconLib;
 
             const { useState, useEffect, useRef } = React;
             
-            // Các hàm Logic ngày tháng nguyên bản
             const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
             
             const formatDate = (date) => {
@@ -222,6 +218,13 @@
 
             const cleanNum = (num) => Number(num).toFixed(1).replace(/\.0$/, '');
 
+            const getSpotifyEmbedUrl = (url) => {
+                if (!url) return null;
+                const trackMatch = url.match(/track\/([a-zA-Z0-9]+)/);
+                if (trackMatch) return `https://open.spotify.com/embed/track/${trackMatch[1]}?utm_source=generator&theme=0`;
+                return null;
+            };
+
             const App = () => {
                 const [isDarkMode, setIsDarkMode] = useState(() => {
                     const saved = localStorage.getItem('theme_mode');
@@ -272,9 +275,9 @@
                 const [toast, setToast] = useState(null);
                 const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
-                // Đã cập nhật Script URL như yêu cầu
-                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbxh32oJRhS_2XP_8-2PzE3HCKFY0RRRDcMWo5sSYU9WVz8qXcMIf-8UOyPfQu3X8Vo6/exec';
-                const defaultGeminiKey = 'AQ.Ab8RN6JwPEjMva'+'LfjQ54z1uldTge-aqNjAc_m1-n0dyeeTTMVw';
+                // Đã cập nhật Script URL mới từ yêu cầu
+                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbwgAw1mJmt-am4SvqoBWqrhJjrckYL75oP1WFIH7KUrrFUwBjXjXwOewT1MtBPRa26f/exec';
+                const defaultGeminiKey = 'AQ.Ab8RN6JwPEjMvaLfjQ5'+'4z1uldTge-aqNjAc_m1-n0dyeeTTMVw';
 
                 const [showSettings, setShowSettings] = useState(false);
                 const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_url') || defaultScriptUrl);
@@ -308,8 +311,9 @@
                 const [currentExercises, setCurrentExercises] = useState([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
                 const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+                // Thêm thuộc tính musicUrl vào statFormData
                 const [isAddingStat, setIsAddingStat] = useState(false);
-                const [statFormData, setStatFormData] = useState({ mood: 3, outing: 1, summary: '', images: [] });
+                const [statFormData, setStatFormData] = useState({ mood: 3, outing: 1, summary: '', images: [], musicUrl: '' });
 
                 const [timerSeconds, setTimerSeconds] = useState(null);
                 const timerRef = useRef(null);
@@ -528,7 +532,8 @@
                             return { date: dKey, sang: formatMeal('Sáng'), trua: formatMeal('Trưa'), chieu: formatMeal('Chiều'), ngoai_le: formatMeal('Ngoài lề'), ngu: sleepStr, totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein) };
                         });
                         const finalPayload = syncDataPayload.filter(item => item.sang !== 'X' || item.trua !== 'X' || item.chieu !== 'X' || item.ngoai_le !== 'X' || item.ngu !== '');
-                        const statsPayload = Object.keys(statsByDate).map(d => ({ date: d, mood: statsByDate[d].mood, outing: statsByDate[d].outing, summary: statsByDate[d].summary, images: (statsByDate[d].images || []).filter(img => img && typeof img === 'string') }));
+                        // Thêm musicUrl vào payload
+                        const statsPayload = Object.keys(statsByDate).map(d => ({ date: d, mood: statsByDate[d].mood, outing: statsByDate[d].outing, summary: statsByDate[d].summary, images: (statsByDate[d].images || []).filter(img => img && typeof img === 'string'), musicUrl: statsByDate[d].musicUrl || '' }));
                         let formattedWorkouts = [];
                         Object.keys(workoutsByDate).forEach(wDate => {
                             const wOut = workoutsByDate[wDate];
@@ -632,7 +637,8 @@
                                    for (let i = 0; i < data.data.stat.length; i++) {
                                        const r = data.data.stat[i]; if (!r[0] || String(r[0]).toLowerCase() === 'date') continue;
                                        const dClean = parseRawDate(r[0]); if(!dClean) continue;
-                                       nS[dClean] = { mood: Number(r[1])||3, outing: Number(r[2])||1, summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [] };
+                                       // Parse thêm thuộc tính musicUrl ở cột thứ 11 (index 10)
+                                       nS[dClean] = { mood: Number(r[1])||3, outing: Number(r[2])||1, summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||'') };
                                    }
                                    return nS;
                                 });
@@ -1494,16 +1500,29 @@
                                                 <span className={`px-4 py-2 rounded-2xl text-sm font-black ${MOODS.find(m=>m.val===currentStat.mood)?.twBg || 'bg-slate-500'} text-white shadow-md flex items-center gap-2`}>
                                                     {React.createElement(MOODS.find(m=>m.val===currentStat.mood)?.icon || SmileIcon, {size: 18})} {MOODS.find(m=>m.val===currentStat.mood)?.label || 'Không rõ'}
                                                 </span>
-                                                {(() => {
-                                                    const out = OUTINGS.find(o => o.val === currentStat.outing);
-                                                    if (out) return (
-                                                        <span className="bg-slate-50 dark:bg-zinc-800 p-2.5 rounded-2xl border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center justify-center">
-                                                            <out.Icon size={20} className={out.color} />
+                                                <div className="flex items-center gap-2">
+                                                    {currentStat.musicUrl && getSpotifyEmbedUrl(currentStat.musicUrl) && (
+                                                        <span className="bg-green-50 dark:bg-green-500/10 p-2.5 rounded-2xl border border-green-200/50 dark:border-green-500/30 text-green-500 flex items-center justify-center shadow-sm">
+                                                            <MusicIcon size={20}/>
                                                         </span>
-                                                    );
-                                                    return null;
-                                                })()}
+                                                    )}
+                                                    {(() => {
+                                                        const out = OUTINGS.find(o => o.val === currentStat.outing);
+                                                        if (out) return (
+                                                            <span className="bg-slate-50 dark:bg-zinc-800 p-2.5 rounded-2xl border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center justify-center">
+                                                                <out.Icon size={20} className={out.color} />
+                                                            </span>
+                                                        );
+                                                        return null;
+                                                    })()}
+                                                </div>
                                             </div>
+
+                                            {currentStat.musicUrl && getSpotifyEmbedUrl(currentStat.musicUrl) && (
+                                                <div className="w-full rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-700/50">
+                                                    <iframe src={getSpotifyEmbedUrl(currentStat.musicUrl)} width="100%" height="80" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                                                </div>
+                                            )}
 
                                             {(currentStat.images && currentStat.images.length > 0) && (
                                                 <div className={`grid gap-2 rounded-3xl overflow-hidden shadow-inner ${currentStat.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -1538,7 +1557,7 @@
                                             <div className="bg-slate-50 dark:bg-zinc-800 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-slate-100 dark:border-zinc-700"><BookIcon className="text-slate-400 dark:text-zinc-500" size={48} /></div>
                                             <h3 className="font-black text-slate-800 dark:text-zinc-100 text-2xl mb-3 tracking-tight">Chưa có nhật ký</h3>
                                             <p className="text-slate-500 dark:text-zinc-400 text-sm mb-8 px-8 font-medium leading-relaxed">Hãy dành 1 phút để đúc kết lại ngày hôm nay nhé!</p>
-                                            <button onClick={() => { setIsAddingStat(true); setStatFormData({ mood: 3, outing: 1, summary: '', images: [] }); }} className="bg-purple-600 text-white rounded-2xl px-8 py-4 font-black shadow-xl shadow-purple-500/20 active:scale-95 transition-all text-lg flex items-center justify-center gap-2 mx-auto"><SparklesIcon size={20}/> Check-in Ngày Này</button>
+                                            <button onClick={() => { setIsAddingStat(true); setStatFormData({ mood: 3, outing: 1, summary: '', images: [], musicUrl: '' }); }} className="bg-purple-600 text-white rounded-2xl px-8 py-4 font-black shadow-xl shadow-purple-500/20 active:scale-95 transition-all text-lg flex items-center justify-center gap-2 mx-auto"><SparklesIcon size={20}/> Check-in Ngày Này</button>
                                         </div>
                                     )}
                                 </div>
@@ -1578,15 +1597,22 @@
                                                                         <outIcon.Icon size={14} className={outIcon.color}/>
                                                                     </span>
                                                                 )}
-                                                                {((journalDetailLevel === 'detail' || journalDetailLevel === 'all') && Math.round(foodTotals.kcal) > 0) && (
-                                                                    <span className="bg-orange-50 dark:bg-orange-500/10 px-3 py-2 rounded-xl flex items-center gap-1.5 text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 shadow-sm">
-                                                                        🔥 {Math.round(foodTotals.kcal)}kcal
-                                                                    </span>
-                                                                )}
+                                                              {((journalDetailLevel === 'detail' || journalDetailLevel === 'all') && Math.round(foodTotals.kcal) > 0) && (
+    <div className="bg-orange-50 dark:bg-orange-500/10 px-3 py-1.5 rounded-xl flex flex-col justify-center gap-0.5 text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
+        <span>🔥 {Math.round(foodTotals.kcal)} kcal</span>
+        <span>🥩 {cleanNum(foodTotals.protein)}g Pro</span>
+    </div>
+)}
                                                             </div>
                                                             <span className="text-slate-800 dark:text-zinc-100 text-sm font-black mt-1 tracking-wide">{VN_DAYS[day.getDay()]} <span className="opacity-50 text-[10px] font-bold">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></span>
                                                         </div>
                                                     </div>
+
+                                                    {sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && (journalDetailLevel === 'detail' || journalDetailLevel === 'all') && (
+                                                        <div className="w-full relative z-20 mb-4 rounded-xl overflow-hidden shadow-lg border border-slate-200 dark:border-zinc-700/50">
+                                                            <iframe src={getSpotifyEmbedUrl(sDay.musicUrl)} width="100%" height="80" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                                                        </div>
+                                                    )}
 
                                                     <div className="flex-1 relative z-10 w-[65%] pr-2 flex flex-col justify-center">
                                                         <p className="text-slate-600 dark:text-zinc-300 text-[13px] font-medium mb-4 line-clamp-4 italic whitespace-normal break-words leading-relaxed">"{sDay?.summary || 'Không có ghi chú'}"</p>
@@ -1677,6 +1703,7 @@
                                                             <div className="flex justify-between items-center mb-5">
                                                                 <p className={`text-base font-black ${sDay ? 'text-white' : (isToday ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-400')}`}>{VN_DAYS[day.getDay()]} <span className={`text-[10px] font-bold ml-1 ${sDay ? 'text-white/70' : 'opacity-70'}`}>({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
                                                                 <div className="flex items-center gap-2">
+                                                                    {sDay && sDay.musicUrl && <MusicIcon size={16} className="text-white/90" />}
                                                                     {sDay && (sDay.images && sDay.images.length > 0) && <ImageIcon size={16} className="text-white/80" />}
                                                                 </div>
                                                             </div>
@@ -2035,6 +2062,11 @@
                                 </div>
                                 
                                 <div className="overflow-y-auto pb-4 no-scrollbar space-y-5 flex-1 pr-1">
+                                    <div className="bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 transition-colors shadow-sm">
+                                        <h3 className="text-[10px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><MusicIcon size={14}/> Bài hát của ngày</h3>
+                                        <input type="text" value={statFormData.musicUrl || ''} onChange={(e) => setStatFormData(p=>({...p, musicUrl: e.target.value}))} placeholder="Dán link Spotify vào đây..." className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl px-4 py-3.5 outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 transition-all shadow-sm" />
+                                    </div>
+
                                     <div className="bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 transition-colors shadow-sm">
                                         <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-1.5"><SmileIcon size={14}/> Tâm trạng hôm nay</h3>
                                         <div className="grid grid-cols-3 gap-3">
