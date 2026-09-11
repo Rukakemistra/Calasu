@@ -106,7 +106,7 @@
                     Clock: E("🕒"), CheckCircle: E("✅"), Loader: E("⏳"), Activity: E("📈"), Image: E("🖼️"),
                     Cloud: E("☁️"), Download: E("⬇️"), Upload: E("⬆️"), Skull: E("💀"), Bomb: E("💣"), Heart: E("💚"), Alert: E("❗"), XCircle: E("❌"),
                     Timer: E("⏱️"), Book: E("📓"), Home: E("🏠"), Plane: E("✈️"), Smile: E("😊"), Frown: E("🙁"), Brain: E("🧠"), FileText: E("📝"), Menu: E("☰"),
-                    Check: E("✓"), Send: E("🚀"), Music: E("🎵")
+                    Check: E("✓"), Send: E("🚀"), Music: E("🎵"), Smartphone: E("📱"), Monitor: E("💻")
                 };
             }
 
@@ -118,7 +118,7 @@
                 Clock: ClockIcon, CheckCircle: CheckCircleIcon, Loader: LoaderIcon, Activity: ActivityIcon, Image: ImageIcon,
                 Cloud: CloudIcon, Download: DownloadIcon, Upload: UploadIcon, Skull: SkullIcon, Bomb: BombIcon, Heart: HeartIcon, Alert: AlertIcon, XCircle: XCircleIcon,
                 Timer: TimerIcon, Book: BookIcon, Home: HomeIcon, Plane: PlaneIcon, Smile: SmileIcon, Frown: FrownIcon, Brain: BrainIcon, FileText: FileTextIcon, Menu: MenuIcon,
-                Check: CheckIcon, Send: SendIcon, Music: MusicIcon
+                Check: CheckIcon, Send: SendIcon, Music: MusicIcon, Smartphone: SmartphoneIcon, Monitor: MonitorIcon
             } = IconLib;
 
             const { useState, useEffect, useRef } = React;
@@ -226,11 +226,19 @@
             };
 
             const App = () => {
-                const [isDarkMode, setIsDarkMode] = useState(() => {
+              const [isDarkMode, setIsDarkMode] = useState(() => {
                     const saved = localStorage.getItem('theme_mode');
                     return saved !== null ? JSON.parse(saved) : true; 
                 });
                 useEffect(() => { localStorage.setItem('theme_mode', JSON.stringify(isDarkMode)); }, [isDarkMode]);
+
+                // Tự động nhận diện thiết bị lúc mới vào (>=1024px là PC)
+                const [isDesktopMode, setIsDesktopMode] = useState(() => {
+                    const saved = localStorage.getItem('desktop_mode');
+                    if (saved !== null) return JSON.parse(saved);
+                    return window.innerWidth >= 1024;
+                });
+                useEffect(() => { localStorage.setItem('desktop_mode', JSON.stringify(isDesktopMode)); }, [isDesktopMode]);
 
                 const [appMode, setAppMode] = useState('journal'); 
                 const [currentView, setCurrentView] = useState('week'); 
@@ -243,6 +251,24 @@
                 
                 const [lightboxImages, setLightboxImages] = useState(null);
                 const [lightboxIndex, setLightboxIndex] = useState(0);
+// Xử lý phím Esc và nút Back điện thoại cho Lightbox
+                useEffect(() => {
+                    if (lightboxImages) {
+                        const handlePopState = () => setLightboxImages(null);
+                        const handleKeyDown = (e) => {
+                            if (e.key === 'Escape') window.history.back();
+                        };
+                        
+                        window.history.pushState({ modal: 'lightbox' }, '', window.location.href);
+                        window.addEventListener('popstate', handlePopState);
+                        window.addEventListener('keydown', handleKeyDown);
+                        
+                        return () => {
+                            window.removeEventListener('popstate', handlePopState);
+                            window.removeEventListener('keydown', handleKeyDown);
+                        };
+                    }
+                }, [lightboxImages]);
 
                 useEffect(() => { setActiveFilter(null); }, [appMode, currentView]);
 
@@ -754,43 +780,48 @@
                         </div>
                     )}
 
-                    {/* TOP HEADER GLASSMORPHISM */}
-                    <header className="shrink-0 z-40 glass-header border-b border-slate-200/60 dark:border-zinc-800/60 px-5 pt-4 pb-3 flex flex-col gap-4 transition-colors">
-                        <div className="flex justify-between items-center">
-                            <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 bg-clip-text text-transparent drop-shadow-sm">Calasu</h1>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
-                                    {isDarkMode ? <SunIcon size={18}/> : <MoonIcon size={18}/>}
-                                </button>
-                                <button onClick={() => setShowSettings(true)} className="p-2.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95 transition-all shadow-sm">
-                                    <CloudIcon size={18} />
-                                </button>
-                            </div>
-                        </div>
-                        
-                        {/* VIEW MODE TOGGLE */}
-                        <div className="flex bg-slate-200/50 dark:bg-zinc-800/50 p-1 rounded-2xl w-full mx-auto relative backdrop-blur-md shadow-inner border border-slate-200/50 dark:border-zinc-700/50">
-                            {['day', 'week', 'month'].map(view => {
-                                const isActive = currentView === view;
-                                let activeCls = 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200';
-                                if(isActive) {
-                                    if (appMode === 'macro') activeCls = 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'; 
-                                    else if (appMode === 'sleep') activeCls = 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'; 
-                                    else if (appMode === 'workout') activeCls = 'bg-orange-500 text-white shadow-md shadow-orange-500/20';
-                                    else if (appMode === 'journal' || appMode === 'stat') activeCls = 'bg-purple-500 text-white shadow-md shadow-purple-500/20';
-                                    else if (appMode === 'work') activeCls = 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20';
-                                }
-                                return (
-                                    <button key={view} onClick={() => setCurrentView(view)} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
-                                        {view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}
+                   {/* TOP HEADER GLASSMORPHISM */}
+                    <header className="shrink-0 z-40 glass-header border-b border-slate-200/60 dark:border-zinc-800/60 flex justify-center transition-colors">
+                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} w-full px-5 pt-4 pb-3 flex flex-col gap-4 transition-all duration-500`}>
+                            <div className="flex justify-between items-center">
+                                <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 bg-clip-text text-transparent drop-shadow-sm">Calasu</h1>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setIsDesktopMode(!isDesktopMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
+                                        {isDesktopMode ? <SmartphoneIcon size={18}/> : <MonitorIcon size={18}/>}
                                     </button>
-                                );
-                            })}
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
+                                        {isDarkMode ? <SunIcon size={18}/> : <MoonIcon size={18}/>}
+                                    </button>
+                                    <button onClick={() => setShowSettings(true)} className="p-2.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95 transition-all shadow-sm">
+                                        <CloudIcon size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* VIEW MODE TOGGLE */}
+                            <div className="flex bg-slate-200/50 dark:bg-zinc-800/50 p-1 rounded-2xl w-full mx-auto relative backdrop-blur-md shadow-inner border border-slate-200/50 dark:border-zinc-700/50">
+                                {['day', 'week', 'month'].map(view => {
+                                    const isActive = currentView === view;
+                                    let activeCls = 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200';
+                                    if(isActive) {
+                                        if (appMode === 'macro') activeCls = 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'; 
+                                        else if (appMode === 'sleep') activeCls = 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'; 
+                                        else if (appMode === 'workout') activeCls = 'bg-orange-500 text-white shadow-md shadow-orange-500/20';
+                                        else if (appMode === 'journal' || appMode === 'stat') activeCls = 'bg-purple-500 text-white shadow-md shadow-purple-500/20';
+                                        else if (appMode === 'work') activeCls = 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20';
+                                    }
+                                    return (
+                                        <button key={view} onClick={() => setCurrentView(view)} className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
+                                            {view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </header>
 
                     <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
-                        <div className="max-w-md mx-auto p-4 space-y-6 pb-24">
+                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} mx-auto p-4 space-y-6 pb-24 transition-all duration-500`}>
                             
                             {/* DATE NAVIGATOR - DAY */}
                             {currentView === 'day' && (
@@ -1787,7 +1818,7 @@
                     </main>
 
                     <nav className="shrink-0 z-40 glass border-t border-slate-200/60 dark:border-zinc-800/60 pb-[env(safe-area-inset-bottom,1rem)] pt-1 transition-colors relative">
-                        <div className="max-w-md mx-auto px-4 h-[60px] flex justify-between items-center relative">
+                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} mx-auto px-4 h-[60px] flex justify-between items-center relative transition-all duration-500`}>
                             {[
                                 { id: 'work', icon: BrainIcon, label: 'Work', activeColor: 'text-cyan-500', activeBg: 'bg-cyan-500/10' },
                                 { id: 'macro', icon: UtensilsIcon, label: 'Food', activeColor: 'text-emerald-500', activeBg: 'bg-emerald-500/10' },
@@ -2256,10 +2287,10 @@
 
                     {/* LIGHTBOX (TRÌNH XEM ẢNH FULL MÀN HÌNH) */}
                     {lightboxImages && lightboxImages.length > 0 && (
-                        <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col justify-center items-center backdrop-blur-md animate-[fadeIn_0.2s_ease-out]" onClick={() => setLightboxImages(null)}>
+                        <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col justify-center items-center backdrop-blur-md animate-[fadeIn_0.2s_ease-out]" onClick={() => window.history.back()}>
                             <div className="absolute top-6 right-6 flex gap-4 z-50">
                                 <span className="text-white font-black tracking-widest bg-white/10 px-4 py-2 rounded-2xl backdrop-blur text-sm border border-white/10">{lightboxIndex + 1} / {lightboxImages.length}</span>
-                                <button onClick={(e) => { e.stopPropagation(); setLightboxImages(null); }} className="text-white bg-white/10 p-2.5 rounded-full hover:bg-white/20 backdrop-blur border border-white/10 transition-all active:scale-90"><XIcon size={20}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); window.history.back(); }} className="text-white bg-white/10 p-2.5 rounded-full hover:bg-white/20 backdrop-blur border border-white/10 transition-all active:scale-90"><XIcon size={20}/></button>
                             </div>
 
                             <div className="relative w-full max-w-4xl flex justify-center items-center h-full px-4" onClick={(e) => e.stopPropagation()}>
