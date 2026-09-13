@@ -33,8 +33,8 @@
     <!-- Babel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
     
-    <!-- Lucide Icons -->
-    <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.292.0/dist/umd/lucide-react.js"></script>
+   <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide-react@0.284.0/dist/umd/lucide-react.min.js"></script>
     <script>if (window.lucide && !window.lucideReact) window.lucideReact = window.lucide;</script>
 
     <!-- Google Fonts -->
@@ -93,10 +93,12 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        try {
-            let IconLib = window.lucideReact;
+       try {
+            // Ép hệ thống bắt đúng biến LucideReact (chữ L viết hoa)
+            let IconLib = window.LucideReact || window.lucideReact || window.lucide;
+            if (IconLib && !IconLib.Alert) { IconLib = { ...IconLib, Alert: IconLib.AlertTriangle || IconLib.Info }; }
             
-            if (!IconLib) {
+            if (!IconLib || !IconLib.Calendar) {
                 const E = (char) => ({ size, className }) => <span className={className} style={{ fontSize: size ? size * 0.8 : 'inherit', lineHeight: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{char}</span>;
                 IconLib = {
                     Calendar: E("📅"), Plus: E("➕"), Trash2: E("🗑️"), Camera: E("📷"), Sparkles: E("✨"),
@@ -106,7 +108,7 @@
                     Clock: E("🕒"), CheckCircle: E("✅"), Loader: E("⏳"), Activity: E("📈"), Image: E("🖼️"),
                     Cloud: E("☁️"), Download: E("⬇️"), Upload: E("⬆️"), Skull: E("💀"), Bomb: E("💣"), Heart: E("💚"), Alert: E("❗"), XCircle: E("❌"),
                     Timer: E("⏱️"), Book: E("📓"), Home: E("🏠"), Plane: E("✈️"), Smile: E("😊"), Frown: E("🙁"), Brain: E("🧠"), FileText: E("📝"), Menu: E("☰"),
-                    Check: E("✓"), Send: E("🚀"), Music: E("🎵"), Smartphone: E("📱"), Monitor: E("💻")
+                    Check: E("✓"), Send: E("🚀"), Music: E("🎵"), Smartphone: E("📱"), Monitor: E("💻"), Search: E("🔍")
                 };
             }
 
@@ -118,7 +120,7 @@
                 Clock: ClockIcon, CheckCircle: CheckCircleIcon, Loader: LoaderIcon, Activity: ActivityIcon, Image: ImageIcon,
                 Cloud: CloudIcon, Download: DownloadIcon, Upload: UploadIcon, Skull: SkullIcon, Bomb: BombIcon, Heart: HeartIcon, Alert: AlertIcon, XCircle: XCircleIcon,
                 Timer: TimerIcon, Book: BookIcon, Home: HomeIcon, Plane: PlaneIcon, Smile: SmileIcon, Frown: FrownIcon, Brain: BrainIcon, FileText: FileTextIcon, Menu: MenuIcon,
-                Check: CheckIcon, Send: SendIcon, Music: MusicIcon, Smartphone: SmartphoneIcon, Monitor: MonitorIcon
+                Check: CheckIcon, Send: SendIcon, Music: MusicIcon, Smartphone: SmartphoneIcon, Monitor: MonitorIcon, Meh: MehIcon, Search: SearchIcon, Filter: FilterIcon
             } = IconLib;
 
             const { useState, useEffect, useRef } = React;
@@ -200,13 +202,13 @@
                 return null;
             };
 
-            const MOODS = [
-                { val: 0, label: 'Tồi tệ', color: '#4A1525', twBg: 'bg-[#4A1525]', twText: 'text-white', icon: SkullIcon },
-                { val: 1, label: 'Mệt mỏi', color: '#B45309', twBg: 'bg-amber-700', twText: 'text-white', icon: FrownIcon },
-                { val: 2, label: 'Chán ngắt', color: '#EAB308', twBg: 'bg-yellow-500', twText: 'text-slate-900', icon: FrownIcon },
-                { val: 3, label: 'Bình ổn', color: '#0284C7', twBg: 'bg-sky-600', twText: 'text-white', icon: SmileIcon },
-                { val: 4, label: 'Vui vẻ', color: '#16A34A', twBg: 'bg-emerald-600', twText: 'text-white', icon: SmileIcon },
-                { val: 5, label: 'Thăng hoa', color: '#9333EA', twBg: 'bg-purple-600', twText: 'text-white', icon: SparklesIcon }
+         const MOODS = [
+                { val: 0, label: 'Tồi tệ', twBg: 'bg-rose-50 dark:bg-rose-500/10', twText: 'text-rose-600 dark:text-rose-400', twBorder: 'border-rose-200 dark:border-rose-500/20', icon: SkullIcon },
+                { val: 1, label: 'Mệt mỏi', twBg: 'bg-orange-50 dark:bg-orange-500/10', twText: 'text-orange-600 dark:text-orange-400', twBorder: 'border-orange-200 dark:border-orange-500/20', icon: CloudIcon },
+                { val: 2, label: 'Chán ngắt', twBg: 'bg-yellow-50 dark:bg-yellow-500/10', twText: 'text-yellow-600 dark:text-yellow-400', twBorder: 'border-yellow-200 dark:border-yellow-500/20', icon: FrownIcon },
+                { val: 3, label: 'Bình ổn', twBg: 'bg-sky-50 dark:bg-sky-500/10', twText: 'text-sky-600 dark:text-sky-400', twBorder: 'border-sky-200 dark:border-sky-500/20', icon: MehIcon },
+                { val: 4, label: 'Vui vẻ', twBg: 'bg-emerald-50 dark:bg-emerald-500/10', twText: 'text-emerald-600 dark:text-emerald-400', twBorder: 'border-emerald-200 dark:border-emerald-500/20', icon: SmileIcon },
+                { val: 5, label: 'Thăng hoa', twBg: 'bg-purple-50 dark:bg-purple-500/10', twText: 'text-purple-600 dark:text-purple-400', twBorder: 'border-purple-200 dark:border-purple-500/20', icon: SparklesIcon }
             ];
 
             const OUTINGS = [
@@ -248,6 +250,62 @@
                 
                 const [activeFilter, setActiveFilter] = useState(null);
                 const [journalDetailLevel, setJournalDetailLevel] = useState('simple');
+                const [showFilterModal, setShowFilterModal] = useState(false);
+                const [journalFilters, setJournalFilters] = useState({ 
+                    query: '', moods: [], outings: [], workouts: [],
+                    foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all'
+                });
+                
+                const isFiltering = journalFilters.query.trim() || journalFilters.moods.length > 0 || journalFilters.outings.length > 0 || journalFilters.workouts.length > 0 || journalFilters.foodQuery.trim() || journalFilters.foodType !== 'all' || journalFilters.proType !== 'all' || journalFilters.sleepStart !== 'all' || journalFilters.sleepEnd !== 'all';
+
+                const toggleFilterItem = (category, value) => {
+                    setJournalFilters(prev => {
+                        const current = prev[category];
+                        if (current.includes(value)) return { ...prev, [category]: current.filter(v => v !== value) };
+                        return { ...prev, [category]: [...current, value] };
+                    });
+                };
+
+                const checkJournalMatch = (dKey) => {
+                    if (!isFiltering) return true;
+                    const { query, moods, outings, workouts, foodQuery, foodType, proType, sleepStart, sleepEnd } = journalFilters;
+                    const sDay = statsByDate[dKey];
+                    const fDay = foodsByDate[dKey] || [];
+                    const wDay = workoutsByDate[dKey];
+                    const slDay = sleepByDate[dKey] || [];
+
+                    let matchQuery = true;
+                    if (query.trim()) {
+                        const q = query.toLowerCase().trim();
+                        const matchSummary = sDay?.summary?.toLowerCase().includes(q);
+                        const matchOuting = sDay?.outing && OUTINGS.find(o => o.val === sDay.outing)?.label.toLowerCase().includes(q);
+                        matchQuery = matchSummary || matchOuting; // Đã tách food ra bộ lọc riêng
+                    }
+
+                    let matchMood = moods.length === 0 || (sDay && moods.includes(sDay.mood));
+                    let matchOuting = outings.length === 0 || (sDay && outings.includes(sDay.outing));
+                    let matchWorkout = workouts.length === 0 || (wDay && workouts.includes(wDay.type));
+
+                    // Lọc Ẩm thực
+                    let matchFood = true;
+                    const fTotals = calculateTotals(fDay);
+                    if (foodQuery.trim() && !fDay.some(f => f.name.toLowerCase().includes(foodQuery.toLowerCase().trim()))) matchFood = false;
+                    if (foodType === 'cheatday' && (fDay.length === 0 || fTotals.kcal <= 2500)) matchFood = false;
+                    if (foodType === 'normal' && (fDay.length === 0 || fTotals.kcal > 2500)) matchFood = false;
+                    if (proType === 'enough' && (fDay.length === 0 || fTotals.protein < 115)) matchFood = false;
+                    if (proType === 'lack' && (fDay.length === 0 || fTotals.protein >= 115)) matchFood = false;
+
+                    // Lọc Giấc ngủ
+                    let matchSleep = true;
+                    const cWarn = getCircadianWarning(slDay);
+                    const hasSleep = slDay.length > 0;
+                    if (sleepStart === 'late' && (!hasSleep || (cWarn !== 'late_sleep' && cWarn !== 'bomb'))) matchSleep = false;
+                    if (sleepStart === 'early' && (!hasSleep || cWarn === 'late_sleep' || cWarn === 'bomb')) matchSleep = false;
+                    if (sleepEnd === 'late' && (!hasSleep || (cWarn !== 'late_wake' && cWarn !== 'bomb'))) matchSleep = false;
+                    if (sleepEnd === 'early' && (!hasSleep || cWarn === 'late_wake' || cWarn === 'bomb')) matchSleep = false;
+
+                    return matchQuery && matchMood && matchOuting && matchWorkout && matchFood && matchSleep;
+                };
                 
                 const [lightboxImages, setLightboxImages] = useState(null);
                 const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -336,6 +394,14 @@
                 const [workoutNote, setWorkoutNote] = useState('');
                 const [currentExercises, setCurrentExercises] = useState([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
                 const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+                const [activeExerciseId, setActiveExerciseId] = useState(null);
+
+                const handleQuickSaveWorkout = () => { 
+                    const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); 
+                    if (vEx.length === 0) return; 
+                    setWorkoutsByDate(p => ({ ...p, [dateKey]: { type: workoutType, note: workoutNote, exercises: vEx } })); 
+                    showToast('Đã lưu nháp tiến độ!', 'success'); 
+                };
 
                 // Thêm thuộc tính musicUrl vào statFormData
                 const [isAddingStat, setIsAddingStat] = useState(false);
@@ -789,6 +855,11 @@
                                     <button onClick={() => setIsDesktopMode(!isDesktopMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
                                         {isDesktopMode ? <SmartphoneIcon size={18}/> : <MonitorIcon size={18}/>}
                                     </button>
+                                    {(appMode === 'journal' || appMode === 'stat') && (
+                                        <button onClick={() => setShowFilterModal(true)} className={`p-2.5 rounded-full hover:scale-105 active:scale-95 transition-all shadow-sm ${isFiltering ? 'bg-purple-500 text-white shadow-purple-500/30' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300'}`}>
+                                            <FilterIcon size={18}/>
+                                        </button>
+                                    )}
                                     <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
                                         {isDarkMode ? <SunIcon size={18}/> : <MoonIcon size={18}/>}
                                     </button>
@@ -1172,6 +1243,26 @@
 
                             {appMode === 'workout' && currentView === 'day' && (
                                 <div className="animate-[fadeScale_0.3s_ease-out]">
+                                    
+                                    {/* BỘ ĐẾM GIỜ MẶT TIỀN */}
+                                    <div className={`bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-3 rounded-[1.5rem] flex items-center justify-between gap-2 mb-6 shadow-sm z-10 relative transition-colors ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
+                                            {[45, 60, 90, 120, 150, 180].map(sec => (
+                                                <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-slate-50 dark:bg-zinc-800 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-200/50 dark:border-zinc-700/50">
+                                                    {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-3 pr-2 shrink-0 border-l border-slate-100 dark:border-zinc-800 pl-3">
+                                            <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-200')}`}>
+                                                {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
+                                            </span>
+                                            {timerSeconds !== null && (
+                                                <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl hover:bg-red-100 active:scale-90 transition-all border border-red-100 dark:border-red-500/20"><XIcon size={16}/></button>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {currentWorkout ? (
                                         <div className="mb-6">
                                             {(() => {
@@ -1527,9 +1618,14 @@
                                     {currentStat ? (
                                         <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6 transition-colors relative z-20">
                                             <div className="flex justify-between items-center pb-5 border-b border-slate-100 dark:border-zinc-800/50">
-                                                <span className={`px-4 py-2 rounded-2xl text-sm font-black ${MOODS.find(m=>m.val===currentStat.mood)?.twBg || 'bg-slate-500'} text-white shadow-md flex items-center gap-2`}>
-                                                    {React.createElement(MOODS.find(m=>m.val===currentStat.mood)?.icon || SmileIcon, {size: 18})} {MOODS.find(m=>m.val===currentStat.mood)?.label || 'Không rõ'}
-                                                </span>
+                                                {(() => {
+                                                    const cMood = MOODS.find(m => m.val === currentStat.mood) || MOODS[3];
+                                                    return (
+                                                        <span className={`px-4 py-2 rounded-2xl text-sm font-black ${cMood.twBg} ${cMood.twText} border ${cMood.twBorder} shadow-sm flex items-center gap-2`}>
+                                                            {React.createElement(cMood.icon, {size: 18, strokeWidth: 2.5})} {cMood.label}
+                                                        </span>
+                                                    );
+                                                })()}
                                                 <div className="flex items-center gap-2">
                                                     {currentStat.musicUrl && getSpotifyEmbedUrl(currentStat.musicUrl) && (
                                                         <span className="bg-green-50 dark:bg-green-500/10 p-2.5 rounded-2xl border border-green-200/50 dark:border-green-500/30 text-green-500 flex items-center justify-center shadow-sm">
@@ -1595,15 +1691,25 @@
 
                             {(appMode === 'journal' || appMode === 'stat') && currentView === 'week' && (
                                 <div className="animate-[fadeScale_0.3s_ease-out]">
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar mb-5 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800">
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4 bg-white dark:bg-zinc-900 p-1.5 rounded-2xl shadow-sm border border-slate-100 dark:border-zinc-800">
                                         <button onClick={() => setJournalDetailLevel('simple')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${journalDetailLevel === 'simple' ? 'bg-slate-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 dark:text-zinc-500 hover:text-slate-700'}`}>Đơn giản</button>
                                         <button onClick={() => setJournalDetailLevel('detail')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${journalDetailLevel === 'detail' ? 'bg-slate-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 dark:text-zinc-500 hover:text-slate-700'}`}>Chi tiết</button>
                                         <button onClick={() => setJournalDetailLevel('all')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${journalDetailLevel === 'all' ? 'bg-slate-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 dark:text-zinc-500 hover:text-slate-700'}`}>Tất tần tật</button>
                                     </div>
+                                    
+{/* THANH THÔNG BÁO ĐANG LỌC */}
+                                    {isFiltering && (
+                                        <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-6 flex justify-between items-center shadow-sm">
+                                            <span className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-2"><FilterIcon size={14}/> Đang áp dụng bộ lọc</span>
+                                            <button onClick={() => setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="text-[10px] bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm font-bold text-slate-600 dark:text-zinc-300 active:scale-95">Xóa Lọc</button>
+                                        </div>
+                                    )}
+
                                     <div 
                                         className="flex overflow-x-auto snap-x gap-4 pb-8 pt-2 no-scrollbar items-stretch"
-                                        onTouchStart={(e) => e.currentTarget.dataset.startX = e.touches[0].clientX}
+                                        onTouchStart={(e) => { if(!isFiltering) e.currentTarget.dataset.startX = e.touches[0].clientX; }}
                                         onTouchEnd={(e) => {
+                                            if (isFiltering) return; // Đang lọc thì không cho lướt qua lại tuần
                                             const el = e.currentTarget;
                                             const scrollLeft = el.scrollLeft;
                                             const maxScroll = el.scrollWidth - el.clientWidth;
@@ -1612,208 +1718,228 @@
                                             const diff = startX - endX;
                                             
                                             if (scrollLeft >= maxScroll - 20 && diff > 60) {
-                                                el.style.scrollBehavior = 'auto';
-                                                el.scrollLeft = 0;
-                                                changeWeek(1);
-                                                const nextMon = new Date(currentWeekStart); nextMon.setDate(nextMon.getDate() + 7);
-                                                setSelectedDate(nextMon);
+                                                el.style.scrollBehavior = 'auto'; el.scrollLeft = 0; changeWeek(1);
+                                                const nextMon = new Date(currentWeekStart); nextMon.setDate(nextMon.getDate() + 7); setSelectedDate(nextMon);
                                                 setTimeout(() => { el.style.scrollBehavior = 'smooth'; }, 100);
-                                            } 
-                                            else if (scrollLeft <= 20 && diff < -60) {
-                                                el.style.scrollBehavior = 'auto';
-                                                el.scrollLeft = 9999;
-                                                changeWeek(-1);
-                                                const prevSun = new Date(currentWeekStart); prevSun.setDate(prevSun.getDate() - 1);
-                                                setSelectedDate(prevSun);
+                                            } else if (scrollLeft <= 20 && diff < -60) {
+                                                el.style.scrollBehavior = 'auto'; el.scrollLeft = 9999; changeWeek(-1);
+                                                const prevSun = new Date(currentWeekStart); prevSun.setDate(prevSun.getDate() - 1); setSelectedDate(prevSun);
                                                 setTimeout(() => { el.style.scrollBehavior = 'smooth'; }, 100);
                                             }
                                         }}
                                     >
-                                        {weekDays.map(day => {
-                                            const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                            const sDay = statsByDate[dKey]; const sleepDay = sleepByDate[dKey] || []; const workDay = workoutsByDate[dKey]; const foodDay = foodsByDate[dKey] || []; const foodTotals = calculateTotals(foodDay);
-                                            
-                                            let moodColor = MOODS[3]; let outIcon = OUTINGS[0]; let moodIcon = MOODS[3].icon;
-                                            if (sDay) { moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3]; outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0]; moodIcon = moodColor.icon; }
+                                        {(() => {
+                                            // LOGIC RENDER: Nếu có lọc thì lôi hết lịch sử ra, nếu không thì hiện tuần hiện tại
+                                            let renderDays = [];
+                                            if (isFiltering) {
+                                                const allDatesSet = new Set([...Object.keys(statsByDate), ...Object.keys(foodsByDate), ...Object.keys(workoutsByDate)]);
+                                                renderDays = Array.from(allDatesSet)
+                                                    .filter(dKey => checkJournalMatch(dKey))
+                                                    .sort((a, b) => parseDateToNumber(b) - parseDateToNumber(a)) // Mới nhất lên đầu
+                                                    .map(dKey => {
+                                                        const [dd, mm, yyyy] = dKey.split('/');
+                                                        return new Date(yyyy, mm - 1, dd);
+                                                    });
+                                            } else {
+                                                renderDays = weekDays;
+                                            }
 
-                                            
+                                            if (renderDays.length === 0) {
+                                                return (
+                                                    <div className="w-full py-16 text-center text-slate-400 dark:text-zinc-600 font-black tracking-widest uppercase text-sm border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-[2.5rem]">
+                                                        Không tìm thấy dữ liệu nào phù hợp!
+                                                    </div>
+                                                );
+                                            }
 
-                                            return (
-                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 dark:shadow-none text-left transition-all active:scale-[0.98] border border-slate-100 dark:border-zinc-800 ${isToday ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : 'hover:shadow-2xl'} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
-                                                    
-                                                    {/* Header Thẻ - Đã quy hoạch lại khoa học hơn */}
-                                                    <div className="flex justify-between items-start mb-5 relative z-10 w-full">
-                                                        {/* Cột trái: Ngày & Cảm xúc */}
-                                                        <div className="flex flex-col gap-2.5 items-start">
-                                                            <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
-                                                                {VN_DAYS[day.getDay()]} <span className="opacity-50 text-[10px] font-bold">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span>
-                                                            </span>
-                                                            <span className={`${moodColor.twBg} text-white font-black px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 shadow-md`}>
-                                                                {React.createElement(moodIcon, {size: 16})} {sDay ? moodColor.label : 'Chưa có'}
-                                                            </span>
-                                                        </div>
-                                                        
-                                                        {/* Cột phải: Vị trí & Dinh dưỡng */}
-                                                        <div className="flex flex-col items-end gap-2.5">
-                                                            {sDay && outIcon && (
-                                                                <span className="bg-slate-50 dark:bg-zinc-800 px-3 py-2 rounded-xl text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
-                                                                    <outIcon.Icon size={14} className={outIcon.color}/>
-                                                                    {outIcon.label}
+                                            return renderDays.map(day => {
+                                                const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                                const sDay = statsByDate[dKey]; const sleepDay = sleepByDate[dKey] || []; const workDay = workoutsByDate[dKey]; const foodDay = foodsByDate[dKey] || []; const foodTotals = calculateTotals(foodDay);
+                                                
+                                                let moodColor = MOODS[3]; let outIcon = OUTINGS[0]; let moodIcon = MOODS[3].icon;
+                                                if (sDay) { moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3]; outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0]; moodIcon = moodColor.icon; }
+
+                                                return (
+                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 dark:shadow-none text-left transition-all active:scale-[0.98] border border-slate-100 dark:border-zinc-800 ${isToday && !isFiltering ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : 'hover:shadow-2xl'} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
+                                                        <div className="flex justify-between items-start mb-5 relative z-10 w-full">
+                                                            <div className="flex flex-col gap-2.5 items-start">
+                                                                <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
+                                                                    {VN_DAYS[day.getDay()]} <span className="opacity-50 text-[10px] font-bold">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span>
                                                                 </span>
-                                                            )}
-                                                            {((journalDetailLevel === 'detail' || journalDetailLevel === 'all') && Math.round(foodTotals.kcal) > 0) && (
-                                                                <div className="bg-orange-50 dark:bg-orange-500/10 px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
-                                                                    <span className="flex items-center gap-1"><FlameIcon size={12}/> {Math.round(foodTotals.kcal)}</span>
-                                                                    <div className="w-px h-3 bg-orange-200 dark:bg-orange-500/30"></div>
-                                                                    <span className="flex items-center gap-1"><BeefIcon size={12}/> {cleanNum(foodTotals.protein)}g</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && (
-    <div className="w-full relative z-20 mb-4 rounded-xl overflow-hidden shadow-lg border border-slate-200 dark:border-zinc-700/50">
-        <iframe src={getSpotifyEmbedUrl(sDay.musicUrl)} width="100%" height="152" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
-    </div>
-)}
-
-                                                 {/* Khu vực Nội dung - Ảnh - Thức ăn (Đúng thứ tự luồng trên xuống dưới) */}
-                                                    <div className="w-full flex-1 mt-2 flex flex-col gap-4">
-                                                        
-                                                        {/* 1. Ghi chú & Tags */}
-                                                        <div className="flex flex-col gap-3 relative z-10">
-                                                            <p className="text-slate-600 dark:text-zinc-300 text-[13px] font-medium line-clamp-4 italic whitespace-normal break-words leading-relaxed">"{sDay?.summary || 'Không có ghi chú'}"</p>
-
-                                                            {(journalDetailLevel === 'detail' || journalDetailLevel === 'all') && (
-                                                                <div className="flex flex-wrap gap-2 items-center">
-                                                                    {sleepDay.length > 0 && (
-                                                                        <div className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-500/20 shadow-sm">
-                                                                            <MoonIcon size={14}/> {sleepDay[sleepDay.length-1].sleepTime}-{sleepDay[sleepDay.length-1].wakeTime}
-                                                                        </div>
-                                                                    )}
-                                                                  {workDay && (() => {
-                                                                          const wCol = getWorkoutColor(workDay.type);
-                                                                          return (
-                                                                              <div className={`${wCol.lightBg} ${wCol.text} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 w-max shadow-sm border ${wCol.border} border-opacity-30`}>
-                                                                                  <DumbbellIcon size={14}/> {workDay.type}
-                                                                              </div>
-                                                                          );
-                                                                      })()}
-                                                                </div>
-                                                            )}
+                                                                <span className={`${sDay ? moodColor.twBg + ' ' + moodColor.twText + ' border ' + moodColor.twBorder : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-500 border border-slate-200 dark:border-zinc-700'} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-sm`}>
+                                                                    {React.createElement(moodIcon, {size: 14, strokeWidth: 2.5})} {sDay ? moodColor.label : 'Chưa có'}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            <div className="flex flex-col items-end gap-2.5">
+                                                                {sDay && outIcon && (
+                                                                    <span className="bg-slate-50 dark:bg-zinc-800 px-3 py-2 rounded-xl text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
+                                                                        <outIcon.Icon size={14} className={outIcon.color}/>
+                                                                        {outIcon.label}
+                                                                    </span>
+                                                                )}
+                                                                {((journalDetailLevel === 'detail' || journalDetailLevel === 'all') && Math.round(foodTotals.kcal) > 0) && (
+                                                                    <div className="bg-orange-50 dark:bg-orange-500/10 px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
+                                                                        <span className="flex items-center gap-1"><FlameIcon size={12}/> {Math.round(foodTotals.kcal)}</span>
+                                                                        <div className="w-px h-3 bg-orange-200 dark:bg-orange-500/30"></div>
+                                                                        <span className="flex items-center gap-1"><BeefIcon size={12}/> {cleanNum(foodTotals.protein)}g</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
 
-                                                       {/* 2. Hình ảnh Polaroid Xếp Dạt Ngang (Nằm độc lập, không chèn ép) */}
-                                                        {sDay?.images && sDay.images.length > 0 && (
-                                                            <div className="relative w-full h-36 my-2 z-20 pointer-events-none">
-                                                                {(() => {
-                                                                    const numFrames = Math.min(sDay.images.length, 3);
-                                                                    const frames = Array.from({length: numFrames}, () => []);
-                                                                    sDay.images.forEach((img, idx) => { frames[idx % numFrames].push(img); });
-                                                                    
-                                                                    let rotations = []; let positions = [];
-                                                                    
-                                                                    if (numFrames === 1) { 
-                                                                        rotations = ['rotate-[-2deg]']; 
-                                                                        positions = ['left-8 top-1 z-10'];
-                                                                    } 
-                                                                    else if (numFrames === 2) { 
-                                                                        rotations = ['rotate-[-5deg]', 'rotate-[4deg]']; 
-                                                                        positions = ['left-2 top-3 z-10', 'right-4 top-0 z-20'];
-                                                                    } 
-                                                                    else { 
-                                                                        rotations = ['rotate-[-7deg]', 'rotate-[1deg]', 'rotate-[8deg]']; 
-                                                                        // Giãn ảnh to ra góc để lấp đầy thẻ
-                                                                        positions = ['-left-2 top-4 z-10', 'left-1/2 -translate-x-1/2 -top-1 z-20', '-right-2 top-3 z-30'];
-                                                                    }
-                                                                    
-                                                                    return frames.map((frame, i) => (
-                                                                        <div key={i} onClick={(e) => { e.stopPropagation(); setLightboxImages(sDay.images); setLightboxIndex(0); }}
-                                                                            className={`absolute ${positions[i]} w-[115px] h-[120px] bg-[#fafafa] dark:bg-[#e4e4e7] p-1.5 pb-7 shadow-lg dark:shadow-[0_8px_20px_rgba(0,0,0,0.8)] rounded-sm transform ${rotations[i]} origin-center border border-slate-200/60 dark:border-zinc-400 cursor-pointer hover:scale-110 transition-transform pointer-events-auto opacity-95`}
-                                                                        >
-                                                                            <div className="relative w-full h-full bg-slate-200 dark:bg-zinc-400 rounded-[1px] overflow-hidden shadow-inner">
-                                                                                {frame.map((img, idx) => {
-                                                                                    const len = Math.min(frame.length, 5); const animClass = len > 1 ? `xfade-${len}` : 'xfade-1'; const delay = len > 1 ? `${idx * 3}s` : '0s';
-                                                                                    return <img key={idx} src={img} draggable="false" className={`crossfade-img ${animClass}`} style={{ animationDelay: delay }} onError={(e) => { e.target.style.display = 'none'; }} />
-                                                                                })}
+                                                        {sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && (
+                                                            <div className="w-full relative z-20 mb-4 rounded-xl overflow-hidden shadow-lg border border-slate-200 dark:border-zinc-700/50">
+                                                                <iframe src={getSpotifyEmbedUrl(sDay.musicUrl)} width="100%" height="152" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="w-full flex-1 mt-2 flex flex-col gap-4">
+                                                            
+                                                            <div className="flex flex-col gap-3 relative z-10">
+                                                                <p className="text-slate-600 dark:text-zinc-300 text-[13px] font-medium line-clamp-4 italic whitespace-normal break-words leading-relaxed">"{sDay?.summary || 'Không có ghi chú'}"</p>
+
+                                                                {(journalDetailLevel === 'detail' || journalDetailLevel === 'all') && (
+                                                                    <div className="flex flex-wrap gap-2 items-center">
+                                                                        {sleepDay.length > 0 && (
+                                                                            <div className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-500/20 shadow-sm">
+                                                                                <MoonIcon size={14}/> {sleepDay[sleepDay.length-1].sleepTime}-{sleepDay[sleepDay.length-1].wakeTime}
                                                                             </div>
-                                                                        </div>
-                                                                    ));
-                                                                })()}
+                                                                        )}
+                                                                      {workDay && (() => {
+                                                                              const wCol = getWorkoutColor(workDay.type);
+                                                                              return (
+                                                                                  <div className={`${wCol.lightBg} ${wCol.text} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 w-max shadow-sm border ${wCol.border} border-opacity-30`}>
+                                                                                      <DumbbellIcon size={14}/> {workDay.type}
+                                                                                  </div>
+                                                                              );
+                                                                          })()}
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                        )}
 
-                                                        {/* 3. Danh sách Thức ăn (Bị đẩy xuống tận cùng dưới ảnh) */}
-                                                        {journalDetailLevel === 'all' && foodDay.length > 0 && (
-                                                            <div className="space-y-2 text-[10px] font-semibold w-full bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-zinc-700/50 shadow-inner mt-auto relative z-10">
-                                                                {['Sáng', 'Trưa', 'Chiều', 'Ngoài lề'].map(m => {
-                                                                    const mFoods = foodDay.filter(f => f.meal === m).map(f => f.name).join(', ');
-                                                                    if(!mFoods) return null;
-                                                                    let ic = '☀️', label = 'SÁNG';
-                                                                    if(m==='Trưa') {ic='🍗'; label='TRƯA';}
-                                                                    if(m==='Chiều') {ic='🥣'; label='CHIỀU';}
-                                                                    if(m==='Ngoài lề') {ic='🍬'; label='NGOÀI';}
-                                                                    return <p key={m} className="whitespace-normal break-words leading-snug border-b border-slate-200/50 dark:border-zinc-700/50 pb-1.5 last:border-0 last:pb-0"><span className="text-slate-400 dark:text-zinc-500 font-black tracking-wider uppercase inline-block w-[60px]">{ic} {label}</span> <span className="text-slate-700 dark:text-zinc-200">{mFoods}</span></p>;
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                        
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
+                                                            {sDay?.images && sDay.images.length > 0 && (
+                                                                <div className="relative w-full h-36 my-2 z-20 pointer-events-none">
+                                                                    {(() => {
+                                                                        const numFrames = Math.min(sDay.images.length, 3);
+                                                                        const frames = Array.from({length: numFrames}, () => []);
+                                                                        sDay.images.forEach((img, idx) => { frames[idx % numFrames].push(img); });
+                                                                        
+                                                                        let rotations = []; let positions = [];
+                                                                        
+                                                                        if (numFrames === 1) { 
+                                                                            rotations = ['rotate-[-2deg]']; 
+                                                                            positions = ['left-8 top-1 z-10'];
+                                                                        } 
+                                                                        else if (numFrames === 2) { 
+                                                                            rotations = ['rotate-[-5deg]', 'rotate-[4deg]']; 
+                                                                            positions = ['left-2 top-3 z-10', 'right-4 top-0 z-20'];
+                                                                        } 
+                                                                        else { 
+                                                                            rotations = ['rotate-[-7deg]', 'rotate-[1deg]', 'rotate-[8deg]']; 
+                                                                            positions = ['-left-2 top-4 z-10', 'left-1/2 -translate-x-1/2 -top-1 z-20', '-right-2 top-3 z-30'];
+                                                                        }
+                                                                        
+                                                                        return frames.map((frame, i) => (
+                                                                            <div key={i} onClick={(e) => { e.stopPropagation(); setLightboxImages(sDay.images); setLightboxIndex(0); }}
+                                                                                className={`absolute ${positions[i]} w-[115px] h-[120px] bg-[#fafafa] dark:bg-[#e4e4e7] p-1.5 pb-7 shadow-lg dark:shadow-[0_8px_20px_rgba(0,0,0,0.8)] rounded-sm transform ${rotations[i]} origin-center border border-slate-200/60 dark:border-zinc-400 cursor-pointer hover:scale-110 transition-transform pointer-events-auto opacity-95`}
+                                                                            >
+                                                                                <div className="relative w-full h-full bg-slate-200 dark:bg-zinc-400 rounded-[1px] overflow-hidden shadow-inner">
+                                                                                    {frame.map((img, idx) => {
+                                                                                        const len = Math.min(frame.length, 5); const animClass = len > 1 ? `xfade-${len}` : 'xfade-1'; const delay = len > 1 ? `${idx * 3}s` : '0s';
+                                                                                        return <img key={idx} src={img} draggable="false" className={`crossfade-img ${animClass}`} style={{ animationDelay: delay }} onError={(e) => { e.target.style.display = 'none'; }} />
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            )}
+
+                                                            {journalDetailLevel === 'all' && foodDay.length > 0 && (
+                                                                <div className="space-y-2 text-[10px] font-semibold w-full bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-zinc-700/50 shadow-inner mt-auto relative z-10">
+                                                                    {['Sáng', 'Trưa', 'Chiều', 'Ngoài lề'].map(m => {
+                                                                        const mFoods = foodDay.filter(f => f.meal === m).map(f => f.name).join(', ');
+                                                                        if(!mFoods) return null;
+                                                                        let MIcon = SunriseIcon; let label = 'SÁNG';
+                                                                        if(m==='Trưa') { MIcon = SunIcon; label='TRƯA'; }
+                                                                        if(m==='Chiều') { MIcon = SunsetIcon; label='CHIỀU'; }
+                                                                        if(m==='Ngoài lề') { MIcon = CoffeeIcon; label='NGOÀI'; }
+                                                                        return (
+                                                                            <div key={m} className="flex items-start gap-1.5 leading-snug border-b border-slate-200/50 dark:border-zinc-700/50 pb-1.5 last:border-0 last:pb-0">
+                                                                                <span className="text-slate-400 dark:text-zinc-500 font-black tracking-wider uppercase w-[65px] flex items-center gap-1 shrink-0"><MIcon size={12} strokeWidth={3}/> {label}</span> 
+                                                                                <span className="text-slate-700 dark:text-zinc-200 flex-1 whitespace-normal break-words pt-[1px]">{mFoods}</span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                            
+                                                        </div>
+                                                    </button>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                 </div>
                             )}
 
                             {(appMode === 'journal' || appMode === 'stat') && currentView === 'month' && (
-                                <div className="animate-[fadeScale_0.3s_ease-out] space-y-8">
-                                    {monthWeeks.map((week, wIndex) => (
-                                        <div key={wIndex} className="space-y-4">
-                                            <h4 className="text-[10px] font-black text-slate-500 dark:text-zinc-500 uppercase tracking-widest pl-2">Tuần {wIndex + 1}: {formatDate(week[0]).slice(0,5)} - {formatDate(week[week.length-1]).slice(0,5)}</h4>
-                                            <div className="flex overflow-x-auto snap-x gap-4 pb-4 no-scrollbar items-stretch">
-                                                {week.map(day => {
-                                                    const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                                    const sDay = statsByDate[dKey];
-                                                    let cellBg = 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800'; let textColor = 'text-slate-800 dark:text-zinc-100'; let moodColor = null;
-
-                                                    if (sDay) {
-                                                        moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3];
-                                                        cellBg = `${moodColor.twBg} border-transparent shadow-lg shadow-${moodColor.twBg.split('-')[1]}-500/20 text-white`;
-                                                        textColor = 'text-white';
-                                                    }
-
-                                                    return (
-                                                        <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`snap-center shrink-0 w-[80vw] max-w-[280px] p-6 rounded-[2rem] text-left shadow-sm border transition-all active:scale-[0.98] ${isToday && !sDay ? 'ring-2 ring-purple-500' : ''} ${cellBg}`}>
-                                                            <div className="flex justify-between items-center mb-5">
-                                                                <p className={`text-base font-black ${sDay ? 'text-white' : (isToday ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-400')}`}>{VN_DAYS[day.getDay()]} <span className={`text-[10px] font-bold ml-1 ${sDay ? 'text-white/70' : 'opacity-70'}`}>({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                                <div className="flex items-center gap-2">
-                                                                    {sDay && sDay.musicUrl && <MusicIcon size={16} className="text-white/90" />}
-                                                                    {sDay && (sDay.images && sDay.images.length > 0) && <ImageIcon size={16} className="text-white/80" />}
-                                                                </div>
-                                                            </div>
-                                                            <div className="min-h-[80px]">
-                                                                {sDay ? (
-                                                                    <>
-                                                                        <p className="text-2xl font-black mb-2 tracking-tight text-white">{moodColor.label}</p>
-                                                                        <p className="text-sm font-semibold line-clamp-3 text-white/90 italic">"{sDay.summary || 'Không có ghi chú'}"</p>
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="flex flex-col items-center justify-center h-full opacity-40 text-slate-500 dark:text-zinc-500 py-4">
-                                                                        <BookIcon size={32} className="mb-3" />
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest">Trống</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                <div className="animate-[fadeScale_0.3s_ease-out]">
+                                    
+                                    {/* THANH THÔNG BÁO ĐANG LỌC */}
+                                    {isFiltering && (
+                                        <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-6 flex justify-between items-center shadow-sm">
+                                            <span className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-2"><FilterIcon size={14}/> Đang áp dụng bộ lọc</span>
+                                            <button onClick={() => setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="text-[10px] bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm font-bold text-slate-600 dark:text-zinc-300 active:scale-95">Xóa Lọc</button>
                                         </div>
-                                    ))}
+                                    )}
+
+                                    <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 mb-6 transition-colors">
+                                        <div className="grid grid-cols-7 gap-2 mb-3">
+                                            {VN_DAYS.map(day => (<div key={day} className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500">{day}</div>))}
+                                        </div>
+                                        <div className="grid grid-cols-7 gap-2">
+                                            {[...Array(firstDayOfMonth)].map((_, i) => (<div key={`empty-${i}`} className="h-12 sm:h-14"></div>))}
+                                            {monthDays.map(day => {
+                                                const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                                const sDay = statsByDate[dKey];
+                                                const hasData = !!sDay || !!(foodsByDate[dKey] && foodsByDate[dKey].length > 0) || !!workoutsByDate[dKey] || !!(sleepByDate[dKey] && sleepByDate[dKey].length > 0);
+                                                
+                                                let cellClass = "bg-slate-50 dark:bg-zinc-800/50 text-slate-600 dark:text-zinc-400 border border-slate-100 dark:border-zinc-700/50";
+                                                
+                                                if (isFiltering) {
+                                                    const isMatch = checkJournalMatch(dKey);
+                                                    if (isMatch) {
+                                                        // Xanh lấp lánh khi trúng bộ lọc
+                                                        cellClass = "bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105 z-10 border-transparent ring-2 ring-emerald-400 ring-offset-1 dark:ring-offset-zinc-900";
+                                                    } else {
+                                                        // Đen chìm khi trượt bộ lọc
+                                                        cellClass = "bg-slate-100 dark:bg-zinc-900/50 border-slate-200/50 dark:border-zinc-800/50 opacity-20 grayscale";
+                                                    }
+                                                } else {
+                                                    if (sDay) {
+                                                        const moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3];
+                                                        cellClass = `${moodColor.twBg} border-transparent shadow-sm text-slate-800 dark:text-white`;
+                                                    } else if (isToday) {
+                                                        cellClass += " ring-2 ring-purple-500 border-transparent";
+                                                    }
+                                                }
+
+                                                return (
+                                                    <button key={dKey} onClick={() => { 
+                                                        setSelectedDate(day); setCurrentView('day'); 
+                                                        setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); 
+                                                    }} className={`h-12 sm:h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all active:scale-90 ${cellClass}`}>
+                                                        <span className={`z-10 text-[10px] font-bold ${hasData && !isFiltering ? 'absolute top-1 left-1.5 opacity-60' : ''}`}>{day.getDate()}</span>
+                                                        {!isFiltering && sDay && <span className="absolute bottom-1.5">{React.createElement((MOODS.find(m => m.val === sDay.mood) || MOODS[3]).icon, {size: 14, strokeWidth: 2.5})}</span>}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-
                         </div>
                     </main>
 
@@ -1940,7 +2066,7 @@
                                                             {(() => {
                                                                 const h = []; const seen = new Set();
                                                                 Object.values(foodsByDate).reverse().forEach(day => day.forEach(f => {
-                                                                    if(f.name && !seen.has(f.name.toLowerCase()) && h.length < 20) { seen.add(f.name.toLowerCase()); h.push(f); }
+                                                                    if(f.name && !seen.has(f.name.toLowerCase()) && h.length < 150) { seen.add(f.name.toLowerCase()); h.push(f); }
                                                                 }));
                                                                 if(h.length === 0) return <p className="text-xs text-center text-slate-400 py-2 font-bold">Chưa có lịch sử</p>;
                                                                 
@@ -2056,19 +2182,21 @@
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Timer Block (Đã đưa ra ngoài vùng cuộn để cố định ở Header form) */}
-                                        <div className={`bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/50 dark:border-zinc-700/50 p-3 rounded-2xl flex items-center justify-between gap-2 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
-                                            <div className="flex gap-2">
-                                                <button onClick={(e) => { e.preventDefault(); startRestTimer(60); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-xs font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform">60s</button>
-                                                <button onClick={(e) => { e.preventDefault(); startRestTimer(90); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-xs font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform">90s</button>
-                                                <button onClick={(e) => { e.preventDefault(); startRestTimer(120); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-xs font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform">2m</button>
+                                        {/* Timer Block Popup */}
+                                        <div className={`bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
+                                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
+                                                {[45, 60, 90, 120, 150, 180].map(sec => (
+                                                    <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-800">
+                                                        {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            <div className="flex items-center gap-3 pr-2">
-                                                <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-white' : 'text-slate-800 dark:text-zinc-200')}`}>
+                                            <div className="flex items-center gap-3 pr-2 shrink-0 border-l border-slate-200 dark:border-zinc-700 pl-3">
+                                                <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-200')}`}>
                                                     {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
                                                 </span>
                                                 {timerSeconds !== null && (
-                                                    <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all"><XIcon size={16}/></button>
+                                                    <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all border border-red-200/50 dark:border-red-500/30"><XIcon size={16}/></button>
                                                 )}
                                             </div>
                                         </div>
@@ -2083,8 +2211,9 @@
                                             {currentExercises.map((ex) => {
                                                 const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
                                                 const wCol = getWorkoutColor(workoutType);
+                                                const isActiveEx = activeExerciseId === ex.id;
                                                 return (
-                                                    <div key={ex.id} className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-5 rounded-[2rem] relative transition-colors shadow-md">
+                                                    <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`bg-white dark:bg-zinc-900 p-5 rounded-[2rem] relative transition-all duration-300 shadow-md border-2 ${isActiveEx ? wCol.border + ' shadow-' + wCol.fill.split('-')[1] + '-500/20 scale-[1.02]' : 'border-slate-100 dark:border-zinc-800'}`}>
                                                         <div className="mb-5">
                                                             <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài tập" className={`w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/50 dark:border-zinc-700/50 rounded-xl px-4 py-3 outline-none focus:${wCol.border} focus:ring-4 focus:ring-slate-500/10 font-black text-slate-800 dark:text-zinc-100 text-lg transition-all shadow-inner`} />
                                                             {prevHist && (
@@ -2136,14 +2265,133 @@
                                         </div>
                                         <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 mt-2 shrink-0 flex gap-2 transition-colors pb-safe-bottom">
                                             <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-5 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={20} /></button>
-                                            <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${getWorkoutColor(workoutType).fill} text-white rounded-[1.25rem] font-black text-lg shadow-xl shadow-${getWorkoutColor(workoutType).fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={20} /> Hoàn tất buổi tập</button>
+                                            <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-[1.25rem] font-black text-sm shadow-md flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Lưu Tạm</button>
+                                            <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${getWorkoutColor(workoutType).fill} text-white rounded-[1.25rem] font-black text-sm shadow-xl shadow-${getWorkoutColor(workoutType).fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={18} /> Đóng Form</button>
                                         </div>
                                     </>
                                 )}
                             </div>
                         </div>
                     )}
+                    {/* MODAL BỘ LỌC ĐA TẦNG */}
+                    {showFilterModal && (
+                        <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center">
+                            <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm modal-overlay" onClick={() => setShowFilterModal(false)}></div>
+                            <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-slate-100 dark:border-zinc-800">
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden shrink-0"></div>
+                                <div className="flex justify-between items-center mb-6 shrink-0">
+                                    <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight">
+                                        <div className="p-2 bg-purple-50 dark:bg-purple-500/10 rounded-xl"><FilterIcon className="text-purple-600 dark:text-purple-400" size={24}/></div>
+                                        Bộ Lọc
+                                    </h2>
+                                    <button onClick={() => setShowFilterModal(false)} className="text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90"><XIcon size={20} /></button>
+                                </div>
+                                
+                                <div className="overflow-y-auto pb-4 no-scrollbar space-y-6 flex-1 pr-1">
+                                    {/* Lọc Text Ký ức */}
+                                    <div>
+                                        <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1">Tìm Kiếm Nhanh</h3>
+                                        <div className="relative">
+                                            <SearchIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input type="text" value={journalFilters.query} onChange={(e) => setJournalFilters(p => ({...p, query: e.target.value}))} placeholder="Memo Keeper..." className="w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl pl-11 pr-4 py-3.5 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 font-bold text-sm text-slate-800 dark:text-zinc-100 transition-all shadow-sm" />
+                                        </div>
+                                    </div>
 
+                                    {/* Lọc Ăn Uống */}
+                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800/50">
+                                        <h3 className="text-[10px] font-black text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5"><UtensilsIcon size={14}/> Dinh Dưỡng</h3>
+                                        <div className="space-y-3">
+                                            <div className="relative">
+                                                <SearchIcon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <input type="text" value={journalFilters.foodQuery} onChange={(e) => setJournalFilters(p => ({...p, foodQuery: e.target.value}))} placeholder="Tìm tên món ăn..." className="w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-emerald-500 focus:ring-2 text-xs font-bold text-slate-800 dark:text-zinc-100 transition-all shadow-sm" />
+                                            </div>
+                                            <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                                <button onClick={() => setJournalFilters(p => ({...p, foodType: 'cheatday'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === 'cheatday' ? 'bg-orange-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Cheatday</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, foodType: 'all'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === 'all' ? 'bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Tất cả</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, foodType: 'normal'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === 'normal' ? 'bg-emerald-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Bình thường</button>
+                                            </div>
+                                            <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                                <button onClick={() => setJournalFilters(p => ({...p, proType: 'lack'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === 'lack' ? 'bg-red-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Thiếu Pro</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, proType: 'all'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === 'all' ? 'bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Tất cả</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, proType: 'enough'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === 'enough' ? 'bg-blue-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Đủ Pro</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Lọc Giấc Ngủ */}
+                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800/50">
+                                        <h3 className="text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5"><MoonIcon size={14}/> Giấc Ngủ</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepStart: 'late'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === 'late' ? 'bg-rose-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Thức khuya</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepStart: 'all'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === 'all' ? 'bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Tất cả</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepStart: 'early'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === 'early' ? 'bg-indigo-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Ngủ sớm</button>
+                                            </div>
+                                            <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepEnd: 'late'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === 'late' ? 'bg-rose-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Ngủ nướng</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepEnd: 'all'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === 'all' ? 'bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Tất cả</button>
+                                                <button onClick={() => setJournalFilters(p => ({...p, sleepEnd: 'early'}))} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === 'early' ? 'bg-indigo-500 shadow-sm text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300'}`}>Thức sớm</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Lọc Cảm xúc & Hoạt động */}
+                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800/50">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1">Tâm Trạng</h3>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {MOODS.map(m => {
+                                                        const isSel = journalFilters.moods.includes(m.val);
+                                                        return (
+                                                            <button key={m.val} onClick={() => toggleFilterItem('moods', m.val)} className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all border ${isSel ? m.twBg + ' ' + m.twText + ' border-transparent shadow-md scale-105 ring-2 ring-current' : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-zinc-800'}`}>
+                                                                {React.createElement(m.icon, {size: 16, strokeWidth: 2.5})}
+                                                                <span className="text-[8px] font-black uppercase tracking-wider">{m.label}</span>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1">Hoạt Động</h3>
+                                                <div className="flex flex-col gap-2">
+                                                    {OUTINGS.map(o => {
+                                                        const isSel = journalFilters.outings.includes(o.val);
+                                                        return (
+                                                            <button key={o.val} onClick={() => toggleFilterItem('outings', o.val)} className={`p-2.5 rounded-2xl flex items-center justify-center gap-2 transition-all border ${isSel ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/30 shadow-md ring-2 ring-purple-400' : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-zinc-800'}`}>
+                                                                <o.Icon size={14} />
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider">{o.label}</span>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Lọc Thể Thao */}
+                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800/50">
+                                        <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5"><DumbbellIcon size={14} className="text-orange-500"/> Lịch Tập</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {['Upper', 'Lower', 'Push', 'Pull', 'Leg'].map(t => {
+                                                const isSel = journalFilters.workouts.includes(t);
+                                                return (
+                                                    <button key={t} onClick={() => toggleFilterItem('workouts', t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border ${isSel ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30 border-transparent' : 'bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-zinc-800'}`}>
+                                                        {t}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 mt-2 shrink-0 flex gap-3 transition-colors pb-safe-bottom">
+                                    <button onClick={() => setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="py-4 px-6 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold transition-all active:scale-95 shadow-sm">Xóa Hết</button>
+                                    <button onClick={() => setShowFilterModal(false)} className="flex-1 py-4 bg-purple-600 text-white rounded-[1.25rem] font-black text-lg shadow-xl shadow-purple-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Áp dụng Filter</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {/* Modal Thêm Nhật Ký (STAT) */}
                     {isAddingStat && (appMode === 'stat' || appMode === 'journal') && (
                         <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center">
@@ -2170,9 +2418,10 @@
                                     <div className="bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 transition-colors shadow-sm">
                                         <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-1.5"><SmileIcon size={14}/> Tâm trạng hôm nay</h3>
                                         <div className="grid grid-cols-3 gap-3">
-                                            {MOODS.map(m => (
-                                                <button key={m.val} onClick={() => setStatFormData(p=>({...p, mood: m.val}))} className={`py-3 px-1 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${statFormData.mood === m.val ? `${m.twBg} ${m.twText} border-transparent shadow-lg shadow-${m.twBg.split('-')[1]}-500/30 scale-105` : 'bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 shadow-sm'}`}>
-                                                    {m.val} - {m.label}
+                                           {MOODS.map(m => (
+                                                <button key={m.val} onClick={() => setStatFormData(p=>({...p, mood: m.val}))} className={`py-3 px-1 rounded-xl text-xs font-bold border transition-all active:scale-95 flex flex-col items-center gap-1.5 ${statFormData.mood === m.val ? `${m.twBg} ${m.twText} ${m.twBorder} ring-2 ring-current shadow-md scale-105` : 'bg-white dark:bg-zinc-900 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm'}`}>
+                                                    {React.createElement(m.icon, {size: 20, strokeWidth: 2.5})}
+                                                    <span className="uppercase tracking-wider text-[9px]">{m.label}</span>
                                                 </button>
                                             ))}
                                         </div>
