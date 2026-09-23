@@ -108,7 +108,7 @@
                     Clock: E("🕒"), CheckCircle: E("✅"), Loader: E("⏳"), Activity: E("📈"), Image: E("🖼️"),
                     Cloud: E("☁️"), Download: E("⬇️"), Upload: E("⬆️"), Skull: E("💀"), Bomb: E("💣"), Heart: E("💚"), Alert: E("❗"), XCircle: E("❌"),
                     Timer: E("⏱️"), Book: E("📓"), Home: E("🏠"), Plane: E("✈️"), Smile: E("😊"), Frown: E("🙁"), Brain: E("🧠"), FileText: E("📝"), Menu: E("☰"),
-                    Check: E("✓"), Send: E("🚀"), Music: E("🎵"), Smartphone: E("📱"), Monitor: E("💻"), Search: E("🔍")
+                    Check: E("✓"), Send: E("🚀"), Music: E("🎵"), Smartphone: E("📱"), Monitor: E("💻"), Search: E("🔍"), Copy: E("📋")
                 };
             }
 
@@ -120,7 +120,7 @@
                 Clock: ClockIcon, CheckCircle: CheckCircleIcon, Loader: LoaderIcon, Activity: ActivityIcon, Image: ImageIcon,
                 Cloud: CloudIcon, Download: DownloadIcon, Upload: UploadIcon, Skull: SkullIcon, Bomb: BombIcon, Heart: HeartIcon, Alert: AlertIcon, XCircle: XCircleIcon,
                 Timer: TimerIcon, Book: BookIcon, Home: HomeIcon, Plane: PlaneIcon, Smile: SmileIcon, Frown: FrownIcon, Brain: BrainIcon, FileText: FileTextIcon, Menu: MenuIcon,
-                Check: CheckIcon, Send: SendIcon, Music: MusicIcon, Smartphone: SmartphoneIcon, Monitor: MonitorIcon, Meh: MehIcon, Search: SearchIcon, Filter: FilterIcon
+                Check: CheckIcon, Send: SendIcon, Music: MusicIcon, Smartphone: SmartphoneIcon, Monitor: MonitorIcon, Meh: MehIcon, Search: SearchIcon, Filter: FilterIcon, Copy: CopyIcon
             } = IconLib;
 
             const { useState, useEffect, useRef } = React;
@@ -360,7 +360,7 @@
                 const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
                 // Đã cập nhật Script URL mới từ yêu cầu
-                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbwgAw1mJmt-am4SvqoBWqrhJjrckYL75oP1WFIH7KUrrFUwBjXjXwOewT1MtBPRa26f/exec';
+                const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbz-JYItnHMk6nnuDWrWQ2pVXWfTlfXjmhp9yY5s_YyLTYoHm4VmkGrqGX4kU1ShnCZg/exec';
                 const defaultGeminiKey = 'AQ.Ab8RN6JwPEjMvaLfjQ54'+'z1uldTge-aqNjAc_m1-n0dyeeTTMVw';
 
                 const [showSettings, setShowSettings] = useState(false);
@@ -376,7 +376,8 @@
                 const [entryMode, setEntryMode] = useState('quick'); 
                 const [formData, setFormData] = useState({ name: '', kcal: '', carbs: '', fat: '', protein: '' });
                 const [editingFoodId, setEditingFoodId] = useState(null);
-                const [editFoodName, setEditFoodName] = useState('');
+                const [editFoodData, setEditFoodData] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' });
+                const [editEntryMode, setEditEntryMode] = useState('quick');
                 
                 const [imagePreview, setImagePreview] = useState(null);
                 const [imageBase64, setImageBase64] = useState(null);
@@ -395,6 +396,7 @@
                 const [currentExercises, setCurrentExercises] = useState([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
                 const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
                 const [activeExerciseId, setActiveExerciseId] = useState(null);
+                const [doneSets, setDoneSets] = useState({});
 
                 const handleQuickSaveWorkout = () => { 
                     const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); 
@@ -631,13 +633,9 @@
                             const wOut = workoutsByDate[wDate];
                             if (wOut && ["Upper", "Lower", "Push", "Pull", "Leg"].includes(wOut.type)) {
                                 const exes = (wOut.exercises || []).map(ex => {
-                                    if (ex.rawText && ex.rawText.trim() !== '') return { name: ex.name, sets: [{ reps: ex.rawText.trim(), weight: '', unit: '' }] };
+                                    if (ex.rawText && ex.rawText.trim() !== '') return { name: ex.name, rawText: ex.rawText.trim(), sets: [{ reps: '', weight: '', unit: 'KG' }] };
                                     const vSets = (ex.sets || []).filter(s => s.weight.trim() !== '' || s.reps.trim() !== '');
-                                    if (vSets.length === 0) return { name: ex.name, sets: [] };
-                                    let allSame = true; const fW = vSets[0].weight.trim(), fU = vSets[0].unit.toUpperCase();
-                                    for(let i=1; i<vSets.length; i++) { if(vSets[i].weight.trim()!==fW || vSets[i].unit.toUpperCase()!==fU) { allSame = false; break; } }
-                                    if (allSame) return { name: ex.name, sets: vSets.map(s => ({ reps: s.reps, weight: s.weight, unit: s.unit.toUpperCase() })) };
-                                    return { name: ex.name, sets: [{ reps: vSets.map(s => `${s.reps||'0'}(${s.weight?s.weight+s.unit.toUpperCase():''})`).join('+'), weight: '', unit: '' }] };
+                                    return { name: ex.name, sets: vSets.map(s => ({ reps: s.reps, weight: s.weight, unit: s.unit.toUpperCase() })) };
                                 });
                                 formattedWorkouts.push({ type: wOut.type, date: wDate, note: wOut.note, exercises: exes });
                             }
@@ -678,8 +676,39 @@
                                                     const hName = cHead[c].trim();
                                                     if (!hName || hName.toLowerCase() === 'note' || hName.toLowerCase() === 'ghi chú') { if (hName) note = row[c] || ''; continue; }
                                                     const cell = String(row[c] || '').trim();
-                                                    if (cell && cell.toUpperCase() !== 'X') exes.push({ id: Date.now()+c, name: hName, rawText: cell, sets: [{ reps:'', weight:'', unit:'KG' }] });
-                                                    else exes.push({ id: Date.now()+c, name: hName, sets: [{ reps:'', weight:'', unit:'KG' }] });
+                                                    
+                                                    if (!cell || cell.toUpperCase() === 'X') {
+                                                        exes.push({ id: Date.now()+c, name: hName, sets: [{ reps:'', weight:'', unit:'KG' }] });
+                                                        continue;
+                                                    }
+                                                    
+                                                    let parsedSets = []; let isRaw = false;
+                                                    const parts = cell.split(' + ');
+                                                    for (let p of parts) {
+                                                        const pt = p.trim();
+                                                        // Tìm dấu cách CUỐI CÙNG, cái gì đứng trước là tạ, đứng sau là reps
+                                                        const sIdx = pt.lastIndexOf(' '); 
+                                                        if (sIdx !== -1) {
+                                                            const wP = pt.substring(0, sIdx).trim();
+                                                            const rP = pt.substring(sIdx + 1).trim();
+                                                            
+                                                            let unit = 'KG'; let wVal = wP;
+                                                            if (wP.toUpperCase().endsWith('KG')) { unit = 'KG'; wVal = wP.substring(0, wP.length-2).trim(); }
+                                                            else if (wP.toUpperCase().endsWith('LBS')) { unit = 'LBS'; wVal = wP.substring(0, wP.length-3).trim(); }
+                                                            
+                                                            rP.split('+').forEach(r => parsedSets.push({ weight: wVal, unit: unit, reps: r.trim() }));
+                                                        } else {
+                                                            // Nếu không có dấu cách nào, check xem có phải chỉ nhập mỗi reps kiểu "10+8(fail)" không
+                                                            if (/^[\d+()a-zA-Z~.\-ữươ]+$/.test(pt)) {
+                                                                pt.split('+').forEach(r => parsedSets.push({ weight: '', unit: 'KG', reps: r.trim() }));
+                                                            } else {
+                                                                isRaw = true; break;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    if (isRaw) exes.push({ id: Date.now()+c, name: hName, rawText: cell, sets: [{ reps:'', weight:'', unit:'KG' }] });
+                                                    else exes.push({ id: Date.now()+c, name: hName, sets: parsedSets });
                                                 }
                                                 nW[dClean] = { type: wType, note: note, exercises: exes };
                                             }
@@ -759,8 +788,40 @@
                     setFormData({ name: '', kcal: '', carbs: '', fat: '', protein: '' }); setIsAddingFood(false);
                 };
                 const handleDeleteFood = (id) => setFoodsByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).filter(f => f.id !== id) }));
-                const handleStartEditFood = (food) => { setEditingFoodId(food.id); setEditFoodName(food.name); };
-                const handleSaveEditFood = (id) => { if (!editFoodName.trim()) { setEditingFoodId(null); return; } setFoodsByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).map(f => f.id === id ? { ...f, name: editFoodName } : f) })); setEditingFoodId(null); setEditFoodName(''); };
+                const handleStartEditFood = (food) => { 
+                    setEditingFoodId(food.id); 
+                    setEditEntryMode((food.carbs > 0 || food.fat > 0) ? 'detail' : 'quick');
+                    setEditFoodData({ 
+                        name: food.name, 
+                        kcal: food.kcal !== undefined ? food.kcal : Math.round((food.carbs||0)*4 + (food.protein||0)*4 + (food.fat||0)*9),
+                        protein: cleanNum(food.protein) || 0,
+                        carbs: cleanNum(food.carbs) || 0,
+                        fat: cleanNum(food.fat) || 0
+                    }); 
+                };
+                const handleSaveEditFood = (id) => { 
+                    if (!editFoodData.name.trim()) { setEditingFoodId(null); return; } 
+                    
+                    let finalKcal = editEntryMode === 'quick' 
+                        ? (Math.round(editFoodData.kcal) || 0) 
+                        : Math.round((Number(editFoodData.carbs)||0)*4 + (Number(editFoodData.protein)||0)*4 + (Number(editFoodData.fat)||0)*9);
+                    let finalCarbs = editEntryMode === 'quick' ? 0 : (Number(editFoodData.carbs) || 0);
+                    let finalFat = editEntryMode === 'quick' ? 0 : (Number(editFoodData.fat) || 0);
+
+                    if (editEntryMode === 'quick' && finalKcal / 4 < (Number(editFoodData.protein) || 0)) {
+                        showToast('⚠️ Kcal chia 4 không thể nhỏ hơn lượng Protein!', 'error'); return;
+                    }
+
+                    setFoodsByDate(p => ({ ...p, [dateKey]: (p[dateKey] || []).map(f => f.id === id ? { 
+                        ...f, 
+                        name: editFoodData.name,
+                        kcal: finalKcal,
+                        protein: Number(editFoodData.protein) || 0,
+                        carbs: finalCarbs,
+                        fat: finalFat
+                    } : f) })); 
+                    setEditingFoodId(null); 
+                };
 
                 const handleAddSleep = (e) => {
                     e.preventDefault(); if (!sleepFormData.sleepTime || !sleepFormData.wakeTime) return;
@@ -775,19 +836,56 @@
                     let tE = []; 
                     for(let d of pD) { 
                         const wOut = workoutsByDate[d];
-                        if(wOut?.type === t && wOut?.exercises) { tE = wOut.exercises.map((ex, i) => ({ id: Date.now()+i, name: ex.name || '', sets: [{ reps: '', weight: '', unit: 'KG' }] })); break; } 
+                        if(wOut?.type === t && wOut?.exercises) { 
+                            tE = wOut.exercises.map((ex, i) => {
+                                let targetSets = 1;
+                                const match = (ex.name || '').match(/(?:^|\s|\()(\d+)\s*[xX*×]/);
+                                if (match && !isNaN(parseInt(match[1]))) { targetSets = parseInt(match[1]); }
+                                const initialSets = [];
+                                for(let k=0; k<targetSets; k++) initialSets.push({ reps: '', weight: '', unit: 'KG' });
+                                return { id: Date.now()+i, name: ex.name || '', sets: initialSets };
+                            }); 
+                            break; 
+                        } 
                     } 
                     if (tE.length > 0) setCurrentExercises(tE); else setCurrentExercises([{ id: '1', name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]); 
                 };
-                const handleSaveWorkout = () => { const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); if (vEx.length === 0) return; setWorkoutsByDate(p => ({ ...p, [dateKey]: { type: workoutType, note: workoutNote, exercises: vEx } })); setIsAddingWorkout(false); setWorkoutAddStep(1); };
-                const handleCancelAddWorkout = () => { setIsAddingWorkout(false); setWorkoutAddStep(1); };
+                const handleSaveWorkout = () => { const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); if (vEx.length === 0) return; setWorkoutsByDate(p => ({ ...p, [dateKey]: { type: workoutType, note: workoutNote, exercises: vEx } })); setIsAddingWorkout(false); setWorkoutAddStep(1); stopRestTimer(); };
+                const handleCancelAddWorkout = () => { setIsAddingWorkout(false); setWorkoutAddStep(1); stopRestTimer(); };
                 const handleDeleteWorkout = () => { setWorkoutsByDate(p => { const n = {...p}; delete n[dateKey]; return n; }); setShowDeleteConfirm(false); };
                 const handleAddExerciseRow = () => setCurrentExercises(prev => [...prev, { id: Date.now().toString(), name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
-                const handleUpdateExerciseName = (id, name) => setCurrentExercises(prev => prev.map(ex => ex.id === id ? { ...ex, name } : ex));
+                const handleUpdateExerciseName = (id, name) => {
+                    setCurrentExercises(prev => prev.map(ex => {
+                        if (ex.id !== id) return ex;
+                        let newSets = [...ex.sets];
+                        const matchTarget = name.match(/(?:^|\s|\()(\d+)\s*[xX*×]/);
+                        if (matchTarget && !isNaN(parseInt(matchTarget[1]))) {
+                            const target = parseInt(matchTarget[1]);
+                            while (newSets.length < target) { newSets.push({ reps: '', weight: '', unit: newSets[0]?.unit || 'KG' }); }
+                        }
+                        return { ...ex, name, sets: newSets };
+                    }));
+                };
                 const handleAddSet = (exId) => setCurrentExercises(prev => prev.map(ex => { if (exId === ex.id) { const ls = ex.sets[ex.sets.length - 1] || { reps: '', weight: '', unit: 'KG' }; return { ...ex, sets: [...ex.sets, { ...ls }] }; } return ex; }));
-                const handleUpdateSet = (exId, sIdx, field, val) => setCurrentExercises(p => p.map(ex => { if (ex.id === exId) { const ns = [...ex.sets]; ns[sIdx] = { ...ns[sIdx], [field]: val }; return { ...ex, sets: ns }; } return ex; }));
+                const handleUpdateSet = (exId, sIdx, field, val) => setCurrentExercises(p => { 
+                    let triggerTimer = false;
+                    const nextState = p.map(ex => { 
+                        if (ex.id === exId) { 
+                            const ns = [...ex.sets]; 
+                            const wasDone = ns[sIdx].weight.trim() !== '' && ns[sIdx].reps.trim() !== '';
+                            ns[sIdx] = { ...ns[sIdx], [field]: val }; 
+                            const isNowDone = ns[sIdx].weight.trim() !== '' && ns[sIdx].reps.trim() !== '';
+                            if (!wasDone && isNowDone) { triggerTimer = true; }
+                            return { ...ex, sets: ns }; 
+                        } 
+                        return ex; 
+                    });
+                    if (triggerTimer) { setTimeout(() => startRestTimer(90), 0); }
+                    return nextState;
+                });
                 const handleUpdateRawText = (exId, rawText) => setCurrentExercises(prev => prev.map(ex => ex.id === exId ? { ...ex, rawText } : ex));
                 const handleToggleUnit = (exId, sIdx) => setCurrentExercises(p => p.map(ex => { if (ex.id === exId) { const ns = [...ex.sets]; ns[sIdx] = { ...ns[sIdx], unit: ns[sIdx].unit.toLowerCase() === 'kg' ? 'LBS' : 'KG' }; return { ...ex, sets: ns }; } return ex; }));
+                const handleCopyPrevWeight = (exId, sIdx) => setCurrentExercises(p => p.map(ex => { if (ex.id === exId && sIdx > 0) { const ns = [...ex.sets]; ns[sIdx] = { ...ns[sIdx], weight: ns[sIdx-1].weight, unit: ns[sIdx-1].unit }; return { ...ex, sets: ns }; } return ex; }));
                 const handleRemoveSet = (exId, sIdx) => setCurrentExercises(prev => prev.map(ex => ex.id === exId ? { ...ex, sets: ex.sets.filter((_, i) => i !== sIdx) } : ex));
 
                 const handleSaveStat = () => { setStatsByDate(p => ({ ...p, [dateKey]: { ...statFormData } })); setIsAddingStat(false); showToast('📓 Đã ghi nhận nhật ký!', 'success'); };
@@ -1168,7 +1266,33 @@
                                                                     <div key={food.id} className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 flex justify-between items-center group hover:shadow-md transition-all">
                                                                         <div className="flex-1 mr-3">
                                                                             {editingFoodId === food.id ? (
-                                                                                <input autoFocus value={editFoodName} onChange={e=>setEditFoodName(e.target.value)} onBlur={()=>handleSaveEditFood(food.id)} onKeyDown={e=>e.key==='Enter'&&handleSaveEditFood(food.id)} className="w-full bg-white dark:bg-zinc-900 border-2 border-emerald-400 rounded-xl px-3 py-2 outline-none mb-2 text-sm font-bold text-slate-800 dark:text-white transition-colors shadow-sm" />
+                                                                                <div className="bg-white dark:bg-zinc-900 p-3 rounded-2xl border-2 border-emerald-400 shadow-sm mb-2">
+                                                                                    <div className="flex justify-between items-center mb-2">
+                                                                                        <div className="flex bg-slate-100 dark:bg-zinc-800/50 p-1 rounded-lg w-32 border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                                                                            <button onClick={() => setEditEntryMode('quick')} className={`flex-1 py-1 rounded text-[10px] font-black transition-all ${editEntryMode === 'quick' ? 'bg-white dark:bg-zinc-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 dark:text-zinc-400'}`}>Nhanh</button>
+                                                                                            <button onClick={() => setEditEntryMode('detail')} className={`flex-1 py-1 rounded text-[10px] font-black transition-all ${editEntryMode === 'detail' ? 'bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 dark:text-zinc-400'}`}>Chi tiết</button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <input autoFocus value={editFoodData.name} onChange={e=>setEditFoodData({...editFoodData, name: e.target.value})} placeholder="Tên món..." className="w-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-2 outline-none mb-3 text-sm font-bold text-slate-800 dark:text-white" />
+                                                                                    
+                                                                                    {editEntryMode === 'quick' ? (
+                                                                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                                                                            <div><label className="text-[9px] font-black text-emerald-500 uppercase block mb-1 ml-1">Kcal</label><input type="number" value={editFoodData.kcal} onChange={e=>setEditFoodData({...editFoodData, kcal: e.target.value})} className="w-full bg-slate-50 dark:bg-zinc-800 rounded-xl px-2 py-2 outline-none text-sm font-bold text-center border border-slate-200 dark:border-zinc-700 focus:border-emerald-400 transition-colors" /></div>
+                                                                                            <div><label className="text-[9px] font-black text-red-500 uppercase block mb-1 ml-1">Pro (g)</label><input type="number" value={editFoodData.protein} onChange={e=>setEditFoodData({...editFoodData, protein: e.target.value})} className="w-full bg-slate-50 dark:bg-zinc-800 rounded-xl px-2 py-2 outline-none text-sm font-bold text-center border border-slate-200 dark:border-zinc-700 focus:border-red-400 transition-colors" /></div>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="grid grid-cols-3 gap-2 mb-3">
+                                                                                            <div><label className="text-[9px] font-black text-blue-500 uppercase block mb-1 ml-1">Carb</label><input type="number" value={editFoodData.carbs} onChange={e=>setEditFoodData({...editFoodData, carbs: e.target.value})} className="w-full bg-slate-50 dark:bg-zinc-800 rounded-xl px-2 py-2 outline-none text-sm font-bold text-center border border-slate-200 dark:border-zinc-700 focus:border-blue-400 transition-colors" /></div>
+                                                                                            <div><label className="text-[9px] font-black text-yellow-600 uppercase block mb-1 ml-1">Fat</label><input type="number" value={editFoodData.fat} onChange={e=>setEditFoodData({...editFoodData, fat: e.target.value})} className="w-full bg-slate-50 dark:bg-zinc-800 rounded-xl px-2 py-2 outline-none text-sm font-bold text-center border border-slate-200 dark:border-zinc-700 focus:border-yellow-400 transition-colors" /></div>
+                                                                                            <div><label className="text-[9px] font-black text-red-500 uppercase block mb-1 ml-1">Pro</label><input type="number" value={editFoodData.protein} onChange={e=>setEditFoodData({...editFoodData, protein: e.target.value})} className="w-full bg-slate-50 dark:bg-zinc-800 rounded-xl px-2 py-2 outline-none text-sm font-bold text-center border border-slate-200 dark:border-zinc-700 focus:border-red-400 transition-colors" /></div>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    <div className="flex gap-2">
+                                                                                        <button onClick={() => setEditingFoodId(null)} className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-700 transition-colors">Hủy</button>
+                                                                                        <button onClick={() => handleSaveEditFood(food.id)} className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 text-white shadow-md shadow-emerald-500/20 active:scale-95 transition-transform flex items-center justify-center gap-1.5"><CheckCircleIcon size={14} /> Lưu</button>
+                                                                                    </div>
+                                                                                </div>
                                                                             ) : (
                                                                                 <div className="flex items-center gap-2 mb-2 cursor-pointer active:opacity-50" onClick={() => handleStartEditFood(food)}>
                                                                                     <p className="font-black text-slate-800 dark:text-zinc-100 text-base">{food.name}</p><PencilIcon size={14} className="text-slate-300 dark:text-zinc-600 hover:text-emerald-500 transition-colors" />
@@ -2182,92 +2306,156 @@
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Timer Block Popup */}
-                                        <div className={`bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
-                                            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
-                                                {[45, 60, 90, 120, 150, 180].map(sec => (
-                                                    <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-800">
-                                                        {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="flex items-center gap-3 pr-2 shrink-0 border-l border-slate-200 dark:border-zinc-700 pl-3">
-                                                <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-200')}`}>
-                                                    {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
-                                                </span>
-                                                {timerSeconds !== null && (
-                                                    <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all border border-red-200/50 dark:border-red-500/30"><XIcon size={16}/></button>
-                                                )}
-                                            </div>
-                                        </div>
+                                        {(() => {
+                                            let totalWorkoutSets = 0; let completedWorkoutSets = 0;
+                                            currentExercises.forEach(ex => {
+                                                if (ex.rawText && ex.rawText.toUpperCase() !== 'X') {
+                                                    totalWorkoutSets += 1; completedWorkoutSets += 1; return;
+                                                }
+                                                let tSets = ex.sets.length; 
+                                                const match = (ex.name || '').match(/(?:^|\s|\()(\d+)\s*[xX*×]/);
+                                                if (match && !isNaN(parseInt(match[1]))) { tSets = Math.max(ex.sets.length, parseInt(match[1])); }
+                                                totalWorkoutSets += tSets;
+                                                ex.sets.forEach(s => { if (s.weight.trim() !== '' && s.reps.trim() !== '') completedWorkoutSets++; });
+                                            });
+                                            const progressPct = totalWorkoutSets > 0 ? Math.round((completedWorkoutSets / totalWorkoutSets) * 100) : 0;
+                                            const modalMainColor = getWorkoutColor(workoutType);
 
-                                        <div className="overflow-y-auto flex-1 pb-4 no-scrollbar px-1 pt-1">
-                                            <div className="mb-6 shrink-0">
-                                                <label className="block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-2 ml-1">Ghi chú buổi tập</label>
-                                                <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} placeholder="Hôm nay tập sung không?" className={`w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:${getWorkoutColor(workoutType).border} focus:ring-4 focus:ring-slate-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[60px] resize-none transition-all shadow-sm`} />
-                                            </div>
-                                            
-                                            <div className="space-y-5">
-                                            {currentExercises.map((ex) => {
-                                                const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
-                                                const wCol = getWorkoutColor(workoutType);
-                                                const isActiveEx = activeExerciseId === ex.id;
-                                                return (
-                                                    <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`bg-white dark:bg-zinc-900 p-5 rounded-[2rem] relative transition-all duration-300 shadow-md border-2 ${isActiveEx ? wCol.border + ' shadow-' + wCol.fill.split('-')[1] + '-500/20 scale-[1.02]' : 'border-slate-100 dark:border-zinc-800'}`}>
-                                                        <div className="mb-5">
-                                                            <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài tập" className={`w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200/50 dark:border-zinc-700/50 rounded-xl px-4 py-3 outline-none focus:${wCol.border} focus:ring-4 focus:ring-slate-500/10 font-black text-slate-800 dark:text-zinc-100 text-lg transition-all shadow-inner`} />
-                                                            {prevHist && (
-                                                                <div className={`${wCol.lightBg} p-3.5 rounded-xl border ${wCol.border} mt-3`}>
-                                                                    <p className={`text-[9px] font-black ${wCol.text} mb-2 uppercase tracking-widest`}>Lịch sử bài này</p>
-                                                                    <div className="space-y-2">
-                                                                        {prevHist.map((h, i) => (
-                                                                            <div key={i} className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm p-3 rounded-xl border border-slate-200 dark:border-zinc-700 shadow-sm transition-colors">
-                                                                                <p className="font-bold text-slate-800 dark:text-zinc-200 mb-2 text-xs">{h.dateStr}</p>
-                                                                                <div className="flex flex-wrap gap-2">
-                                                                                    {h.rawText && h.rawText.toUpperCase() !== 'X' ? (
-                                                                                        <span className="font-semibold text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-600 text-xs whitespace-pre-wrap">{h.rawText}</span>
-                                                                                    ) : (
-                                                                                        h.sets?.map((s, j) => (<span key={j} className="font-bold text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 px-2 py-1 rounded-lg border border-slate-200 dark:border-zinc-600 text-xs shadow-sm">S{j+1}: {s.weight}{s.unit.toUpperCase()} × {s.reps}</span>))
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="space-y-2 mt-4">
-                                                            <div className="mb-3">
-                                                                <input type="text" value={ex.rawText || ''} onChange={e=>handleUpdateRawText(ex.id, e.target.value)} placeholder="Hoặc ghi chú nhanh (VD: 9+9+10 fail)" className="w-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 outline-none focus:border-slate-400 dark:focus:border-slate-500 text-sm font-bold text-slate-700 dark:text-zinc-200 transition-colors" />
-                                                            </div>
-
-                                                            {ex.sets.map((set, sIdx) => (
-                                                                <div key={sIdx} className="flex items-center gap-2">
-                                                                    <span className="text-xs font-black text-slate-400 dark:text-zinc-500 w-6 uppercase">S{sIdx + 1}</span>
-                                                                    <div className={`relative flex-1 flex items-center bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl focus-within:${wCol.border} focus-within:ring-2 focus-within:ring-slate-100 dark:focus-within:ring-zinc-800 transition-all overflow-hidden`}>
-                                                                        <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className="w-full bg-transparent pl-4 pr-12 py-3 outline-none font-black text-slate-700 dark:text-zinc-200 text-center uppercase" />
-                                                                        <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-2 text-[10px] font-black ${wCol.text} uppercase bg-white dark:bg-zinc-900 px-2 py-1.5 rounded-lg shadow-sm border border-slate-100 dark:border-zinc-700`}>{set.unit.toUpperCase()}</button>
-                                                                    </div>
-                                                                    <span className="text-slate-300 dark:text-zinc-600 text-sm font-black mx-1">×</span>
-                                                                    <div className="flex-1">
-                                                                        <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded-xl px-3 py-3 outline-none focus:${wCol.border} focus:ring-2 focus:ring-slate-100 dark:focus:ring-zinc-800 text-center font-black text-slate-700 dark:text-zinc-200 transition-colors`} />
-                                                                    </div>
-                                                                    {ex.sets.length > 1 && (<button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="p-3 text-slate-300 dark:text-zinc-500 hover:text-red-500 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl ml-1 shadow-sm transition-colors active:scale-95"><Trash2Icon size={16} /></button>)}
-                                                                </div>
-                                                            ))}
-                                                            <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-3 ${wCol.lightBg} ${wCol.text} rounded-xl font-black text-sm flex items-center justify-center gap-1.5 mt-4 transition-all active:scale-[0.98] border border-transparent hover:${wCol.border} shadow-sm`}><PlusIcon size={16} /> Thêm hiệp</button>
+                                            return (
+                                                <div className="flex flex-col flex-1 min-h-0 w-full relative pt-2">
+                                                    {/* GLOBAL PROGRESS BAR TỔNG THỂ CÓ TEXT % */}
+                                                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-200 dark:bg-zinc-800 z-50 rounded-full overflow-hidden">
+                                                        <div className={`h-full ${modalMainColor.fill} transition-all duration-700 ease-out`} style={{ width: `${progressPct}%`, boxShadow: `0 0 10px ${modalMainColor.fill.includes('orange')?'#f97316':modalMainColor.fill.includes('yellow')?'#eab308':modalMainColor.fill.includes('emerald')?'#10b981':modalMainColor.fill.includes('blue')?'#3b82f6':'#a855f7'}` }}>
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
-                                            <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-full py-5 border-2 border-dashed border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:${getWorkoutColor(workoutType).border} hover:${getWorkoutColor(workoutType).lightBg} hover:${getWorkoutColor(workoutType).text} font-black rounded-[1.5rem] flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] mt-2`}><PlusIcon size={20} /> Thêm bài tập mới</button>
-                                            </div>
-                                        </div>
-                                        <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 mt-2 shrink-0 flex gap-2 transition-colors pb-safe-bottom">
-                                            <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-5 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={20} /></button>
-                                            <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 rounded-[1.25rem] font-black text-sm shadow-md flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Lưu Tạm</button>
-                                            <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${getWorkoutColor(workoutType).fill} text-white rounded-[1.25rem] font-black text-sm shadow-xl shadow-${getWorkoutColor(workoutType).fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={18} /> Đóng Form</button>
-                                        </div>
+                                                    <div className="absolute -top-1.5 right-2 z-50 text-[10px] font-black text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-900 px-2 rounded-b-md shadow-sm border border-t-0 border-slate-100 dark:border-zinc-800 pb-0.5">{progressPct}%</div>
+                                                    
+                                                    {/* Timer Block Popup */}
+                                                    <div className={`bg-slate-50 dark:bg-zinc-800/80 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mt-4 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
+                                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
+                                                            {[45, 60, 90, 120, 150, 180].map(sec => (
+                                                                <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-800">
+                                                                    {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex items-center gap-3 pr-2 shrink-0 border-l border-slate-200 dark:border-zinc-700 pl-3">
+                                                            <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-200')}`}>
+                                                                {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
+                                                            </span>
+                                                            {timerSeconds !== null && (
+                                                                <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all border border-red-200/50 dark:border-red-500/30"><XIcon size={16}/></button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="overflow-y-auto flex-1 pb-4 no-scrollbar pt-1 px-1">
+                                                        <div className="mb-6 shrink-0">
+                                                            <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} placeholder="Ghi chú buổi tập..." className={`w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:${modalMainColor.border} focus:ring-4 focus:ring-slate-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[50px] resize-none transition-all shadow-sm`} />
+                                                        </div>
+                                                        
+                                                        <div className="flex overflow-x-auto snap-x gap-4 pb-6 pt-2 no-scrollbar items-stretch">
+                                                        {currentExercises.map((ex) => {
+                                                            const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
+                                                            const wCol = getWorkoutColor(workoutType);
+                                                            const isActiveEx = activeExerciseId === ex.id;
+                                                            
+                                                            let targetSets = ex.sets.length;
+                                                            const matchTarget = (ex.name || '').match(/(?:^|\s|\()(\d+)\s*[xX*×]/);
+                                                            if (matchTarget && !isNaN(parseInt(matchTarget[1]))) { targetSets = Math.max(ex.sets.length, parseInt(matchTarget[1])); }
+                                                            
+                                                            const validSetsCount = ex.sets.filter(s => s.weight.trim() !== '' && s.reps.trim() !== '').length;
+                                                            const isExDone = validSetsCount >= targetSets && targetSets > 0;
+
+                                                            return (
+                                                                <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`w-[85vw] max-w-[340px] shrink-0 snap-center bg-white dark:bg-zinc-900/80 p-0 rounded-[2rem] relative transition-all duration-300 border-2 overflow-hidden flex flex-col ${isActiveEx ? wCol.border + ' shadow-[0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]' : (isExDone ? 'border-emerald-500/30' : 'border-slate-200 dark:border-zinc-800')}`}>
+                                                                    
+                                                                    <div className="p-5 relative z-10 flex-1 flex flex-col">
+                                                                        <div className="flex justify-between items-center mb-3">
+                                                                            <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài (VD: Bench Press 3x10)" className={`flex-1 bg-transparent border-b border-transparent focus:border-slate-300 dark:focus:border-zinc-600 py-1 outline-none font-black text-lg transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`} />
+                                                                            <div className={`px-2 py-1 rounded-xl text-xs font-black tracking-widest ml-2 border transition-colors shrink-0 ${isExDone ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 border-slate-200 dark:border-zinc-700'}`}>
+                                                                                {validSetsCount}/{targetSets}
+                                                                            </div>
+                                                                        </div>
+                                                                    
+                                                                        <div className="space-y-3 flex-1 mt-1">
+                                                                            {ex.sets.map((set, sIdx) => {
+                                                                                const isSetDone = set.weight.trim() !== '' && set.reps.trim() !== '';
+                                                                                return (
+                                                                                <div key={sIdx} className={`flex items-center gap-2 py-0.5 relative`}>
+                                                                                    
+                                                                                    {sIdx > 0 && !isSetDone && (
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleCopyPrevWeight(ex.id, sIdx); }} className="w-8 h-[46px] flex items-center justify-center text-slate-500 hover:text-blue-500 transition-colors shrink-0 bg-slate-100 dark:bg-zinc-800 rounded-xl active:scale-95 border border-transparent" title="Copy tạ từ Set trên">
+                                                                                            <CopyIcon size={14}/>
+                                                                                        </button>
+                                                                                    )}
+
+                                                                                    {/* Ô nhập tạ tối màu */}
+                                                                                    <div className={`relative flex-[1.2] flex items-center bg-white dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[46px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                        <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className={`w-full h-full bg-transparent pl-4 pr-10 outline-none text-center uppercase transition-colors ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-1.5 transition-colors ${isSetDone ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'}`}>{set.unit.toUpperCase()}</button>
+                                                                                    </div>
+                                                                                    
+                                                                                    <span className="text-slate-400 dark:text-zinc-600 font-black text-sm">×</span>
+                                                                                    
+                                                                                    {/* Ô nhập rep tối màu */}
+                                                                                    <div className={`flex-[0.8] relative bg-white dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[46px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                        <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full h-full bg-transparent outline-none text-center transition-colors ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
+                                                                                    </div>
+
+                                                                                    {ex.sets.length > 1 && (
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="w-8 h-[46px] flex justify-center items-center text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors active:scale-95">
+                                                                                            <Trash2Icon size={16} />
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            )})}
+                                                                            <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-3 bg-slate-50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mt-3 transition-all active:scale-[0.98] border border-slate-200/50 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700`}><PlusIcon size={16} /> Thêm hiệp</button>
+                                                                        </div>
+
+                                                                        {prevHist && prevHist.length > 0 && (
+                                                                            <div className="mt-5 pt-4 border-t border-dashed border-slate-200 dark:border-zinc-700/50 flex flex-col gap-2.5 shrink-0">
+                                                                                <span className="text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest flex items-center gap-1.5"><ActivityIcon size={14}/> Lịch sử bài tập:</span>
+                                                                                <div className="flex flex-col gap-2">
+                                                                                    {prevHist.map((h, j) => {
+                                                                                        let textToShow = '';
+                                                                                        if (h.rawText && h.rawText.toUpperCase() !== 'X') {
+                                                                                            textToShow = h.rawText;
+                                                                                        } else if (h.sets && h.sets.length > 0) {
+                                                                                            let allSame = true; const fW = h.sets[0].weight.trim(), fU = (h.sets[0].unit || 'KG').toLowerCase();
+                                                                                            for(let s=1; s<h.sets.length; s++) { if(h.sets[s].weight.trim() !== fW || (h.sets[s].unit || 'KG').toLowerCase() !== fU) { allSame = false; break; } }
+                                                                                            if (allSame) {
+                                                                                                textToShow = (fW ? `${fW}${fU} ` : '') + h.sets.map(s => s.reps).join('+');
+                                                                                            } else {
+                                                                                                textToShow = h.sets.map(s => (s.weight.trim() ? `${s.weight.trim()}${(s.unit || 'KG').toLowerCase()} ` : '') + s.reps.trim()).join(' + ');
+                                                                                            }
+                                                                                        }
+                                                                                        if (!textToShow) return null;
+                                                                                        return (
+                                                                                            <div key={j} className="font-bold text-slate-500 dark:text-zinc-400 text-[13px] flex items-start gap-2.5">
+                                                                                                <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shrink-0 mt-[1px]">{h.dateStr.substring(0,5)}</span>
+                                                                                                <span className="leading-snug">{textToShow}</span>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[300px] border-2 border-dashed border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 hover:${modalMainColor.border} hover:${modalMainColor.text} font-black rounded-[2rem] flex flex-col items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.98]`}><PlusIcon size={32} /> Thêm bài tập mới</button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 shrink-0 flex gap-2 transition-colors pb-safe-bottom bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md relative z-50">
+                                                        <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-5 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={20} /></button>
+                                                        <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-[1.25rem] font-black text-sm flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Lưu Tạm</button>
+                                                        <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${modalMainColor.fill} text-white rounded-[1.25rem] font-black text-sm shadow-xl shadow-${modalMainColor.fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={18} /> Đóng Form</button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </>
                                 )}
                             </div>
