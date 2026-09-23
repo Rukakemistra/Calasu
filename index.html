@@ -30,6 +30,10 @@
     <!-- Sửa lỗi UMD của lucide-react -->
     <script>window.react = window.React;</script>
     
+    <!-- Recharts (Thư viện Biểu đồ) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.js"></script>
+
     <!-- Babel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
     
@@ -124,6 +128,7 @@
             } = IconLib;
 
             const { useState, useEffect, useRef } = React;
+            const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts || {};
             
             const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
             
@@ -398,11 +403,157 @@
                 const [activeExerciseId, setActiveExerciseId] = useState(null);
                 const [doneSets, setDoneSets] = useState({});
 
+                const [showChartModal, setShowChartModal] = useState(false);
+                const [chartData, setChartData] = useState([]);
+                const [chartExerciseName, setChartExerciseName] = useState('');
+                const [chartMetric, setChartMetric] = useState('maxWeight'); // 'maxWeight' hoặc 'volume'
+
+                const handleOpenChart = (rawName) => {
+                    const baseName = rawName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+                    if (!baseName) return;
+
+                    let hist = [];
+                    const cNum = parseDateToNumber(dateKey);
+
+                    Object.keys(workoutsByDate).sort((a, b) => parseDateToNumber(a) - parseDateToNumber(b)).forEach(d => {
+                        if (parseDateToNumber(d) > cNum) return; 
+                        const wOut = workoutsByDate[d];
+                        if (!wOut || !wOut.exercises) return;
+
+                        const ex = wOut.exercises.find(e => e?.name?.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase() === baseName);
+                        if (ex && ex.sets && ex.sets.length > 0 && (!ex.rawText || ex.rawText.toUpperCase() === 'X')) {
+                            let maxW = 0; let vol = 0; let isValid = false;
+                            ex.sets.forEach(s => {
+                                // Xử lý thông minh chữ BB (Barbell = 20kg)
+                                let wStr = (s.weight || '').toUpperCase().replace(/KG|LBS/g, '').trim();
+                                let w = 0;
+                                if (wStr.startsWith('BB')) {
+                                    w = 20 + (parseFloat(wStr.replace('BB', '').replace('+', '')) || 0);
+                                } else {
+                                    w = parseFloat(wStr) || 0;
+                                }
+                                
+                                const r = parseFloat(s.reps) || 0;
+                                if (w > 0 || r > 0) {
+                                    isValid = true;
+                                    if (w > maxW) maxW = w;
+                                    vol += (w * r);
+                                }
+                            });
+                            // Chỉ push nếu thực sự có tạ hoặc volume, chống rớt biểu đồ về 0
+                            if (isValid && (maxW > 0 || vol > 0)) {
+                                hist.push({ date: d.substring(0, 5), maxWeight: maxW, volume: vol });
+                            }
+                        }
+                    });
+
+                    if (hist.length < 2) {
+                        showToast('Cần ít nhất 2 ngày tập bài này để vẽ biểu đồ!', 'error');
+                        return;
+                    }
+
+                    setChartData(hist);
+                    setChartExerciseName(rawName.replace(/\s*\([^)]*\)\s*$/, '').trim());
+                    setChartMetric('maxWeight');
+                    setShowChartModal(true);
+                };
+
                 const handleQuickSaveWorkout = () => { 
                     const vEx = currentExercises.filter(ex => ex.name.trim() !== ''); 
                     if (vEx.length === 0) return; 
                     setWorkoutsByDate(p => ({ ...p, [dateKey]: { type: workoutType, note: workoutNote, exercises: vEx } })); 
                     showToast('Đã lưu nháp tiến độ!', 'success'); 
+                };
+
+                // State cho tính năng Trung bình
+                const [showAvgModal, setShowAvgModal] = useState(false);
+                const formatDt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                const [avgStartDate, setAvgStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return formatDt(d); });
+                const [avgEndDate, setAvgEndDate] = useState(() => formatDt(new Date()));
+                const [avgResult, setAvgResult] = useState(null);
+                const [avgPresetMode, setAvgPresetMode] = useState('week'); 
+                const [avgOffset, setAvgOffset] = useState(0);
+
+                const applyAvgPreset = (mode, offset) => {
+                    setAvgPresetMode(mode); setAvgOffset(offset); setAvgResult(null);
+                    const end = new Date();
+                    if (mode === 'week') {
+                        end.setDate(end.getDate() + (offset * 7));
+                        const start = new Date(end); start.setDate(start.getDate() - 6);
+                        setAvgStartDate(formatDt(start)); setAvgEndDate(formatDt(end));
+                    } else if (mode === 'month') {
+                        end.setMonth(end.getMonth() + offset);
+                        const firstDay = new Date(end.getFullYear(), end.getMonth(), 1);
+                        const lastDay = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+                        if (offset === 0) {
+                            setAvgStartDate(formatDt(firstDay)); setAvgEndDate(formatDt(new Date()));
+                        } else {
+                            setAvgStartDate(formatDt(firstDay)); setAvgEndDate(formatDt(lastDay));
+                        }
+                    }
+                };
+
+                const calculateAverages = (e) => {
+                    e.preventDefault();
+                    const sNum = parseInt(avgStartDate.replace(/-/g, ''));
+                    const eNum = parseInt(avgEndDate.replace(/-/g, ''));
+                    if (sNum > eNum) { showToast('Ngày kết thúc phải sau ngày bắt đầu!', 'error'); return; }
+
+                    let tKcal = 0, tPro = 0, mDays = 0;
+                    let sTimes = [], wTimes = [], tDur = 0, sDays = 0;
+
+                    // Tính Macro
+                    Object.keys(foodsByDate).forEach(dKey => {
+                        const dNum = parseInt(dKey.split('/')[2] + dKey.split('/')[1] + dKey.split('/')[0]);
+                        if (dNum >= sNum && dNum <= eNum) {
+                            const fDay = foodsByDate[dKey] || [];
+                            if (fDay.length > 0) {
+                                const tots = calculateTotals(fDay);
+                                tKcal += Math.round(tots.kcal);
+                                tPro += tots.protein;
+                                mDays++;
+                            }
+                        }
+                    });
+
+                    // Tính Sleep
+                    Object.keys(sleepByDate).forEach(dKey => {
+                        const dNum = parseInt(dKey.split('/')[2] + dKey.split('/')[1] + dKey.split('/')[0]);
+                        if (dNum >= sNum && dNum <= eNum) {
+                            const sDay = sleepByDate[dKey] || [];
+                            if (sDay.length > 0) {
+                                const main = sDay[sDay.length - 1];
+                                sTimes.push(main.sleepTime);
+                                wTimes.push(main.wakeTime);
+                                tDur += main.duration;
+                                sDays++;
+                            }
+                        }
+                    });
+
+                    const avgTime = (arr, isSleep) => {
+                        if(!arr.length) return '--:--';
+                        let totalM = 0;
+                        arr.forEach(t => {
+                            let [h, m] = t.split(':').map(Number);
+                            if (isSleep && h < 12) h += 24; // Xử lý thông minh giờ qua đêm
+                            totalM += (h * 60) + m;
+                        });
+                        let avgM = Math.round(totalM / arr.length);
+                        let h = Math.floor(avgM / 60) % 24;
+                        let m = avgM % 60;
+                        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                    };
+
+                    setAvgResult({
+                        kcal: mDays > 0 ? Math.round(tKcal / mDays) : 0,
+                        pro: mDays > 0 ? cleanNum(tPro / mDays) : 0,
+                        mDays,
+                        sleep: avgTime(sTimes, true),
+                        wake: avgTime(wTimes, false),
+                        dur: sDays > 0 ? Math.round(tDur / sDays) : 0,
+                        sDays
+                    });
                 };
 
                 // Thêm thuộc tính musicUrl vào statFormData
@@ -502,12 +653,15 @@
                     });
                 };
 
+                const [todoCache, setTodoCache] = useState(() => loadSafeJSON('work_todos'));
                 const [todoData, setTodoData] = useState({ must: [], should: [], can: [] });
-                const [todoCache, setTodoCache] = useState({});
                 const todoTimerRef = useRef(null);
-                const [urgentList, setUrgentList] = useState([]);
+                const [urgentList, setUrgentList] = useState(() => { try { const saved = localStorage.getItem('work_urgents'); return saved ? JSON.parse(saved) : []; } catch(e) { return []; } });
                 const [scratchpad, setScratchpad] = useState(() => localStorage.getItem('work_scratchpad') || '');
                 const scratchpadTimerRef = useRef(null);
+
+                useEffect(() => { localStorage.setItem('work_todos', JSON.stringify(todoCache)); }, [todoCache]);
+                useEffect(() => { localStorage.setItem('work_urgents', JSON.stringify(urgentList)); }, [urgentList]);
 
                 const fetchWorkData = async () => {
                     const dKey = formatDate(selectedDate);
@@ -1049,7 +1203,14 @@
                                     <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-6 rounded-[2rem] shadow-sm transition-colors">
                                         <div className="flex justify-between items-center mb-6">
                                             <h3 className="text-xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2"><CheckCircleIcon className="text-cyan-500" size={24}/> To-do list</h3>
-                                            <button className="p-2 bg-slate-50 dark:bg-zinc-800 text-slate-500 rounded-xl hover:bg-slate-100 transition-all active:scale-95"><ClockIcon size={18}/></button>
+                                            <button onClick={() => {
+                                                const yesterday = new Date(selectedDate); yesterday.setDate(yesterday.getDate() - 1);
+                                                const yKey = formatDate(yesterday); const yData = todoCache[yKey];
+                                                if (!yData || (!yData.must?.length && !yData.should?.length && !yData.can?.length)) { showToast('Hôm qua không có task nào!', 'error'); return; }
+                                                const clone = (ts) => (ts||[]).map(t => ({...t, id: Date.now() + Math.random().toString(), done: false}));
+                                                const nData = { must: [...(todoData.must||[]), ...clone(yData.must)], should: [...(todoData.should||[]), ...clone(yData.should)], can: [...(todoData.can||[]), ...clone(yData.can)] };
+                                                setTodoData(nData); setTodoCache(c => ({...c, [dateKey]: nData})); scheduleTodoSync(nData); showToast('Đã chép việc hôm qua!', 'success');
+                                            }} className="p-2 bg-slate-50 dark:bg-zinc-800 text-blue-500 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/20 transition-all active:scale-95 shadow-sm border border-slate-100 dark:border-zinc-700 font-bold text-xs flex items-center gap-1.5"><CopyIcon size={14}/> Chép hôm qua</button>
                                         </div>
 
                                         <div className="space-y-8">
@@ -1421,7 +1582,13 @@
                                             <div className="space-y-4">
                                                 {currentWorkout.exercises?.map((ex, idx) => (
                                                     <div className="bg-white dark:bg-zinc-900 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors" key={idx}>
-                                                        <h4 className="font-black text-slate-800 dark:text-zinc-100 text-lg mb-4 border-b border-slate-100 dark:border-zinc-800/50 pb-3">{ex.name}</h4>
+                                                          <div className="flex items-center gap-3 mb-4 border-b border-slate-100 dark:border-zinc-800/50 pb-3">
+                                                            <button onClick={(e) => { e.preventDefault(); handleOpenChart(ex.name); }} className="p-1.5 text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-100 dark:border-blue-500/30 transition-all active:scale-90 shadow-sm shrink-0" title="Phân tích biểu đồ">
+                                                                <ActivityIcon size={18} />
+                                                            </button>
+                                                            <h4 className="font-black text-slate-800 dark:text-zinc-100 text-lg">{ex.name}</h4>
+                                                        </div>
+
                                                         <div className="space-y-3">
                                                             {ex.rawText && ex.rawText.toUpperCase() !== 'X' ? (
                                                                 <div className="text-sm font-bold text-slate-700 dark:text-zinc-200 bg-slate-50 dark:bg-zinc-800/80 px-4 py-4 rounded-2xl transition-colors whitespace-pre-wrap border border-slate-200/50 dark:border-zinc-700/50">{ex.rawText}</div>
@@ -1552,7 +1719,12 @@
                                     
                                     {/* Phân tích tuần - Redesigned Cards */}
                                     <div className="mt-6 bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
-                                        <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 mb-5 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tuần</h3>
+                                        <div className="flex justify-between items-center mb-5">
+                                            <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tuần</h3>
+                                            {(appMode === 'macro' || appMode === 'sleep') && (
+                                                <button onClick={() => { setShowAvgModal(true); setAvgResult(null); }} className="text-[10px] font-black text-blue-500 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"><CalendarIcon size={12}/> TÍNH TB</button>
+                                            )}
+                                        </div>
                                         {appMode === 'macro' && (
                                             <div className="grid grid-cols-2 gap-4">
                                                 <button onClick={() => handleFilterClick('protein')} className={`w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border text-center transition-all ${activeFilter === 'protein' ? 'ring-2 ring-red-500 border-transparent shadow-lg shadow-red-500/20 scale-[1.02]' : 'border-red-100 dark:border-red-500/20 hover:scale-105 active:scale-95'}`}>
@@ -1689,7 +1861,12 @@
                                     </div>
 
                                     <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
-                                        <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 mb-5 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tháng</h3>
+                                        <div className="flex justify-between items-center mb-5">
+                                            <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tháng</h3>
+                                            {(appMode === 'macro' || appMode === 'sleep') && (
+                                                <button onClick={() => { setShowAvgModal(true); setAvgResult(null); }} className="text-[10px] font-black text-blue-500 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"><CalendarIcon size={12}/> TÍNH TB</button>
+                                            )}
+                                        </div>
                                         
                                         {appMode === 'macro' && (
                                             <div className="grid grid-cols-2 gap-4">
@@ -2279,27 +2456,25 @@
                         </div>
                     )}
 
-                    {/* Modal Thêm Buổi Tập */}
+                    {/* Giao diện Full-screen Thêm Buổi Tập */}
                     {isAddingWorkout && appMode === 'workout' && (
-                        <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center">
-                            <div className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm modal-overlay" onClick={handleCancelAddWorkout}></div>
-                            <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-slate-100 dark:border-zinc-800">
-                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden shrink-0"></div>
-                                <div className="flex justify-between items-center mb-6 shrink-0">
+                        <div className="fixed inset-0 z-[150] flex justify-center bg-slate-50 dark:bg-zinc-950 animate-[fadeScale_0.2s_ease-out]">
+                            <div className="w-full max-w-xl bg-slate-50 dark:bg-zinc-950 h-[100dvh] flex flex-col relative">
+                                <div className="flex justify-between items-center px-4 pt-6 pb-4 sm:p-6 shrink-0 border-b border-slate-200/50 dark:border-zinc-800/50 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md z-20">
                                     <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight">
-                                        <div className="p-2 bg-slate-100 dark:bg-zinc-800 rounded-xl"><DumbbellIcon className="text-slate-800 dark:text-zinc-200" size={24}/></div>
+                                        <div className="p-2.5 bg-white dark:bg-zinc-800 rounded-xl shadow-sm border border-slate-100 dark:border-zinc-700"><DumbbellIcon className="text-slate-800 dark:text-zinc-200" size={24}/></div>
                                         {workoutAddStep === 1 ? 'Chọn Lịch Tập' : workoutType}
                                     </h2>
-                                    <button onClick={handleCancelAddWorkout} className="text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90"><XIcon size={20} /></button>
+                                    <button onClick={handleCancelAddWorkout} className="text-slate-500 bg-white dark:bg-zinc-800 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-100 dark:border-zinc-700 transition-all active:scale-90 shadow-sm"><XIcon size={20} /></button>
                                 </div>
                                 
                                 {workoutAddStep === 1 ? (
-                                    <div className="flex flex-col gap-3 pb-safe-bottom overflow-y-auto no-scrollbar">
+                                    <div className="flex flex-col gap-4 p-4 sm:p-6 pb-safe-bottom overflow-y-auto no-scrollbar">
                                         {['Upper', 'Lower', 'Push', 'Pull', 'Leg'].map(t => {
                                             const tCol = getWorkoutColor(t);
                                             return (
-                                                <button key={t} onClick={() => handleStartWorkout(t)} className={`w-full py-5 px-6 rounded-[1.5rem] font-black text-xl text-left border-2 border-slate-100 dark:border-zinc-800 hover:${tCol.border} hover:${tCol.lightBg} text-slate-800 dark:text-zinc-200 flex justify-between items-center group transition-all active:scale-[0.98] shadow-sm`}>
-                                                    {t} <ChevronRightIcon size={24} className={`text-slate-300 dark:text-zinc-600 group-hover:${tCol.text} transition-colors`} />
+                                                <button key={t} onClick={() => handleStartWorkout(t)} className={`w-full py-6 px-6 rounded-[2rem] font-black text-2xl text-left border-2 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 hover:${tCol.border} hover:${tCol.lightBg} text-slate-800 dark:text-zinc-200 flex justify-between items-center group transition-all active:scale-[0.98] shadow-sm`}>
+                                                    {t} <ChevronRightIcon size={28} className={`text-slate-300 dark:text-zinc-600 group-hover:${tCol.text} transition-colors`} />
                                                 </button>
                                             )
                                         })}
@@ -2322,19 +2497,19 @@
                                             const modalMainColor = getWorkoutColor(workoutType);
 
                                             return (
-                                                <div className="flex flex-col flex-1 min-h-0 w-full relative pt-2">
-                                                    {/* GLOBAL PROGRESS BAR TỔNG THỂ CÓ TEXT % */}
-                                                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-200 dark:bg-zinc-800 z-50 rounded-full overflow-hidden">
+                                                <div className="flex flex-col flex-1 min-h-0 w-full relative pt-1.5">
+                                                    {/* GLOBAL PROGRESS BAR */}
+                                                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-200 dark:bg-zinc-800 z-50 overflow-hidden">
                                                         <div className={`h-full ${modalMainColor.fill} transition-all duration-700 ease-out`} style={{ width: `${progressPct}%`, boxShadow: `0 0 10px ${modalMainColor.fill.includes('orange')?'#f97316':modalMainColor.fill.includes('yellow')?'#eab308':modalMainColor.fill.includes('emerald')?'#10b981':modalMainColor.fill.includes('blue')?'#3b82f6':'#a855f7'}` }}>
                                                         </div>
                                                     </div>
-                                                    <div className="absolute -top-1.5 right-2 z-50 text-[10px] font-black text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-900 px-2 rounded-b-md shadow-sm border border-t-0 border-slate-100 dark:border-zinc-800 pb-0.5">{progressPct}%</div>
+                                                    <div className="absolute -top-1.5 right-4 sm:right-6 z-50 text-[10px] font-black text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-950 px-2 rounded-b-md shadow-sm border border-t-0 border-slate-200/50 dark:border-zinc-800/50 pb-0.5">{progressPct}%</div>
                                                     
-                                                    {/* Timer Block Popup */}
-                                                    <div className={`bg-slate-50 dark:bg-zinc-800/80 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mt-4 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
+                                                    {/* Timer Block */}
+                                                    <div className={`mx-4 sm:mx-6 bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mt-4 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${timerSeconds !== null && timerSeconds === 0 ? 'timer-done' : ''}`}>
                                                         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
                                                             {[45, 60, 90, 120, 150, 180].map(sec => (
-                                                                <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-white dark:bg-zinc-900 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-800">
+                                                                <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-slate-50 dark:bg-zinc-800 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-700/50">
                                                                     {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
                                                                 </button>
                                                             ))}
@@ -2349,12 +2524,12 @@
                                                         </div>
                                                     </div>
 
-                                                    <div className="overflow-y-auto flex-1 pb-4 no-scrollbar pt-1 px-1">
-                                                        <div className="mb-6 shrink-0">
-                                                            <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} placeholder="Ghi chú buổi tập..." className={`w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:${modalMainColor.border} focus:ring-4 focus:ring-slate-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[50px] resize-none transition-all shadow-sm`} />
+                                                    <div className="overflow-y-auto flex-1 pb-4 no-scrollbar pt-1">
+                                                        <div className="mb-6 shrink-0 px-4 sm:px-6">
+                                                            <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} placeholder="Ghi chú buổi tập..." className={`w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:${modalMainColor.border} focus:ring-4 focus:ring-slate-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[50px] resize-none transition-all shadow-sm`} />
                                                         </div>
                                                         
-                                                        <div className="flex overflow-x-auto snap-x gap-4 pb-6 pt-2 no-scrollbar items-stretch">
+                                                        <div className="flex overflow-x-auto snap-x gap-4 pb-6 pt-2 px-4 sm:px-6 no-scrollbar items-stretch">
                                                         {currentExercises.map((ex) => {
                                                             const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
                                                             const wCol = getWorkoutColor(workoutType);
@@ -2368,55 +2543,60 @@
                                                             const isExDone = validSetsCount >= targetSets && targetSets > 0;
 
                                                             return (
-                                                                <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`w-[85vw] max-w-[340px] shrink-0 snap-center bg-white dark:bg-zinc-900/80 p-0 rounded-[2rem] relative transition-all duration-300 border-2 overflow-hidden flex flex-col ${isActiveEx ? wCol.border + ' shadow-[0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]' : (isExDone ? 'border-emerald-500/30' : 'border-slate-200 dark:border-zinc-800')}`}>
+                                                                <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`w-[85vw] max-w-[360px] shrink-0 snap-center bg-white dark:bg-zinc-900 p-0 rounded-[2rem] relative transition-all duration-300 border-2 overflow-hidden flex flex-col ${isActiveEx ? wCol.border + ' shadow-[0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]' : (isExDone ? 'border-emerald-500/30' : 'border-slate-200 dark:border-zinc-800')}`}>
                                                                     
-                                                                    <div className="p-5 relative z-10 flex-1 flex flex-col">
-                                                                        <div className="flex justify-between items-center mb-3">
-                                                                            <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài (VD: Bench Press 3x10)" className={`flex-1 bg-transparent border-b border-transparent focus:border-slate-300 dark:focus:border-zinc-600 py-1 outline-none font-black text-lg transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`} />
-                                                                            <div className={`px-2 py-1 rounded-xl text-xs font-black tracking-widest ml-2 border transition-colors shrink-0 ${isExDone ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 border-slate-200 dark:border-zinc-700'}`}>
-                                                                                {validSetsCount}/{targetSets}
+                                                                    <div className="p-5 sm:p-6 relative z-10 flex-1 flex flex-col">
+                                                                        <div className="flex justify-between items-center mb-4 gap-2">
+                                                                            <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài (VD: Bench Press 3x10)" className={`flex-1 min-w-[120px] w-0 bg-transparent border-b border-transparent focus:border-slate-300 dark:focus:border-zinc-600 py-1 outline-none font-black text-xl transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`} />
+                                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                                <button onClick={(e) => { e.preventDefault(); handleOpenChart(ex.name); }} className="p-1.5 text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-100 dark:border-blue-500/30 transition-all active:scale-90 shadow-sm" title="Phân tích biểu đồ">
+                                                                                    <ActivityIcon size={18} />
+                                                                                </button>
+                                                                                <div className={`px-2.5 py-1 rounded-xl text-sm font-black tracking-widest border transition-colors ${isExDone ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 border-slate-200 dark:border-zinc-700 shadow-sm'}`}>
+                                                                                    {validSetsCount}/{targetSets}
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     
-                                                                        <div className="space-y-3 flex-1 mt-1">
+                                                                        <div className="space-y-3 flex-1 mt-2">
                                                                             {ex.sets.map((set, sIdx) => {
                                                                                 const isSetDone = set.weight.trim() !== '' && set.reps.trim() !== '';
                                                                                 return (
                                                                                 <div key={sIdx} className={`flex items-center gap-2 py-0.5 relative`}>
                                                                                     
                                                                                     {sIdx > 0 && !isSetDone && (
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleCopyPrevWeight(ex.id, sIdx); }} className="w-8 h-[46px] flex items-center justify-center text-slate-500 hover:text-blue-500 transition-colors shrink-0 bg-slate-100 dark:bg-zinc-800 rounded-xl active:scale-95 border border-transparent" title="Copy tạ từ Set trên">
-                                                                                            <CopyIcon size={14}/>
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleCopyPrevWeight(ex.id, sIdx); }} className="w-10 h-[50px] flex items-center justify-center text-slate-500 hover:text-blue-500 transition-colors shrink-0 bg-slate-100 dark:bg-zinc-800 rounded-xl active:scale-95 border border-transparent" title="Copy tạ từ Set trên">
+                                                                                            <CopyIcon size={16}/>
                                                                                         </button>
                                                                                     )}
 
-                                                                                    {/* Ô nhập tạ tối màu */}
-                                                                                    <div className={`relative flex-[1.2] flex items-center bg-white dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[46px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
-                                                                                        <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className={`w-full h-full bg-transparent pl-4 pr-10 outline-none text-center uppercase transition-colors ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-1.5 transition-colors ${isSetDone ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'}`}>{set.unit.toUpperCase()}</button>
+                                                                                    {/* Ô nhập tạ */}
+                                                                                    <div className={`relative flex-[1.2] flex items-center bg-slate-50 dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[50px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                        <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className={`w-full h-full bg-transparent pl-4 pr-10 outline-none text-center uppercase transition-colors text-base ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-1.5 text-[10px] font-black uppercase rounded-[10px] px-2 py-1.5 transition-colors ${isSetDone ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-white dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 shadow-sm border border-slate-200 dark:border-zinc-700'}`}>{set.unit.toUpperCase()}</button>
                                                                                     </div>
                                                                                     
-                                                                                    <span className="text-slate-400 dark:text-zinc-600 font-black text-sm">×</span>
+                                                                                    <span className="text-slate-400 dark:text-zinc-600 font-black text-base">×</span>
                                                                                     
-                                                                                    {/* Ô nhập rep tối màu */}
-                                                                                    <div className={`flex-[0.8] relative bg-white dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[46px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
-                                                                                        <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full h-full bg-transparent outline-none text-center transition-colors ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
+                                                                                    {/* Ô nhập rep */}
+                                                                                    <div className={`flex-[0.8] relative bg-slate-50 dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[50px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                        <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full h-full bg-transparent outline-none text-center transition-colors text-base ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
                                                                                     </div>
 
                                                                                     {ex.sets.length > 1 && (
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="w-8 h-[46px] flex justify-center items-center text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors active:scale-95">
-                                                                                            <Trash2Icon size={16} />
+                                                                                        <button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="w-10 h-[50px] flex justify-center items-center text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors active:scale-95">
+                                                                                            <Trash2Icon size={18} />
                                                                                         </button>
                                                                                     )}
                                                                                 </div>
                                                                             )})}
-                                                                            <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-3 bg-slate-50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mt-3 transition-all active:scale-[0.98] border border-slate-200/50 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700`}><PlusIcon size={16} /> Thêm hiệp</button>
+                                                                            <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-3.5 bg-slate-50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] border border-slate-200/50 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700`}><PlusIcon size={18} /> Thêm hiệp</button>
                                                                         </div>
 
                                                                         {prevHist && prevHist.length > 0 && (
-                                                                            <div className="mt-5 pt-4 border-t border-dashed border-slate-200 dark:border-zinc-700/50 flex flex-col gap-2.5 shrink-0">
+                                                                            <div className="mt-6 pt-5 border-t border-dashed border-slate-200 dark:border-zinc-700/50 flex flex-col gap-3 shrink-0">
                                                                                 <span className="text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest flex items-center gap-1.5"><ActivityIcon size={14}/> Lịch sử bài tập:</span>
-                                                                                <div className="flex flex-col gap-2">
+                                                                                <div className="flex flex-col gap-2.5">
                                                                                     {prevHist.map((h, j) => {
                                                                                         let textToShow = '';
                                                                                         if (h.rawText && h.rawText.toUpperCase() !== 'X') {
@@ -2432,9 +2612,9 @@
                                                                                         }
                                                                                         if (!textToShow) return null;
                                                                                         return (
-                                                                                            <div key={j} className="font-bold text-slate-500 dark:text-zinc-400 text-[13px] flex items-start gap-2.5">
-                                                                                                <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded shrink-0 mt-[1px]">{h.dateStr.substring(0,5)}</span>
-                                                                                                <span className="leading-snug">{textToShow}</span>
+                                                                                            <div key={j} className="font-bold text-slate-500 dark:text-zinc-400 text-sm flex items-start gap-3 bg-slate-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800/50">
+                                                                                                <span className="text-[10px] font-black text-slate-500 dark:text-zinc-500 bg-white dark:bg-zinc-800 px-2 py-1 rounded-lg shrink-0 mt-[1px] shadow-sm border border-slate-200 dark:border-zinc-700">{h.dateStr.substring(0,5)}</span>
+                                                                                                <span className="leading-snug text-slate-700 dark:text-zinc-300 pt-[1px]">{textToShow}</span>
                                                                                             </div>
                                                                                         );
                                                                                     })}
@@ -2445,13 +2625,13 @@
                                                                 </div>
                                                             );
                                                         })}
-                                                        <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[300px] border-2 border-dashed border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 hover:${modalMainColor.border} hover:${modalMainColor.text} font-black rounded-[2rem] flex flex-col items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.98]`}><PlusIcon size={32} /> Thêm bài tập mới</button>
+                                                        <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-[85vw] max-w-[360px] shrink-0 snap-center min-h-[300px] border-2 border-dashed border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 hover:${modalMainColor.border} hover:${modalMainColor.text} font-black rounded-[2rem] flex flex-col items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.98]`}><PlusIcon size={36} /> Thêm bài tập mới</button>
                                                         </div>
                                                     </div>
-                                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 shrink-0 flex gap-2 transition-colors pb-safe-bottom bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md relative z-50">
-                                                        <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-5 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={20} /></button>
-                                                        <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-[1.25rem] font-black text-sm flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Lưu Tạm</button>
-                                                        <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${modalMainColor.fill} text-white rounded-[1.25rem] font-black text-sm shadow-xl shadow-${modalMainColor.fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={18} /> Đóng Form</button>
+                                                    <div className="pt-4 border-t border-slate-200/50 dark:border-zinc-800/50 shrink-0 flex gap-3 transition-colors px-4 sm:px-6 pb-[env(safe-area-inset-bottom,1.5rem)] bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur-xl relative z-50">
+                                                        <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-6 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={24} /></button>
+                                                        <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-[1.25rem] font-black text-base flex justify-center items-center gap-2 transition-all active:scale-[0.98] shadow-sm">Lưu Tạm</button>
+                                                        <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${modalMainColor.fill} text-white rounded-[1.25rem] font-black text-base shadow-xl shadow-${modalMainColor.fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={20} /> Đóng Form</button>
                                                     </div>
                                                 </div>
                                             );
@@ -2663,7 +2843,51 @@
                             </div>
                         </div>
                     )}
+                    {/* Modal Biểu Đồ Phân Tích */}
+                    {showChartModal && (
+                        <div className="fixed inset-0 z-[200] flex justify-center items-end sm:items-center">
+                            <div className="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm modal-overlay" onClick={() => setShowChartModal(false)}></div>
+                            <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet flex flex-col border-t border-slate-100 dark:border-zinc-800">
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden shrink-0"></div>
+                                <div className="flex justify-between items-start mb-6 shrink-0">
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 tracking-tight flex items-center gap-2">
+                                            <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl"><ActivityIcon className="text-blue-500" size={20}/></div>
+                                            Phân Tích
+                                        </h2>
+                                        <p className="text-sm font-bold text-slate-500 dark:text-zinc-400 mt-1.5">{chartExerciseName}</p>
+                                    </div>
+                                    <button onClick={() => setShowChartModal(false)} className="text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90"><XIcon size={20} /></button>
+                                </div>
 
+                                <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1.5 rounded-2xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner mb-6">
+                                    <button onClick={() => setChartMetric('maxWeight')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${chartMetric === 'maxWeight' ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30 scale-105' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'}`}>Tạ Nặng Nhất</button>
+                                    <button onClick={() => setChartMetric('volume')} className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${chartMetric === 'volume' ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'}`}>Tổng Volume</button>
+                                </div>
+
+                                <div className="h-64 w-full bg-slate-50 dark:bg-zinc-950/50 rounded-[2rem] border border-slate-100 dark:border-zinc-800 p-4 pt-6">
+                                    {LineChart ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={chartData}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke={isDarkMode ? '#27272a' : '#f1f5f9'} vertical={false} />
+                                                <XAxis dataKey="date" stroke={isDarkMode ? '#71717a' : '#94a3b8'} fontSize={10} axisLine={false} tickLine={false} dy={10} />
+                                                <YAxis stroke={isDarkMode ? '#71717a' : '#94a3b8'} fontSize={10} axisLine={false} tickLine={false} dx={-10} width={30} />
+                                                <Tooltip 
+                                                    contentStyle={{ backgroundColor: isDarkMode ? '#18181b' : '#ffffff', borderRadius: '12px', border: isDarkMode ? '1px solid #3f3f46' : '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                                                    itemStyle={{ color: chartMetric === 'maxWeight' ? '#3b82f6' : '#10b981', fontWeight: '900' }}
+                                                    formatter={(value) => [value, chartMetric === 'maxWeight' ? 'Mức Tạ' : 'Volume']}
+                                                    labelStyle={{ color: isDarkMode ? '#a1a1aa' : '#64748b', fontWeight: 'bold', marginBottom: '4px' }}
+                                                />
+                                                <Line type="monotone" dataKey={chartMetric} stroke={chartMetric === 'maxWeight' ? '#3b82f6' : '#10b981'} strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: isDarkMode ? '#18181b' : '#ffffff' }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="flex h-full items-center justify-center text-slate-400 font-bold text-sm">Đang tải thư viện biểu đồ...</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {/* Modal Xóa Buổi Tập */}
                     {showDeleteConfirm && (
                         <div className="fixed inset-0 z-[100] flex justify-center items-center p-4">
@@ -2679,7 +2903,90 @@
                             </div>
                         </div>
                     )}
+                    {/* Modal Tính Trung Bình */}
+                    {showAvgModal && (
+                        <div className="fixed inset-0 z-[200] flex justify-center items-end sm:items-center">
+                            <div className="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm modal-overlay" onClick={() => setShowAvgModal(false)}></div>
+                            <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet flex flex-col border-t border-slate-100 dark:border-zinc-800">
+                                <div className="w-12 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full mx-auto mb-6 sm:hidden shrink-0"></div>
+                                <div className="flex justify-between items-start mb-6 shrink-0">
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 tracking-tight flex items-center gap-2">
+                                            <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl"><ActivityIcon className="text-blue-500" size={20}/></div>
+                                            Chỉ số Trung bình
+                                        </h2>
+                                        <p className="text-sm font-bold text-slate-500 dark:text-zinc-400 mt-1.5">Tính toán theo khoảng ngày</p>
+                                    </div>
+                                    <button onClick={() => setShowAvgModal(false)} className="text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90"><XIcon size={20} /></button>
+                                </div>
 
+                                <form onSubmit={calculateAverages} className="space-y-4 mb-6">
+                                    <div className="flex gap-2 p-1.5 bg-slate-100 dark:bg-zinc-800/80 rounded-2xl border border-slate-200/50 dark:border-zinc-700/50 shadow-inner">
+                                        <div className="flex-1 flex items-center bg-white dark:bg-zinc-900 rounded-[0.8rem] shadow-sm border border-slate-200/80 dark:border-zinc-700 overflow-hidden">
+                                            <button type="button" onClick={() => applyAvgPreset('week', avgPresetMode === 'week' ? avgOffset - 1 : -1)} className="p-3 text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors active:scale-90"><ChevronLeftIcon size={16}/></button>
+                                            <button type="button" onClick={() => applyAvgPreset('week', 0)} className={`flex-1 py-3 text-[10px] font-black uppercase text-center transition-colors ${avgPresetMode === 'week' ? 'text-blue-500' : 'text-slate-500 dark:text-zinc-400'}`}>1 Tuần {avgPresetMode === 'week' && avgOffset !== 0 ? `(${avgOffset})` : ''}</button>
+                                            <button type="button" onClick={() => applyAvgPreset('week', avgPresetMode === 'week' ? avgOffset + 1 : 1)} disabled={avgPresetMode === 'week' && avgOffset >= 0} className="p-3 text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors active:scale-90 disabled:opacity-20"><ChevronRightIcon size={16}/></button>
+                                        </div>
+                                        <div className="flex-1 flex items-center bg-white dark:bg-zinc-900 rounded-[0.8rem] shadow-sm border border-slate-200/80 dark:border-zinc-700 overflow-hidden">
+                                            <button type="button" onClick={() => applyAvgPreset('month', avgPresetMode === 'month' ? avgOffset - 1 : -1)} className="p-3 text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors active:scale-90"><ChevronLeftIcon size={16}/></button>
+                                            <button type="button" onClick={() => applyAvgPreset('month', 0)} className={`flex-1 py-3 text-[10px] font-black uppercase text-center transition-colors ${avgPresetMode === 'month' ? 'text-blue-500' : 'text-slate-500 dark:text-zinc-400'}`}>1 Tháng {avgPresetMode === 'month' && avgOffset !== 0 ? `(${avgOffset})` : ''}</button>
+                                            <button type="button" onClick={() => applyAvgPreset('month', avgPresetMode === 'month' ? avgOffset + 1 : 1)} disabled={avgPresetMode === 'month' && avgOffset >= 0} className="p-3 text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors active:scale-90 disabled:opacity-20"><ChevronRightIcon size={16}/></button>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <div className="flex-1 bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-zinc-700/50">
+                                            <label className="block text-[9px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-1.5">Từ ngày</label>
+                                            <input type="date" value={avgStartDate} onChange={e=>{setAvgStartDate(e.target.value); setAvgPresetMode('custom');}} className="w-full bg-transparent outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark]" required/>
+                                        </div>
+                                        <div className="flex-1 bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-zinc-700/50">
+                                            <label className="block text-[9px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-1.5">Đến ngày</label>
+                                            <input type="date" value={avgEndDate} onChange={e=>{setAvgEndDate(e.target.value); setAvgPresetMode('custom');}} className="w-full bg-transparent outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark]" required/>
+                                        </div>
+                                    </div>
+                                    <button type="submit" className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-black rounded-xl shadow-md shadow-blue-500/30 active:scale-95 transition-all">Tính Toán</button>
+                                </form>
+
+                                {avgResult && (
+                                    <div className="bg-slate-800 dark:bg-black p-5 rounded-[2rem] text-white shadow-inner border border-slate-700 dark:border-zinc-800 animate-[fadeScale_0.2s_ease-out]">
+                                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-700 pb-3 flex items-center justify-between">
+                                            <span>Kết quả ({appMode === 'macro' ? avgResult.mDays : avgResult.sDays} ngày có dl)</span>
+                                            <CheckCircleIcon size={16} className="text-emerald-500"/>
+                                        </p>
+                                        
+                                        {appMode === 'macro' && (
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Kcal TB</p>
+                                                    <p className="text-3xl font-black text-emerald-50">{avgResult.kcal}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Protein TB</p>
+                                                    <p className="text-3xl font-black text-red-50">{avgResult.pro}<span className="text-sm ml-1">g</span></p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {appMode === 'sleep' && (
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                                                    <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">Ngủ lúc</span>
+                                                    <span className="text-xl font-black text-indigo-300">{avgResult.sleep}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                                                    <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">Dậy lúc</span>
+                                                    <span className="text-xl font-black text-orange-300">{avgResult.wake}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
+                                                    <span className="text-[11px] font-black text-slate-300 uppercase tracking-widest">Thời lượng TB</span>
+                                                    <span className="text-xl font-black text-emerald-400">{formatDuration(avgResult.dur)}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {/* Modal Cài Đặt Đồng Bộ */}
                     {showSettings && (
                         <div className="fixed inset-0 z-[100] flex justify-center items-center p-4">
