@@ -791,7 +791,16 @@
                                     const vSets = (ex.sets || []).filter(s => s.weight.trim() !== '' || s.reps.trim() !== '');
                                     return { name: ex.name, sets: vSets.map(s => ({ reps: s.reps, weight: s.weight, unit: s.unit.toUpperCase() })) };
                                 });
-                                formattedWorkouts.push({ type: wOut.type, date: wDate, note: wOut.note, exercises: exes });
+                                // MÀNG LỌC DIỆT BÓNG MA: Tránh đẩy lịch rỗng (toàn X) lên làm mất dữ liệu
+                                let hasRealData = false;
+                                exes.forEach(ex => {
+                                    if (ex.rawText) hasRealData = true;
+                                    if (ex.sets.length > 0) hasRealData = true; 
+                                });
+                                
+                                if (hasRealData || (wOut.note && wOut.note.trim() !== '')) {
+                                    formattedWorkouts.push({ type: wOut.type, date: wDate, note: wOut.note, exercises: exes });
+                                }
                             }
                         });
                         formattedWorkouts.sort((a,b) => parseDateToNumber(a.date) - parseDateToNumber(b.date));
