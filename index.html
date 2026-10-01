@@ -2436,7 +2436,7 @@
                                     <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight"><MoonIcon className="text-indigo-500" size={28}/> Thêm bản ghi</h2>
                                     <button onClick={() => setIsAddingSleep(false)} className="text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90"><XIcon size={20} /></button>
                                 </div>
-                                <form id="add-sleep-form" onSubmit={handleAddSleep} className="space-y-6 flex-1">
+                               <div className="space-y-6 flex-1">
                                     <div className="space-y-5">
                                         <div className="bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 transition-colors shadow-sm">
                                             <label className="block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-2"><MoonIcon size={14}/> Giờ bắt đầu ngủ</label>
@@ -2458,9 +2458,9 @@
                                         </div>
                                     </div>
                                     <div className="pt-2 pb-safe-bottom">
-                                        <button type="submit" className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]"><CheckCircleIcon size={20} /> Lưu thời gian</button>
+                                        <button onClick={(e) => handleAddSleep(e)} className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]"><CheckCircleIcon size={20} /> Lưu thời gian</button>
                                     </div>
-                                </form>
+                                </div>
                             </div>
                         </div>
                     )}
