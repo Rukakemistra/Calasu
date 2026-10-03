@@ -478,6 +478,19 @@
                 const [avgResult, setAvgResult] = useState(null);
                 const [avgPresetMode, setAvgPresetMode] = useState('week'); 
                 const [avgOffset, setAvgOffset] = useState(0);
+                
+                const [sleepAvgDays, setSleepAvgDays] = useState(7);
+                const [sleepAvgStep, setSleepAvgStep] = useState(1);
+                const [showSleepChart, setShowSleepChart] = useState(false);
+                const [sleepChartMetric, setSleepChartMetric] = useState('sleepTime');
+                const [sleepChartDays, setSleepChartDays] = useState(15);
+                const [sleepChartStep, setSleepChartStep] = useState(5);
+                
+                // State cho tính năng Trung bình & Biểu đồ của phần Macro
+                const [macroAvgDays, setMacroAvgDays] = useState(7);
+                const [macroAvgStep, setMacroAvgStep] = useState(1);
+                const [showMacroChart, setShowMacroChart] = useState(false);
+                const [macroChartMetric, setMacroChartMetric] = useState('kcal');
 
                 const applyAvgPreset = (mode, offset) => {
                     setAvgPresetMode(mode); setAvgOffset(offset); setAvgResult(null);
@@ -1812,20 +1825,195 @@
                                                 </button>
                                             </div>
                                         )}
-                                        {appMode === 'sleep' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center transition-all ${activeFilter === 'late_sleep' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'border-slate-200 dark:border-zinc-700 hover:scale-105 active:scale-95'}`}>
-                                                    <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Thức khuya</p>
-                                                    <p className="text-4xl font-black text-slate-800 dark:text-white leading-none">{weekLateSleep}</p>
-                                                    <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Lần</p>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center transition-all ${activeFilter === 'late_wake' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'border-slate-200 dark:border-zinc-700 hover:scale-105 active:scale-95'}`}>
-                                                    <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Ngủ nướng</p>
-                                                    <p className="text-4xl font-black text-slate-800 dark:text-white leading-none">{weekLateWake}</p>
-                                                    <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Lần</p>
-                                                </button>
+                                        {appMode === 'sleep' && (() => {
+                                        // 1. Logic tính Trung Bình
+                                        let sTimes = [], wTimes = [], tDur = 0, sDays = 0;
+                                        const eDate = selectedDate;
+                                        const sDate = new Date(selectedDate);
+                                        sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
+                                        const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
+                                        const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
+
+                                        Object.keys(sleepByDate).forEach(dKey => {
+                                            const p = dKey.split('/');
+                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            if (dNum >= sNum && dNum <= eNum) {
+                                                const sDay = sleepByDate[dKey] || [];
+                                                if (sDay.length > 0) {
+                                                    const main = sDay[sDay.length - 1];
+                                                    sTimes.push(main.sleepTime);
+                                                    wTimes.push(main.wakeTime);
+                                                    tDur += main.duration;
+                                                    sDays++;
+                                                }
+                                            }
+                                        });
+
+                                        const avgTime = (arr, isSleep) => {
+                                            if(!arr.length) return '--:--';
+                                            let totalM = 0;
+                                            arr.forEach(t => {
+                                                let [h, m] = t.split(':').map(Number);
+                                                if (isSleep && h < 12) h += 24; 
+                                                totalM += (h * 60) + m;
+                                            });
+                                            let avgM = Math.round(totalM / arr.length);
+                                            let h = Math.floor(avgM / 60) % 24;
+                                            let m = avgM % 60;
+                                            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                                        };
+
+                                        const avgRes = {
+                                            sleep: avgTime(sTimes, true),
+                                            wake: avgTime(wTimes, false),
+                                            dur: sDays > 0 ? Math.round(tDur / sDays) : 0,
+                                            sDays
+                                        };
+
+                                        // 2. Logic tính Biểu Đồ
+                                        let chartDataRaw = [];
+                                        const cSDate = new Date(selectedDate);
+                                        cSDate.setDate(cSDate.getDate() - sleepAvgDays + 1);
+                                        const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
+                                        
+                                        Object.keys(sleepByDate).forEach(dKey => {
+                                            const p = dKey.split('/');
+                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            if (dNum >= cSNum && dNum <= eNum) {
+                                                const sDay = sleepByDate[dKey] || [];
+                                                if (sDay.length > 0) {
+                                                    const main = sDay[sDay.length - 1];
+                                                    chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
+                                                }
+                                            }
+                                        });
+
+                                        chartDataRaw.sort((a, b) => a.dNum - b.dNum);
+                                        const chartData = chartDataRaw.map(d => {
+                                            let sH = parseInt(d.sleepTime.split(':')[0]);
+                                            let sM = parseInt(d.sleepTime.split(':')[1]);
+                                            let sVal = sH < 12 ? sH + 24 + sM/60 : sH + sM/60;
+
+                                            let wH = parseInt(d.wakeTime.split(':')[0]);
+                                            let wM = parseInt(d.wakeTime.split(':')[1]);
+                                            let wVal = wH + wM/60;
+                                            
+                                            let durVal = d.duration / 60;
+                                            return { ...d, sVal, wVal, durVal };
+                                        });
+
+                                        const formatTooltipTime = (val, metric) => {
+                                            if (metric === 'duration') {
+                                                const h = Math.floor(val);
+                                                const m = Math.round((val - h) * 60);
+                                                return `${h}h${m > 0 ? String(m).padStart(2,'0') : ''}`;
+                                            }
+                                            let h = Math.floor(val) % 24;
+                                            let m = Math.round((val - Math.floor(val)) * 60);
+                                            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                                        };
+
+                                        return (
+                                            <div className="space-y-6">
+                                                <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
+                                                    
+                                                    {/* KẾT QUẢ TRUNG BÌNH */}
+                                                    <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.sDays} ngày có DL)</div>
+                                                    
+                                                    <div className="space-y-3 mb-5">
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
+                                                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Ngủ lúc</span>
+                                                            <span className="text-2xl font-black text-indigo-300">{avgRes.sleep}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
+                                                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Dậy lúc</span>
+                                                            <span className="text-2xl font-black text-orange-300">{avgRes.wake}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/10 shadow-sm transition-colors">
+                                                            <span className="text-xs font-black text-slate-300 uppercase tracking-widest">Thời lượng TB</span>
+                                                            <span className="text-2xl font-black text-emerald-400">{formatDuration(avgRes.dur)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ROW ĐIỀU KHIỂN NẰM DƯỚI KẾT QUẢ */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
+                                                            <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
+                                                                <button onClick={() => setSleepAvgDays(p => Math.max(1, p - sleepAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                <input type="number" value={sleepAvgDays} onChange={e => setSleepAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                <button onClick={() => setSleepAvgDays(p => p + sleepAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                            <button onClick={() => setSleepAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                                <LoaderIcon size={14} className="sm:hidden" />
+                                                                <span className="hidden sm:inline">Reset</span>
+                                                            </button>
+                                                            <button onClick={() => setSleepAvgStep(p => p === 1 ? 5 : p === 5 ? 30 : 1)} className="px-2 sm:px-3 py-2 bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-500/30 active:scale-95 transition-all whitespace-nowrap">
+                                                                Step: {sleepAvgStep}
+                                                            </button>
+                                                            <button onClick={() => setShowSleepChart(!showSleepChart)} className={`p-2 sm:px-3 sm:py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border active:scale-95 transition-all flex items-center gap-1 whitespace-nowrap ${showSleepChart ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' : 'bg-slate-700/50 text-slate-300 border-slate-600/50 hover:bg-slate-600'}`}>
+                                                                <ActivityIcon size={14}/> <span className="hidden sm:inline">Biểu đồ</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* KHU VỰC BIỂU ĐỒ NẰM TRONG THẺ */}
+                                                    {showSleepChart && (
+                                                        <div className="mt-5 pt-5 border-t border-slate-700/50 animate-[fadeScale_0.3s_ease-out]">
+                                                            <div className="flex bg-slate-900/50 p-1 rounded-xl w-full border border-slate-700/50 shadow-inner mb-4">
+                                                                <button onClick={() => setSleepChartMetric('sleepTime')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'sleepTime' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Giờ đi ngủ</button>
+                                                                <button onClick={() => setSleepChartMetric('wakeTime')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'wakeTime' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Giờ thức dậy</button>
+                                                                <button onClick={() => setSleepChartMetric('duration')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'duration' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Số giờ ngủ</button>
+                                                            </div>
+                                                            
+                                                            <div className="h-48 w-full mb-5">
+                                                                {LineChart && chartData.length > 0 ? (
+                                                                    <ResponsiveContainer width="100%" height="100%">
+                                                                        <LineChart data={chartData}>
+                                                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dy={10} />
+                                                                            <YAxis domain={['auto', 'auto']} tickFormatter={(v) => formatTooltipTime(v, sleepChartMetric)} stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dx={-10} width={35} />
+                                                                            <Tooltip 
+                                                                                contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155' }}
+                                                                                itemStyle={{ color: sleepChartMetric === 'sleepTime' ? '#818cf8' : sleepChartMetric === 'wakeTime' ? '#fb923c' : '#34d399', fontWeight: '900' }}
+                                                                                formatter={(value) => [formatTooltipTime(value, sleepChartMetric), sleepChartMetric === 'sleepTime' ? 'Giờ đi ngủ' : sleepChartMetric === 'wakeTime' ? 'Giờ thức dậy' : 'Số giờ ngủ']}
+                                                                                labelStyle={{ color: '#cbd5e1', fontWeight: 'bold', marginBottom: '4px' }}
+                                                                            />
+                                                                            <Line type="monotone" dataKey={sleepChartMetric === 'sleepTime' ? 'sVal' : sleepChartMetric === 'wakeTime' ? 'wVal' : 'durVal'} stroke={sleepChartMetric === 'sleepTime' ? '#6366f1' : sleepChartMetric === 'wakeTime' ? '#f97316' : '#10b981'} strokeWidth={3} dot={{ r: 3, fill: '#0f172a' }} activeDot={{ r: 5 }} />
+                                                                        </LineChart>
+                                                                    </ResponsiveContainer>
+                                                                ) : (
+                                                                    <div className="flex flex-col h-full items-center justify-center text-slate-500 font-bold text-sm gap-2">
+                                                                        <ActivityIcon size={24} className="opacity-30"/>
+                                                                        Không đủ dữ liệu vẽ biểu đồ
+                                                                    </div>
+                                                                )}
+                                                            </div>                                                   
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_sleep' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
+                                                        <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Thức khuya</p>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateSleep}%</span></div>
+                                                    </button>
+                                                    <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_wake' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
+                                                        <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Ngủ nướng</p>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateWake}%</span></div>
+                                                    </button>
+                                                </div>
                                             </div>
-                                        )}
+                                        );
+                                    })()}
                                         {appMode === 'workout' && (
                                             <div className="bg-orange-50 dark:bg-orange-500/10 p-6 rounded-3xl border border-orange-100 dark:border-orange-500/20 text-center flex flex-col items-center justify-center">
                                                 <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-3">Số ngày tập luyện</p>
@@ -1933,47 +2121,349 @@
                                         </div>
                                     </div>
 
+                                    {appMode === 'sleep' && (() => {
+                                        // 1. Logic tính Trung Bình
+                                        let sTimes = [], wTimes = [], tDur = 0, sDays = 0;
+                                        const eDate = selectedDate;
+                                        const sDate = new Date(selectedDate);
+                                        sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
+                                        const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
+                                        const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
+
+                                        Object.keys(sleepByDate).forEach(dKey => {
+                                            const p = dKey.split('/');
+                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            if (dNum >= sNum && dNum <= eNum) {
+                                                const sDay = sleepByDate[dKey] || [];
+                                                if (sDay.length > 0) {
+                                                    const main = sDay[sDay.length - 1];
+                                                    sTimes.push(main.sleepTime);
+                                                    wTimes.push(main.wakeTime);
+                                                    tDur += main.duration;
+                                                    sDays++;
+                                                }
+                                            }
+                                        });
+
+                                        const avgTime = (arr, isSleep) => {
+                                            if(!arr.length) return '--:--';
+                                            let totalM = 0;
+                                            arr.forEach(t => {
+                                                let [h, m] = t.split(':').map(Number);
+                                                if (isSleep && h < 12) h += 24; 
+                                                totalM += (h * 60) + m;
+                                            });
+                                            let avgM = Math.round(totalM / arr.length);
+                                            let h = Math.floor(avgM / 60) % 24;
+                                            let m = avgM % 60;
+                                            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                                        };
+
+                                        const avgRes = {
+                                            sleep: avgTime(sTimes, true),
+                                            wake: avgTime(wTimes, false),
+                                            dur: sDays > 0 ? Math.round(tDur / sDays) : 0,
+                                            sDays
+                                        };
+
+                                        // 2. Logic tính Biểu Đồ
+                                        let chartDataRaw = [];
+                                        const cSDate = new Date(selectedDate);
+                                        cSDate.setDate(cSDate.getDate() - sleepAvgDays + 1);
+                                        const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
+                                        
+                                        Object.keys(sleepByDate).forEach(dKey => {
+                                            const p = dKey.split('/');
+                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            if (dNum >= cSNum && dNum <= eNum) {
+                                                const sDay = sleepByDate[dKey] || [];
+                                                if (sDay.length > 0) {
+                                                    const main = sDay[sDay.length - 1];
+                                                    chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
+                                                }
+                                            }
+                                        });
+
+                                        chartDataRaw.sort((a, b) => a.dNum - b.dNum);
+                                        const chartData = chartDataRaw.map(d => {
+                                            let sH = parseInt(d.sleepTime.split(':')[0]);
+                                            let sM = parseInt(d.sleepTime.split(':')[1]);
+                                            let sVal = sH < 12 ? sH + 24 + sM/60 : sH + sM/60;
+
+                                            let wH = parseInt(d.wakeTime.split(':')[0]);
+                                            let wM = parseInt(d.wakeTime.split(':')[1]);
+                                            let wVal = wH + wM/60;
+                                            
+                                            let durVal = d.duration / 60;
+                                            return { ...d, sVal, wVal, durVal };
+                                        });
+
+                                        const formatTooltipTime = (val, metric) => {
+                                            if (metric === 'duration') {
+                                                const h = Math.floor(val);
+                                                const m = Math.round((val - h) * 60);
+                                                return `${h}h${m > 0 ? String(m).padStart(2,'0') : ''}`;
+                                            }
+                                            let h = Math.floor(val) % 24;
+                                            let m = Math.round((val - Math.floor(val)) * 60);
+                                            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                                        };
+
+                                        return (
+                                            <div className="space-y-6">
+                                                <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
+                                                    
+                                                    {/* KẾT QUẢ TRUNG BÌNH */}
+                                                    <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.sDays} ngày có DL)</div>
+                                                    
+                                                    <div className="space-y-3 mb-5">
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
+                                                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Ngủ lúc</span>
+                                                            <span className="text-2xl font-black text-indigo-300">{avgRes.sleep}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
+                                                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Dậy lúc</span>
+                                                            <span className="text-2xl font-black text-orange-300">{avgRes.wake}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/10 shadow-sm transition-colors">
+                                                            <span className="text-xs font-black text-slate-300 uppercase tracking-widest">Thời lượng TB</span>
+                                                            <span className="text-2xl font-black text-emerald-400">{formatDuration(avgRes.dur)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ROW ĐIỀU KHIỂN NẰM DƯỚI KẾT QUẢ */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
+                                                            <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
+                                                                <button onClick={() => setSleepAvgDays(p => Math.max(1, p - sleepAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                <input type="number" value={sleepAvgDays} onChange={e => setSleepAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                <button onClick={() => setSleepAvgDays(p => p + sleepAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                            <button onClick={() => setSleepAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                                <LoaderIcon size={14} className="sm:hidden" />
+                                                                <span className="hidden sm:inline">Reset</span>
+                                                            </button>
+                                                            <button onClick={() => setSleepAvgStep(p => p === 1 ? 5 : p === 5 ? 30 : 1)} className="px-2 sm:px-3 py-2 bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-500/30 active:scale-95 transition-all whitespace-nowrap">
+                                                                Step: {sleepAvgStep}
+                                                            </button>
+                                                            <button onClick={() => setShowSleepChart(!showSleepChart)} className={`p-2 sm:px-3 sm:py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border active:scale-95 transition-all flex items-center gap-1 whitespace-nowrap ${showSleepChart ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' : 'bg-slate-700/50 text-slate-300 border-slate-600/50 hover:bg-slate-600'}`}>
+                                                                <ActivityIcon size={14}/> <span className="hidden sm:inline">Biểu đồ</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* KHU VỰC BIỂU ĐỒ NẰM TRONG THẺ */}
+                                                    {showSleepChart && (
+                                                        <div className="mt-5 pt-5 border-t border-slate-700/50 animate-[fadeScale_0.3s_ease-out]">
+                                                            <div className="flex bg-slate-900/50 p-1 rounded-xl w-full border border-slate-700/50 shadow-inner mb-4">
+                                                                <button onClick={() => setSleepChartMetric('sleepTime')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'sleepTime' ? 'bg-indigo-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Giờ đi ngủ</button>
+                                                                <button onClick={() => setSleepChartMetric('wakeTime')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'wakeTime' ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Giờ thức dậy</button>
+                                                                <button onClick={() => setSleepChartMetric('duration')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${sleepChartMetric === 'duration' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Số giờ ngủ</button>
+                                                            </div>
+                                                            
+                                                            <div className="h-48 w-full mb-5">
+                                                                {LineChart && chartData.length > 0 ? (
+                                                                    <ResponsiveContainer width="100%" height="100%">
+                                                                        <LineChart data={chartData}>
+                                                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dy={10} />
+                                                                            <YAxis domain={['auto', 'auto']} tickFormatter={(v) => formatTooltipTime(v, sleepChartMetric)} stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dx={-10} width={35} />
+                                                                            <Tooltip 
+                                                                                contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155' }}
+                                                                                itemStyle={{ color: sleepChartMetric === 'sleepTime' ? '#818cf8' : sleepChartMetric === 'wakeTime' ? '#fb923c' : '#34d399', fontWeight: '900' }}
+                                                                                formatter={(value) => [formatTooltipTime(value, sleepChartMetric), sleepChartMetric === 'sleepTime' ? 'Giờ đi ngủ' : sleepChartMetric === 'wakeTime' ? 'Giờ thức dậy' : 'Số giờ ngủ']}
+                                                                                labelStyle={{ color: '#cbd5e1', fontWeight: 'bold', marginBottom: '4px' }}
+                                                                            />
+                                                                            <Line type="monotone" dataKey={sleepChartMetric === 'sleepTime' ? 'sVal' : sleepChartMetric === 'wakeTime' ? 'wVal' : 'durVal'} stroke={sleepChartMetric === 'sleepTime' ? '#6366f1' : sleepChartMetric === 'wakeTime' ? '#f97316' : '#10b981'} strokeWidth={3} dot={{ r: 3, fill: '#0f172a' }} activeDot={{ r: 5 }} />
+                                                                        </LineChart>
+                                                                    </ResponsiveContainer>
+                                                                ) : (
+                                                                    <div className="flex flex-col h-full items-center justify-center text-slate-500 font-bold text-sm gap-2">
+                                                                        <ActivityIcon size={24} className="opacity-30"/>
+                                                                        Không đủ dữ liệu vẽ biểu đồ
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_sleep' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
+                                                        <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Thức khuya</p>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateSleep}%</span></div>
+                                                    </button>
+                                                    <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_wake' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
+                                                        <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Ngủ nướng</p>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateWake}%</span></div>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
                                         <div className="flex justify-between items-center mb-5">
                                             <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tháng</h3>
-                                            {(appMode === 'macro' || appMode === 'sleep') && (
-                                                <button onClick={() => { setShowAvgModal(true); setAvgResult(null); }} className="text-[10px] font-black text-blue-500 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"><CalendarIcon size={12}/> TÍNH TB</button>
-                                            )}
-                                        </div>
+                                            </div>
                                         
-                                        {appMode === 'macro' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('protein')} className={`bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'protein' ? 'ring-2 ring-red-500 border-transparent shadow-lg shadow-red-500/20' : 'border-red-100 dark:border-red-500/20'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-red-100 dark:bg-red-500/20"><div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div></div>
-                                                    <p className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3">Thiếu đạm</p>
-                                                    <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-red-600 dark:text-red-500 leading-none">{monthThieuDam}</span><span className="text-[10px] font-bold text-red-400 dark:text-red-500 uppercase tracking-widest">/ {elapsedDays}</span></div>
-                                                    <div className="bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-red-100 dark:border-red-500/20 inline-block"><span className="text-sm font-black text-red-500">{pctThieuDam}%</span></div>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('calorie')} className={`bg-orange-50 dark:bg-orange-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'calorie' ? 'ring-2 ring-orange-500 border-transparent shadow-lg shadow-orange-500/20' : 'border-orange-100 dark:border-orange-500/20'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-orange-100 dark:bg-orange-500/20"><div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div></div>
-                                                    <p className="text-[10px] font-black text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-3">Cheatday</p>
-                                                    <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-orange-600 dark:text-orange-500 leading-none">{monthCheatDay}</span><span className="text-[10px] font-bold text-orange-400 dark:text-orange-500 uppercase tracking-widest">/ {elapsedDays}</span></div>
-                                                    <div className="bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-orange-100 dark:border-orange-500/20 inline-block"><span className="text-sm font-black text-orange-500">{pctCheatDay}%</span></div>
-                                                </button>
-                                            </div>
-                                        )}
+                                        {appMode === 'macro' && (() => {
+                                            // 1. Logic tính Trung Bình Macro
+                                            let tKcal = 0, tPro = 0, mDays = 0;
+                                            const eDate = selectedDate;
+                                            const sDate = new Date(selectedDate);
+                                            sDate.setDate(sDate.getDate() - macroAvgDays + 1);
+                                            const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
+                                            const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
 
-                                        {appMode === 'sleep' && (
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button onClick={() => handleFilterClick('late_sleep')} className={`bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_sleep' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
-                                                    <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Thức khuya</p>
-                                                    <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
-                                                    <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateSleep}%</span></div>
-                                                </button>
-                                                <button onClick={() => handleFilterClick('late_wake')} className={`bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_wake' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
-                                                    <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
-                                                    <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Ngủ nướng</p>
-                                                    <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
-                                                    <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateWake}%</span></div>
-                                                </button>
-                                            </div>
-                                        )}
+                                            Object.keys(foodsByDate).forEach(dKey => {
+                                                const p = dKey.split('/');
+                                                const dNum = parseInt(p[2] + p[1] + p[0]);
+                                                if (dNum >= sNum && dNum <= eNum) {
+                                                    const fDay = foodsByDate[dKey] || [];
+                                                    if (fDay.length > 0) {
+                                                        const tots = calculateTotals(fDay);
+                                                        tKcal += Math.round(tots.kcal);
+                                                        tPro += Number(tots.protein);
+                                                        mDays++;
+                                                    }
+                                                }
+                                            });
+
+                                            const avgRes = {
+                                                kcal: mDays > 0 ? Math.round(tKcal / mDays) : 0,
+                                                pro: mDays > 0 ? cleanNum(tPro / mDays) : 0,
+                                                mDays
+                                            };
+
+                                            // 2. Logic tính Biểu Đồ Macro
+                                            let chartDataRaw = [];
+                                            const cSDate = new Date(selectedDate);
+                                            cSDate.setDate(cSDate.getDate() - macroAvgDays + 1);
+                                            const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
+                                            
+                                            Object.keys(foodsByDate).forEach(dKey => {
+                                                const p = dKey.split('/');
+                                                const dNum = parseInt(p[2] + p[1] + p[0]);
+                                                if (dNum >= cSNum && dNum <= eNum) {
+                                                    const fDay = foodsByDate[dKey] || [];
+                                                    if (fDay.length > 0) {
+                                                        const tots = calculateTotals(fDay);
+                                                        chartDataRaw.push({ date: dKey.substring(0, 5), kcal: Math.round(tots.kcal), protein: Number(cleanNum(tots.protein)), dNum });
+                                                    }
+                                                }
+                                            });
+
+                                            chartDataRaw.sort((a, b) => a.dNum - b.dNum);
+                                            const chartData = chartDataRaw;
+
+                                            return (
+                                                <div className="space-y-6">
+                                                    <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
+                                                        
+                                                        {/* KẾT QUẢ TRUNG BÌNH */}
+                                                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.mDays} ngày có DL)</div>
+                                                        
+                                                        <div className="grid grid-cols-2 gap-4 mb-5">
+                                                            <div className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl border border-white/5 transition-colors">
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Kcal TB</span>
+                                                                <span className="text-3xl font-black text-emerald-400">{avgRes.kcal}</span>
+                                                            </div>
+                                                            <div className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl border border-white/5 transition-colors">
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Protein TB</span>
+                                                                <span className="text-3xl font-black text-red-400">{avgRes.pro}<span className="text-sm ml-1 text-red-400/70">g</span></span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* ROW ĐIỀU KHIỂN NẰM DƯỚI KẾT QUẢ */}
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
+                                                                <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
+                                                                    <button onClick={() => setMacroAvgDays(p => Math.max(1, p - macroAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                    <input type="number" value={macroAvgDays} onChange={e => setMacroAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                    <button onClick={() => setMacroAvgDays(p => p + macroAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                                </div>
+                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center gap-1.5 flex-1 justify-end">
+                                                                <button onClick={() => setMacroAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                                    <LoaderIcon size={14} className="sm:hidden" />
+                                                                    <span className="hidden sm:inline">Reset</span>
+                                                                </button>
+                                                                <button onClick={() => setMacroAvgStep(p => p === 1 ? 5 : p === 5 ? 30 : 1)} className="px-2 sm:px-3 py-2 bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-500/30 active:scale-95 transition-all whitespace-nowrap">
+                                                                    Step: {macroAvgStep}
+                                                                </button>
+                                                                <button onClick={() => setShowMacroChart(!showMacroChart)} className={`p-2 sm:px-3 sm:py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border active:scale-95 transition-all flex items-center gap-1 whitespace-nowrap ${showMacroChart ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' : 'bg-slate-700/50 text-slate-300 border-slate-600/50 hover:bg-slate-600'}`}>
+                                                                    <ActivityIcon size={14}/> <span className="hidden sm:inline">Biểu đồ</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* KHU VỰC BIỂU ĐỒ NẰM TRONG THẺ */}
+                                                        {showMacroChart && (
+                                                            <div className="mt-5 pt-5 border-t border-slate-700/50 animate-[fadeScale_0.3s_ease-out]">
+                                                                <div className="flex bg-slate-900/50 p-1 rounded-xl w-full border border-slate-700/50 shadow-inner mb-4">
+                                                                    <button onClick={() => setMacroChartMetric('kcal')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${macroChartMetric === 'kcal' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Calories</button>
+                                                                    <button onClick={() => setMacroChartMetric('protein')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${macroChartMetric === 'protein' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Protein</button>
+                                                                </div>
+                                                                
+                                                                <div className="h-48 w-full mb-2">
+                                                                    {LineChart && chartData.length > 0 ? (
+                                                                        <ResponsiveContainer width="100%" height="100%">
+                                                                            <LineChart data={chartData}>
+                                                                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                                                                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dy={10} />
+                                                                                <YAxis stroke="#94a3b8" fontSize={9} axisLine={false} tickLine={false} dx={-10} width={35} />
+                                                                                <Tooltip 
+                                                                                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '12px', border: '1px solid #334155' }}
+                                                                                    itemStyle={{ color: macroChartMetric === 'kcal' ? '#34d399' : '#f87171', fontWeight: '900' }}
+                                                                                    formatter={(value) => [value, macroChartMetric === 'kcal' ? 'Kcal' : 'Protein (g)']}
+                                                                                    labelStyle={{ color: '#cbd5e1', fontWeight: 'bold', marginBottom: '4px' }}
+                                                                                />
+                                                                                <Line type="monotone" dataKey={macroChartMetric} stroke={macroChartMetric === 'kcal' ? '#10b981' : '#ef4444'} strokeWidth={3} dot={{ r: 3, fill: '#0f172a' }} activeDot={{ r: 5 }} />
+                                                                            </LineChart>
+                                                                        </ResponsiveContainer>
+                                                                    ) : (
+                                                                        <div className="flex flex-col h-full items-center justify-center text-slate-500 font-bold text-sm gap-2">
+                                                                            <ActivityIcon size={24} className="opacity-30"/>
+                                                                            Không đủ dữ liệu vẽ biểu đồ
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <button onClick={() => handleFilterClick('protein')} className={`w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'protein' ? 'ring-2 ring-red-500 border-transparent shadow-lg shadow-red-500/20' : 'border-red-100 dark:border-red-500/20'}`}>
+                                                            <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-red-100 dark:bg-red-500/20"><div className="absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t" style={{height: `${pctThieuDam}%`}}></div></div>
+                                                            <p className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3">Thiếu đạm</p>
+                                                            <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-red-600 dark:text-red-500 leading-none">{monthThieuDam}</span><span className="text-[10px] font-bold text-red-400 dark:text-red-500 uppercase tracking-widest">/ {elapsedDays}</span></div>
+                                                            <div className="bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-red-100 dark:border-red-500/20 inline-block"><span className="text-sm font-black text-red-500">{pctThieuDam}%</span></div>
+                                                        </button>
+                                                        <button onClick={() => handleFilterClick('calorie')} className={`w-full bg-orange-50 dark:bg-orange-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'calorie' ? 'ring-2 ring-orange-500 border-transparent shadow-lg shadow-orange-500/20' : 'border-orange-100 dark:border-orange-500/20'}`}>
+                                                            <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-orange-100 dark:bg-orange-500/20"><div className="absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t" style={{height: `${pctCheatDay}%`}}></div></div>
+                                                            <p className="text-[10px] font-black text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-3">Cheatday</p>
+                                                            <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-orange-600 dark:text-orange-500 leading-none">{monthCheatDay}</span><span className="text-[10px] font-bold text-orange-400 dark:text-orange-500 uppercase tracking-widest">/ {elapsedDays}</span></div>
+                                                            <div className="bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-orange-100 dark:border-orange-500/20 inline-block"><span className="text-sm font-black text-orange-500">{pctCheatDay}%</span></div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                      
 
                                         {appMode === 'workout' && (
                                             <div className="bg-orange-50 dark:bg-orange-500/10 p-6 rounded-3xl border border-orange-100 dark:border-orange-500/20 text-center relative overflow-hidden flex flex-col items-center justify-center">
