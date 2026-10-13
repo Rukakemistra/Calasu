@@ -374,6 +374,7 @@
                 const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_url') || defaultScriptUrl);
                 const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || defaultGeminiKey);
                 const [isSyncing, setIsSyncing] = useState(false);
+                const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false); // Biến quản lý trạng thái bật/tắt đồng bộ
                 
                 useEffect(() => { localStorage.setItem('gas_url', gasUrl); }, [gasUrl]);
                 useEffect(() => { localStorage.setItem('gemini_api_key', geminiApiKey); }, [geminiApiKey]);
@@ -983,13 +984,14 @@
                     setIsSyncing(false);
                 };
 
-                useEffect(() => { const gUrl = localStorage.getItem('gas_url') || defaultScriptUrl; if (gUrl) handleSyncPull(gUrl); }, []);
+                
 
                 const physicalSyncTimerRef = useRef(null);
                 useEffect(() => {
+                    if (!isAutoSyncEnabled) return; // Nếu nút Đồng bộ trên Header chưa bật thì cấm tuyệt đối Push data
                     if (physicalSyncTimerRef.current) clearTimeout(physicalSyncTimerRef.current);
                     physicalSyncTimerRef.current = setTimeout(() => { handleSyncPush(true); }, 3000);
-                }, [foodsByDate, sleepByDate, workoutsByDate, statsByDate]);
+                }, [foodsByDate, sleepByDate, workoutsByDate, statsByDate, isAutoSyncEnabled]);
 
                 const handleAddFood = (e) => {
                     e.preventDefault(); if (!formData.name) return;
@@ -1193,6 +1195,9 @@
                                     )}
                                     <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
                                         {isDarkMode ? <SunIcon size={18}/> : <MoonIcon size={18}/>}
+                                    </button>
+                                    <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); }} className={`p-2.5 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-200 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
+                                        <DownloadIcon size={18} />
                                     </button>
                                     <button onClick={() => setShowSettings(true)} className="p-2.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95 transition-all shadow-sm">
                                         <CloudIcon size={18} />
