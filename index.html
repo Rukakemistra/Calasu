@@ -486,12 +486,14 @@
                 const [sleepChartMetric, setSleepChartMetric] = useState('sleepTime');
                 const [sleepChartDays, setSleepChartDays] = useState(15);
                 const [sleepChartStep, setSleepChartStep] = useState(5);
+                const [sleepAnalyzeMonth, setSleepAnalyzeMonth] = useState(false);
                 
                 // State cho tính năng Trung bình & Biểu đồ của phần Macro
                 const [macroAvgDays, setMacroAvgDays] = useState(7);
                 const [macroAvgStep, setMacroAvgStep] = useState(1);
                 const [showMacroChart, setShowMacroChart] = useState(false);
                 const [macroChartMetric, setMacroChartMetric] = useState('kcal');
+                const [macroAnalyzeMonth, setMacroAnalyzeMonth] = useState(false);
 
                 const applyAvgPreset = (mode, offset) => {
                     setAvgPresetMode(mode); setAvgOffset(offset); setAvgResult(null);
@@ -701,8 +703,16 @@
                 };
 
                 const [todoCache, setTodoCache] = useState(() => loadSafeJSON('work_todos'));
-                const [todoData, setTodoData] = useState({ must: [], should: [], can: [] });
-                const todoTimerRef = useRef(null);
+                const todoData = todoCache[dateKey] || { must: [], should: [], can: [] };
+                const setTodoData = (updater) => {
+                    const dKey = formatDate(selectedDate);
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        const next = typeof updater === 'function' ? updater(curr) : updater;
+                        return { ...prev, [dKey]: next };
+                    });
+                };
+                const todoTimerRef = useRef({});
                 const [urgentList, setUrgentList] = useState(() => { try { const saved = localStorage.getItem('work_urgents'); return saved ? JSON.parse(saved) : []; } catch(e) { return []; } });
                 const [scratchpad, setScratchpad] = useState(() => localStorage.getItem('work_scratchpad') || '');
                 const scratchpadTimerRef = useRef(null);
@@ -710,56 +720,41 @@
                 useEffect(() => { localStorage.setItem('work_todos', JSON.stringify(todoCache)); }, [todoCache]);
                 useEffect(() => { localStorage.setItem('work_urgents', JSON.stringify(urgentList)); }, [urgentList]);
 
-                const fetchWorkData = async () => {
-                    const dKey = formatDate(selectedDate);
-                    if (todoCache[dKey]) { setTodoData(todoCache[dKey]); } else { setTodoData({ must: [], should: [], can: [] }); }
-                    try {
-                        const res = await fetch(`${gasUrl}?type=WORK&date=${dKey}`);
-                        const result = await res.json();
-                        
-                        if (result.status === 'success' && result.data) {
-                            if (result.data.todo) {
-                                setTodoData({ must: result.data.todo.must || [], should: result.data.todo.should || [], can: result.data.todo.can || [] });
-                                setTodoCache(prev => ({...prev, [dKey]: { must: result.data.todo.must || [], should: result.data.todo.should || [], can: result.data.todo.can || [] }}));
-                            }
-                            if (result.data.urgent) { setUrgentList(result.data.urgent || []); } else { setUrgentList([]); }
-                            if (result.data.scratchpad !== undefined) {
-                                setScratchpad(result.data.scratchpad); localStorage.setItem('work_scratchpad', result.data.scratchpad);
-                            }
-                        } else { setUrgentList([]); }
-                    } catch (e) { console.error('Fetch WORK error', e); }
+                const scheduleTodoSync = (data, targetDateKey = null) => {
+                    const dKey = targetDateKey || formatDate(selectedDate);
+                    if (todoTimerRef.current[dKey]) clearTimeout(todoTimerRef.current[dKey]);
+                    todoTimerRef.current[dKey] = setTimeout(async () => {
+                        try { await fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'TODO', date: dKey, data }) }); } catch (e) {}
+                    }, 800);
                 };
-                
-                useEffect(() => { if (appMode === 'work') fetchWorkData(); }, [selectedDate, appMode]);
 
                 const handleAddTodo = (category, text) => {
                     const newTask = { id: Date.now().toString(), text, done: false };
                     const dKey = formatDate(selectedDate);
-                    setTodoData(prev => {
-                        const nData = { ...prev, [category]: [...(prev[category] || []), newTask] };
-                        scheduleTodoSync(nData); setTodoCache(c => ({...c, [dKey]: nData})); return nData;
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        const nData = { ...curr, [category]: [...(curr[category] || []), newTask] };
+                        scheduleTodoSync(nData, dKey);
+                        return { ...prev, [dKey]: nData };
                     });
                 };
                 const handleToggleTodo = (category, taskId) => {
                     const dKey = formatDate(selectedDate);
-                    setTodoData(prev => {
-                        const nData = { ...prev, [category]: (prev[category] || []).map(t => t.id === taskId ? { ...t, done: !t.done } : t) };
-                        scheduleTodoSync(nData); setTodoCache(c => ({...c, [dKey]: nData})); return nData;
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        const nData = { ...curr, [category]: (curr[category] || []).map(t => t.id === taskId ? { ...t, done: !t.done } : t) };
+                        scheduleTodoSync(nData, dKey);
+                        return { ...prev, [dKey]: nData };
                     });
                 };
                 const handleDeleteTodo = (category, taskId) => {
                     const dKey = formatDate(selectedDate);
-                    setTodoData(prev => {
-                        const nData = { ...prev, [category]: (prev[category] || []).filter(t => t.id !== taskId) };
-                        scheduleTodoSync(nData); setTodoCache(c => ({...c, [dKey]: nData})); return nData;
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        const nData = { ...curr, [category]: (curr[category] || []).filter(t => t.id !== taskId) };
+                        scheduleTodoSync(nData, dKey);
+                        return { ...prev, [dKey]: nData };
                     });
-                };
-
-                const scheduleTodoSync = (data) => {
-                    if (todoTimerRef.current) clearTimeout(todoTimerRef.current);
-                    todoTimerRef.current = setTimeout(async () => {
-                        try { await fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'TODO', date: formatDate(selectedDate), data }) }); } catch (e) {}
-                    }, 1000);
                 };
 
                 const handleAddUrgent = (content) => {
@@ -777,7 +772,7 @@
                     if (scratchpadTimerRef.current) clearTimeout(scratchpadTimerRef.current);
                     scratchpadTimerRef.current = setTimeout(() => {
                         fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'SCRATCHPAD', text: val }) }).catch(e=>console.error(e));
-                    }, 2000);
+                    }, 1500);
                 };
                 const handleClearScratchpad = () => { handleUpdateScratchpad(''); };
 
@@ -972,12 +967,36 @@
                                    for (let i = 0; i < data.data.stat.length; i++) {
                                        const r = data.data.stat[i]; if (!r[0] || String(r[0]).toLowerCase() === 'date') continue;
                                        const dClean = parseRawDate(r[0]); if(!dClean) continue;
+                                       const rawMood = String(r[1] ?? '').trim();
+                                       const parsedMood = (rawMood !== '' && !isNaN(Number(rawMood))) ? Number(rawMood) : 3;
                                        // Parse thêm thuộc tính musicUrl ở cột thứ 11 (index 10)
-                                       nS[dClean] = { mood: Number(r[1])||3, outing: Number(r[2])||1, summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||'') };
+                                       nS[dClean] = { mood: parsedMood, outing: Number(r[2])||1, summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||'') };
                                    }
                                    return nS;
                                 });
                             }
+                            try {
+                                const curDKey = formatDate(selectedDate);
+                                const wRes = await fetch(`${targetUrl}?type=WORK&date=${curDKey}`);
+                                const wJson = await wRes.json();
+                                if (wJson.status === 'success' && wJson.data) {
+                                    if (wJson.data.todo) {
+                                        setTodoCache(prev => ({
+                                            ...prev,
+                                            [curDKey]: {
+                                                must: wJson.data.todo.must || [],
+                                                should: wJson.data.todo.should || [],
+                                                can: wJson.data.todo.can || []
+                                            }
+                                        }));
+                                    }
+                                    if (wJson.data.urgent) setUrgentList(wJson.data.urgent || []);
+                                    if (wJson.data.scratchpad !== undefined) {
+                                        setScratchpad(wJson.data.scratchpad);
+                                        localStorage.setItem('work_scratchpad', wJson.data.scratchpad);
+                                    }
+                                }
+                            } catch (errWork) {}
                             if (typeof autoUrl !== 'string') showToast('☁️ Kéo dữ liệu Máy chủ thành công!', 'success');
                         }
                     } catch (e) { if (typeof autoUrl !== 'string') showToast('❌ Lỗi kết nối', 'error'); }
@@ -1831,25 +1850,37 @@
                                             </div>
                                         )}
                                         {appMode === 'sleep' && (() => {
-                                        // 1. Logic tính Trung Bình
+                                        // 1. Chuẩn hóa khoảng ngày (Theo Tháng Đang Xem hoặc Trong X Ngày Qua tính từ Hôm Nay)
                                         let sTimes = [], wTimes = [], tDur = 0, sDays = 0;
-                                        const eDate = selectedDate;
-                                        const sDate = new Date(selectedDate);
-                                        sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
-                                        const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
-                                        const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
+                                        let sNum = 0, eNum = 0;
+                                        const viewMonthNum = currentMonthStart.getMonth() + 1;
+                                        const viewYearNum = currentMonthStart.getFullYear();
 
+                                        if (sleepAnalyzeMonth) {
+                                            sNum = viewYearNum * 10000 + viewMonthNum * 100 + 1;
+                                            eNum = viewYearNum * 10000 + viewMonthNum * 100 + 31;
+                                        } else {
+                                            const todayAnchor = new Date();
+                                            const sDate = new Date(todayAnchor);
+                                            sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
+                                            sNum = parseDateToNumber(formatDate(sDate));
+                                            eNum = parseDateToNumber(formatDate(todayAnchor));
+                                        }
+
+                                        let chartDataRaw = [];
                                         Object.keys(sleepByDate).forEach(dKey => {
-                                            const p = dKey.split('/');
-                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            const dNum = parseDateToNumber(dKey);
                                             if (dNum >= sNum && dNum <= eNum) {
                                                 const sDay = sleepByDate[dKey] || [];
                                                 if (sDay.length > 0) {
                                                     const main = sDay[sDay.length - 1];
-                                                    sTimes.push(main.sleepTime);
-                                                    wTimes.push(main.wakeTime);
-                                                    tDur += main.duration;
-                                                    sDays++;
+                                                    if (main?.sleepTime && main?.wakeTime) {
+                                                        sTimes.push(main.sleepTime);
+                                                        wTimes.push(main.wakeTime);
+                                                        tDur += main.duration;
+                                                        sDays++;
+                                                        chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
+                                                    }
                                                 }
                                             }
                                         });
@@ -1875,24 +1906,7 @@
                                             sDays
                                         };
 
-                                        // 2. Logic tính Biểu Đồ
-                                        let chartDataRaw = [];
-                                        const cSDate = new Date(selectedDate);
-                                        cSDate.setDate(cSDate.getDate() - sleepAvgDays + 1);
-                                        const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
-                                        
-                                        Object.keys(sleepByDate).forEach(dKey => {
-                                            const p = dKey.split('/');
-                                            const dNum = parseInt(p[2] + p[1] + p[0]);
-                                            if (dNum >= cSNum && dNum <= eNum) {
-                                                const sDay = sleepByDate[dKey] || [];
-                                                if (sDay.length > 0) {
-                                                    const main = sDay[sDay.length - 1];
-                                                    chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
-                                                }
-                                            }
-                                        });
-
+                                        // 2. Sắp xếp dữ liệu Biểu Đồ theo đúng thứ tự thời gian
                                         chartDataRaw.sort((a, b) => a.dNum - b.dNum);
                                         const chartData = chartDataRaw.map(d => {
                                             let sH = parseInt(d.sleepTime.split(':')[0]);
@@ -1922,8 +1936,15 @@
                                             <div className="space-y-6">
                                                 <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
                                                     
-                                                    {/* KẾT QUẢ TRUNG BÌNH */}
-                                                    <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.sDays} ngày có DL)</div>
+                                                    {/* KẾT QUẢ TRUNG BÌNH & NÚT PHÂN TÍCH THÁNG NÀY */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                            <CheckCircleIcon size={14}/> {sleepAnalyzeMonth ? `Tháng ${String(viewMonthNum).padStart(2,'0')}/${viewYearNum}` : `${sleepAvgDays} ngày qua`} ({avgRes.sDays} ngày có DL)
+                                                        </div>
+                                                        <button onClick={() => setSleepAnalyzeMonth(!sleepAnalyzeMonth)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 flex items-center gap-1.5 ${sleepAnalyzeMonth ? 'bg-indigo-500 text-white border-indigo-400 shadow-md shadow-indigo-500/30' : 'bg-white/5 text-indigo-300 border-indigo-500/30 hover:bg-white/10'}`}>
+                                                            <CalendarIcon size={12}/> Phân tích tháng này
+                                                        </button>
+                                                    </div>
                                                     
                                                     <div className="space-y-3 mb-5">
                                                         <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
@@ -1944,16 +1965,16 @@
                                                     <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
-                                                            <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
-                                                                <button onClick={() => setSleepAvgDays(p => Math.max(1, p - sleepAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
-                                                                <input type="number" value={sleepAvgDays} onChange={e => setSleepAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
-                                                                <button onClick={() => setSleepAvgDays(p => p + sleepAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                            <div className={`flex items-center bg-slate-700/50 rounded-xl p-1 border transition-opacity ${sleepAnalyzeMonth ? 'border-slate-700 opacity-50' : 'border-slate-600/50'}`}>
+                                                                <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(p => Math.max(1, p - sleepAvgStep)); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                <input type="number" value={sleepAvgDays} onChange={e => { setSleepAnalyzeMonth(false); setSleepAvgDays(parseInt(e.target.value)||1); }} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(p => p + sleepAvgStep); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
                                                             </div>
                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
                                                         </div>
                                                         
                                                         <div className="flex items-center gap-1.5 flex-1 justify-end">
-                                                            <button onClick={() => setSleepAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                            <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(1); }} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
                                                                 <LoaderIcon size={14} className="sm:hidden" />
                                                                 <span className="hidden sm:inline">Reset</span>
                                                             </button>
@@ -1997,7 +2018,7 @@
                                                                         Không đủ dữ liệu vẽ biểu đồ
                                                                     </div>
                                                                 )}
-                                                            </div>                                                   
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -2127,25 +2148,37 @@
                                     </div>
 
                                     {appMode === 'sleep' && (() => {
-                                        // 1. Logic tính Trung Bình
+                                        // 1. Chuẩn hóa khoảng ngày (Theo Tháng Đang Xem hoặc Trong X Ngày Qua tính từ Hôm Nay)
                                         let sTimes = [], wTimes = [], tDur = 0, sDays = 0;
-                                        const eDate = selectedDate;
-                                        const sDate = new Date(selectedDate);
-                                        sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
-                                        const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
-                                        const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
+                                        let sNum = 0, eNum = 0;
+                                        const viewMonthNum = currentMonthStart.getMonth() + 1;
+                                        const viewYearNum = currentMonthStart.getFullYear();
 
+                                        if (sleepAnalyzeMonth) {
+                                            sNum = viewYearNum * 10000 + viewMonthNum * 100 + 1;
+                                            eNum = viewYearNum * 10000 + viewMonthNum * 100 + 31;
+                                        } else {
+                                            const todayAnchor = new Date();
+                                            const sDate = new Date(todayAnchor);
+                                            sDate.setDate(sDate.getDate() - sleepAvgDays + 1);
+                                            sNum = parseDateToNumber(formatDate(sDate));
+                                            eNum = parseDateToNumber(formatDate(todayAnchor));
+                                        }
+
+                                        let chartDataRaw = [];
                                         Object.keys(sleepByDate).forEach(dKey => {
-                                            const p = dKey.split('/');
-                                            const dNum = parseInt(p[2] + p[1] + p[0]);
+                                            const dNum = parseDateToNumber(dKey);
                                             if (dNum >= sNum && dNum <= eNum) {
                                                 const sDay = sleepByDate[dKey] || [];
                                                 if (sDay.length > 0) {
                                                     const main = sDay[sDay.length - 1];
-                                                    sTimes.push(main.sleepTime);
-                                                    wTimes.push(main.wakeTime);
-                                                    tDur += main.duration;
-                                                    sDays++;
+                                                    if (main?.sleepTime && main?.wakeTime) {
+                                                        sTimes.push(main.sleepTime);
+                                                        wTimes.push(main.wakeTime);
+                                                        tDur += main.duration;
+                                                        sDays++;
+                                                        chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
+                                                    }
                                                 }
                                             }
                                         });
@@ -2171,24 +2204,7 @@
                                             sDays
                                         };
 
-                                        // 2. Logic tính Biểu Đồ
-                                        let chartDataRaw = [];
-                                        const cSDate = new Date(selectedDate);
-                                        cSDate.setDate(cSDate.getDate() - sleepAvgDays + 1);
-                                        const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
-                                        
-                                        Object.keys(sleepByDate).forEach(dKey => {
-                                            const p = dKey.split('/');
-                                            const dNum = parseInt(p[2] + p[1] + p[0]);
-                                            if (dNum >= cSNum && dNum <= eNum) {
-                                                const sDay = sleepByDate[dKey] || [];
-                                                if (sDay.length > 0) {
-                                                    const main = sDay[sDay.length - 1];
-                                                    chartDataRaw.push({ date: dKey.substring(0, 5), sleepTime: main.sleepTime, wakeTime: main.wakeTime, duration: main.duration, dNum });
-                                                }
-                                            }
-                                        });
-
+                                        // 2. Sắp xếp dữ liệu Biểu Đồ theo đúng thứ tự thời gian
                                         chartDataRaw.sort((a, b) => a.dNum - b.dNum);
                                         const chartData = chartDataRaw.map(d => {
                                             let sH = parseInt(d.sleepTime.split(':')[0]);
@@ -2218,8 +2234,15 @@
                                             <div className="space-y-6">
                                                 <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
                                                     
-                                                    {/* KẾT QUẢ TRUNG BÌNH */}
-                                                    <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.sDays} ngày có DL)</div>
+                                                    {/* KẾT QUẢ TRUNG BÌNH & NÚT PHÂN TÍCH THÁNG NÀY */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                            <CheckCircleIcon size={14}/> {sleepAnalyzeMonth ? `Tháng ${String(viewMonthNum).padStart(2,'0')}/${viewYearNum}` : `${sleepAvgDays} ngày qua`} ({avgRes.sDays} ngày có DL)
+                                                        </div>
+                                                        <button onClick={() => setSleepAnalyzeMonth(!sleepAnalyzeMonth)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 flex items-center gap-1.5 ${sleepAnalyzeMonth ? 'bg-indigo-500 text-white border-indigo-400 shadow-md shadow-indigo-500/30' : 'bg-white/5 text-indigo-300 border-indigo-500/30 hover:bg-white/10'}`}>
+                                                            <CalendarIcon size={12}/> Phân tích tháng này
+                                                        </button>
+                                                    </div>
                                                     
                                                     <div className="space-y-3 mb-5">
                                                         <div className="flex justify-between items-center bg-white/5 hover:bg-white/10 p-3 sm:p-4 rounded-2xl border border-white/5 transition-colors">
@@ -2240,16 +2263,16 @@
                                                     <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
-                                                            <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
-                                                                <button onClick={() => setSleepAvgDays(p => Math.max(1, p - sleepAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
-                                                                <input type="number" value={sleepAvgDays} onChange={e => setSleepAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
-                                                                <button onClick={() => setSleepAvgDays(p => p + sleepAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                            <div className={`flex items-center bg-slate-700/50 rounded-xl p-1 border transition-opacity ${sleepAnalyzeMonth ? 'border-slate-700 opacity-50' : 'border-slate-600/50'}`}>
+                                                                <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(p => Math.max(1, p - sleepAvgStep)); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                <input type="number" value={sleepAvgDays} onChange={e => { setSleepAnalyzeMonth(false); setSleepAvgDays(parseInt(e.target.value)||1); }} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(p => p + sleepAvgStep); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
                                                             </div>
                                                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
                                                         </div>
                                                         
                                                         <div className="flex items-center gap-1.5 flex-1 justify-end">
-                                                            <button onClick={() => setSleepAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                            <button onClick={() => { setSleepAnalyzeMonth(false); setSleepAvgDays(1); }} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
                                                                 <LoaderIcon size={14} className="sm:hidden" />
                                                                 <span className="hidden sm:inline">Reset</span>
                                                             </button>
@@ -2322,24 +2345,36 @@
                                             </div>
                                         
                                         {appMode === 'macro' && (() => {
-                                            // 1. Logic tính Trung Bình Macro
+                                            // 1. Chuẩn hóa khoảng ngày Macro (Theo Tháng Đang Xem hoặc Trong X Ngày Qua tính từ Hôm Nay)
                                             let tKcal = 0, tPro = 0, mDays = 0;
-                                            const eDate = selectedDate;
-                                            const sDate = new Date(selectedDate);
-                                            sDate.setDate(sDate.getDate() - macroAvgDays + 1);
-                                            const sNum = parseInt(formatDate(sDate).split('/').reverse().join(''));
-                                            const eNum = parseInt(formatDate(eDate).split('/').reverse().join(''));
+                                            let sNum = 0, eNum = 0;
+                                            const viewMonthNum = currentMonthStart.getMonth() + 1;
+                                            const viewYearNum = currentMonthStart.getFullYear();
 
+                                            if (macroAnalyzeMonth) {
+                                                sNum = viewYearNum * 10000 + viewMonthNum * 100 + 1;
+                                                eNum = viewYearNum * 10000 + viewMonthNum * 100 + 31;
+                                            } else {
+                                                const todayAnchor = new Date();
+                                                const sDate = new Date(todayAnchor);
+                                                sDate.setDate(sDate.getDate() - macroAvgDays + 1);
+                                                sNum = parseDateToNumber(formatDate(sDate));
+                                                eNum = parseDateToNumber(formatDate(todayAnchor));
+                                            }
+
+                                            let chartDataRaw = [];
                                             Object.keys(foodsByDate).forEach(dKey => {
-                                                const p = dKey.split('/');
-                                                const dNum = parseInt(p[2] + p[1] + p[0]);
+                                                const dNum = parseDateToNumber(dKey);
                                                 if (dNum >= sNum && dNum <= eNum) {
                                                     const fDay = foodsByDate[dKey] || [];
                                                     if (fDay.length > 0) {
                                                         const tots = calculateTotals(fDay);
-                                                        tKcal += Math.round(tots.kcal);
-                                                        tPro += Number(tots.protein);
-                                                        mDays++;
+                                                        if (tots.kcal > 0 || tots.protein > 0) {
+                                                            tKcal += Math.round(tots.kcal);
+                                                            tPro += Number(tots.protein);
+                                                            mDays++;
+                                                            chartDataRaw.push({ date: dKey.substring(0, 5), kcal: Math.round(tots.kcal), protein: Number(cleanNum(tots.protein)), dNum });
+                                                        }
                                                     }
                                                 }
                                             });
@@ -2350,24 +2385,7 @@
                                                 mDays
                                             };
 
-                                            // 2. Logic tính Biểu Đồ Macro
-                                            let chartDataRaw = [];
-                                            const cSDate = new Date(selectedDate);
-                                            cSDate.setDate(cSDate.getDate() - macroAvgDays + 1);
-                                            const cSNum = parseInt(formatDate(cSDate).split('/').reverse().join(''));
-                                            
-                                            Object.keys(foodsByDate).forEach(dKey => {
-                                                const p = dKey.split('/');
-                                                const dNum = parseInt(p[2] + p[1] + p[0]);
-                                                if (dNum >= cSNum && dNum <= eNum) {
-                                                    const fDay = foodsByDate[dKey] || [];
-                                                    if (fDay.length > 0) {
-                                                        const tots = calculateTotals(fDay);
-                                                        chartDataRaw.push({ date: dKey.substring(0, 5), kcal: Math.round(tots.kcal), protein: Number(cleanNum(tots.protein)), dNum });
-                                                    }
-                                                }
-                                            });
-
+                                            // 2. Sắp xếp dữ liệu Biểu Đồ Macro theo đúng thứ tự thời gian
                                             chartDataRaw.sort((a, b) => a.dNum - b.dNum);
                                             const chartData = chartDataRaw;
 
@@ -2375,8 +2393,15 @@
                                                 <div className="space-y-6">
                                                     <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
                                                         
-                                                        {/* KẾT QUẢ TRUNG BÌNH */}
-                                                        <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-4"><CheckCircleIcon size={14}/> Kết quả ({avgRes.mDays} ngày có DL)</div>
+                                                        {/* KẾT QUẢ TRUNG BÌNH & NÚT PHÂN TÍCH THÁNG NÀY */}
+                                                        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                                <CheckCircleIcon size={14}/> {macroAnalyzeMonth ? `Tháng ${String(viewMonthNum).padStart(2,'0')}/${viewYearNum}` : `${macroAvgDays} ngày qua`} ({avgRes.mDays} ngày có DL)
+                                                            </div>
+                                                            <button onClick={() => setMacroAnalyzeMonth(!macroAnalyzeMonth)} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 flex items-center gap-1.5 ${macroAnalyzeMonth ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30' : 'bg-white/5 text-emerald-300 border-emerald-500/30 hover:bg-white/10'}`}>
+                                                                <CalendarIcon size={12}/> Phân tích tháng này
+                                                            </button>
+                                                        </div>
                                                         
                                                         <div className="grid grid-cols-2 gap-4 mb-5">
                                                             <div className="bg-white/5 hover:bg-white/10 p-4 rounded-2xl border border-white/5 transition-colors">
@@ -2393,16 +2418,16 @@
                                                         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-700/50">
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Trong</span>
-                                                                <div className="flex items-center bg-slate-700/50 rounded-xl p-1 border border-slate-600/50">
-                                                                    <button onClick={() => setMacroAvgDays(p => Math.max(1, p - macroAvgStep))} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
-                                                                    <input type="number" value={macroAvgDays} onChange={e => setMacroAvgDays(parseInt(e.target.value)||1)} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
-                                                                    <button onClick={() => setMacroAvgDays(p => p + macroAvgStep)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
+                                                                <div className={`flex items-center bg-slate-700/50 rounded-xl p-1 border transition-opacity ${macroAnalyzeMonth ? 'border-slate-700 opacity-50' : 'border-slate-600/50'}`}>
+                                                                    <button onClick={() => { setMacroAnalyzeMonth(false); setMacroAvgDays(p => Math.max(1, p - macroAvgStep)); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">-</button>
+                                                                    <input type="number" value={macroAvgDays} onChange={e => { setMacroAnalyzeMonth(false); setMacroAvgDays(parseInt(e.target.value)||1); }} className="w-10 sm:w-12 bg-transparent text-center outline-none font-black text-white text-sm" />
+                                                                    <button onClick={() => { setMacroAnalyzeMonth(false); setMacroAvgDays(p => p + macroAvgStep); }} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-white bg-slate-600 hover:bg-slate-500 rounded-lg active:scale-95 transition-all font-black">+</button>
                                                                 </div>
                                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">Ngày qua</span>
                                                             </div>
                                                             
                                                             <div className="flex items-center gap-1.5 flex-1 justify-end">
-                                                                <button onClick={() => setMacroAvgDays(1)} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
+                                                                <button onClick={() => { setMacroAnalyzeMonth(false); setMacroAvgDays(1); }} className="p-2 sm:px-3 sm:py-2 bg-slate-700/50 hover:bg-slate-600 text-slate-300 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-600/50 active:scale-95 transition-all flex items-center gap-1" title="Reset về 1 ngày">
                                                                     <LoaderIcon size={14} className="sm:hidden" />
                                                                     <span className="hidden sm:inline">Reset</span>
                                                                 </button>
@@ -2575,6 +2600,19 @@
                                     )}
 
                                     <div 
+                                        id="journal-week-scroll"
+                                        ref={(el) => {
+                                            if (el && !el.dataset.scrolledToday && !isFiltering) {
+                                                el.dataset.scrolledToday = 'true';
+                                                setTimeout(() => {
+                                                    const todayCard = el.querySelector('[data-today="true"]');
+                                                    if (todayCard) {
+                                                        const scrollPos = todayCard.offsetLeft - (el.clientWidth / 2) + (todayCard.clientWidth / 2);
+                                                        el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
+                                                    }
+                                                }, 50);
+                                            }
+                                        }}
                                         className="flex overflow-x-auto snap-x gap-4 pb-8 pt-2 no-scrollbar items-stretch"
                                         onTouchStart={(e) => { if(!isFiltering) e.currentTarget.dataset.startX = e.touches[0].clientX; }}
                                         onTouchEnd={(e) => {
@@ -2623,13 +2661,14 @@
 
                                             return renderDays.map(day => {
                                                 const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
+                                                const isSelectedDay = formatDate(selectedDate) === dKey;
                                                 const sDay = statsByDate[dKey]; const sleepDay = sleepByDate[dKey] || []; const workDay = workoutsByDate[dKey]; const foodDay = foodsByDate[dKey] || []; const foodTotals = calculateTotals(foodDay);
                                                 
                                                 let moodColor = MOODS[3]; let outIcon = OUTINGS[0]; let moodIcon = MOODS[3].icon;
                                                 if (sDay) { moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3]; outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0]; moodIcon = moodColor.icon; }
 
                                                 return (
-                                                    <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 dark:shadow-none text-left transition-all active:scale-[0.98] border border-slate-100 dark:border-zinc-800 ${isToday && !isFiltering ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : 'hover:shadow-2xl'} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
+                                                    <button key={dKey} data-today={isToday && !isFiltering ? "true" : "false"} data-selected={isSelectedDay && !isFiltering ? "true" : "false"} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 dark:shadow-none text-left transition-all active:scale-[0.98] border border-slate-100 dark:border-zinc-800 ${(isToday || isSelectedDay) && !isFiltering ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : 'hover:shadow-2xl'} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
                                                         <div className="flex justify-between items-start mb-5 relative z-10 w-full">
                                                             <div className="flex flex-col gap-2.5 items-start">
                                                                 <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
@@ -2824,15 +2863,27 @@
                                const isActive = appMode === item.id || (item.id === 'journal' && appMode === 'stat');
                                 
                                 const handleNavClick = () => {
+                                    const now = new Date();
                                     setAppMode(item.id);
                                     if (item.id === 'macro' || item.id === 'work') {
                                         setCurrentView('day');
-                                        setSelectedDate(new Date());
+                                        setSelectedDate(now);
                                     } else if (item.id === 'sleep' || item.id === 'workout') {
                                         setCurrentView('month');
-                                        setSelectedDate(new Date());
+                                        setSelectedDate(now);
                                     } else if (item.id === 'journal') {
+                                        setSelectedDate(now);
+                                        setCurrentWeekStart(getStartOfWeek(now));
                                         setCurrentView('week');
+                                        setJournalDetailLevel('simple');
+                                        setTimeout(() => {
+                                            const el = document.getElementById('journal-week-scroll');
+                                            const todayCard = el?.querySelector('[data-today="true"]');
+                                            if (el && todayCard) {
+                                                const scrollPos = todayCard.offsetLeft - (el.clientWidth / 2) + (todayCard.clientWidth / 2);
+                                                el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
+                                            }
+                                        }, 80);
                                     }
                                 };
 
@@ -3235,8 +3286,35 @@
                                 </div>
                                 
                                 <div className="overflow-y-auto pb-4 no-scrollbar space-y-6 flex-1 pr-1">
-                                    {/* Lọc Text Ký ức */}
+                                    {/* Chọn Ngày Nhảy Tới Thẻ */}
                                     <div>
+                                        <h3 className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5"><CalendarIcon size={14}/> Chọn Ngày (Nhảy tới thẻ ngày)</h3>
+                                        <div className="flex gap-2">
+                                            <input type="date" value={journalFilters.jumpDate || ''} onChange={(e) => setJournalFilters(p => ({...p, jumpDate: e.target.value}))} className="flex-1 bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 font-bold text-sm text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark] transition-all shadow-sm" />
+                                            {journalFilters.jumpDate && (
+                                                <button onClick={() => {
+                                                    const [y, m, d] = journalFilters.jumpDate.split('-').map(Number);
+                                                    const targetDt = new Date(y, m - 1, d);
+                                                    setSelectedDate(targetDt);
+                                                    setCurrentWeekStart(getStartOfWeek(targetDt));
+                                                    setCurrentMonthStart(getStartOfMonth(targetDt));
+                                                    setCurrentView('week');
+                                                    setShowFilterModal(false);
+                                                    setTimeout(() => {
+                                                        const el = document.getElementById('journal-week-scroll');
+                                                        const targetCard = el?.querySelector('[data-selected="true"]');
+                                                        if (el && targetCard) {
+                                                            const scrollPos = targetCard.offsetLeft - (el.clientWidth / 2) + (targetCard.clientWidth / 2);
+                                                            el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
+                                                        }
+                                                    }, 80);
+                                                }} className="px-4 py-3 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-purple-500/30 active:scale-95 transition-all shrink-0">Đi tới</button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Lọc Text Ký ức */}
+                                    <div className="pt-4 border-t border-slate-100 dark:border-zinc-800/50">
                                         <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1">Tìm Kiếm Nhanh</h3>
                                         <div className="relative">
                                             <SearchIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -3333,8 +3411,28 @@
                                 </div>
                                 
                                 <div className="pt-4 border-t border-slate-100 dark:border-zinc-800 mt-2 shrink-0 flex gap-3 transition-colors pb-safe-bottom">
-                                    <button onClick={() => setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="py-4 px-6 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold transition-all active:scale-95 shadow-sm">Xóa Hết</button>
-                                    <button onClick={() => setShowFilterModal(false)} className="flex-1 py-4 bg-purple-600 text-white rounded-[1.25rem] font-black text-lg shadow-xl shadow-purple-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Áp dụng Filter</button>
+                                    <button onClick={() => setJournalFilters({ query: '', jumpDate: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="py-4 px-6 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold transition-all active:scale-95 shadow-sm">Xóa Hết</button>
+                                    <button onClick={() => {
+                                        if (journalFilters.jumpDate) {
+                                            const [y, m, d] = journalFilters.jumpDate.split('-').map(Number);
+                                            const targetDt = new Date(y, m - 1, d);
+                                            setSelectedDate(targetDt);
+                                            setCurrentWeekStart(getStartOfWeek(targetDt));
+                                            setCurrentMonthStart(getStartOfMonth(targetDt));
+                                            setCurrentView('week');
+                                            setShowFilterModal(false);
+                                            setTimeout(() => {
+                                                const el = document.getElementById('journal-week-scroll');
+                                                const targetCard = el?.querySelector('[data-selected="true"]');
+                                                if (el && targetCard) {
+                                                    const scrollPos = targetCard.offsetLeft - (el.clientWidth / 2) + (targetCard.clientWidth / 2);
+                                                    el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
+                                                }
+                                            }, 80);
+                                        } else {
+                                            setShowFilterModal(false);
+                                        }
+                                    }} className="flex-1 py-4 bg-purple-600 text-white rounded-[1.25rem] font-black text-lg shadow-xl shadow-purple-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]">Áp dụng Filter</button>
                                 </div>
                             </div>
                         </div>
