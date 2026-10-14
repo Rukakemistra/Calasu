@@ -357,14 +357,18 @@
                 const [workoutTemplates, setWorkoutTemplates] = useState(() => loadSafeJSON('workout_templates'));
                 const [statsByDate, setStatsByDate] = useState(() => loadSafeJSON('macro_stats'));
 
-                useEffect(() => { localStorage.setItem('macro_foods', JSON.stringify(foodsByDate)); }, [foodsByDate]);
-                useEffect(() => { localStorage.setItem('macro_sleeps', JSON.stringify(sleepByDate)); }, [sleepByDate]);
-                useEffect(() => { localStorage.setItem('macro_workouts', JSON.stringify(workoutsByDate)); }, [workoutsByDate]);
-                useEffect(() => { localStorage.setItem('workout_templates', JSON.stringify(workoutTemplates)); }, [workoutTemplates]);
-                useEffect(() => { localStorage.setItem('macro_stats', JSON.stringify(statsByDate)); }, [statsByDate]);
+                // Chống lag: Debounce việc lưu dữ liệu lớn xuống localStorage 400ms
+                useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('macro_foods', JSON.stringify(foodsByDate)); } catch(e){} }, 400); return () => clearTimeout(t); }, [foodsByDate]);
+                useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('macro_sleeps', JSON.stringify(sleepByDate)); } catch(e){} }, 400); return () => clearTimeout(t); }, [sleepByDate]);
+                useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('macro_workouts', JSON.stringify(workoutsByDate)); } catch(e){} }, 400); return () => clearTimeout(t); }, [workoutsByDate]);
+                useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('workout_templates', JSON.stringify(workoutTemplates)); } catch(e){} }, 400); return () => clearTimeout(t); }, [workoutTemplates]);
+                useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('macro_stats', JSON.stringify(statsByDate)); } catch(e){} }, 400); return () => clearTimeout(t); }, [statsByDate]);
 
                 const [toast, setToast] = useState(null);
                 const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+
+                // State quản lý Bong bóng hồi tưởng (Secret trong tâm trạng - Cột H)
+                const [secretBubble, setSecretBubble] = useState(null);
 
                 // Đã cập nhật Script URL mới từ yêu cầu
                 const defaultScriptUrl = 'https://script.google.com/macros/s/AKfycbwZUtdDdAz_WclwppPIfmQsNU5J-uM1EDSTbyRBH-YgMdwEoQXGAx97YWwMN_4iJKCR/exec';
@@ -375,6 +379,28 @@
                 const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || defaultGeminiKey);
                 const [isSyncing, setIsSyncing] = useState(false);
                 const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false); // Biến quản lý trạng thái bật/tắt đồng bộ
+
+                // Bộ điều khiển Vòng xoay tiến độ kiểu CH Play (push: xanh dương, pull: xanh lá)
+                const [syncRing, setSyncRing] = useState({ active: false, mode: 'push', progress: 0 });
+                const syncRingTimerRef = useRef(null);
+                const startSyncRing = (mode = 'push') => {
+                    if (syncRingTimerRef.current) clearInterval(syncRingTimerRef.current);
+                    setSyncRing({ active: true, mode, progress: 12 });
+                    syncRingTimerRef.current = setInterval(() => {
+                        setSyncRing(prev => {
+                            if (!prev.active) return prev;
+                            const step = Math.max(2, Math.round((92 - prev.progress) * 0.22));
+                            return { ...prev, progress: Math.min(92, prev.progress + step) };
+                        });
+                    }, 160);
+                };
+                const finishSyncRing = () => {
+                    if (syncRingTimerRef.current) clearInterval(syncRingTimerRef.current);
+                    setSyncRing(prev => ({ ...prev, active: true, progress: 100 }));
+                    setTimeout(() => {
+                        setSyncRing({ active: false, mode: 'push', progress: 0 });
+                    }, 500);
+                };
                 
                 useEffect(() => { localStorage.setItem('gas_url', gasUrl); }, [gasUrl]);
                 useEffect(() => { localStorage.setItem('gemini_api_key', geminiApiKey); }, [geminiApiKey]);
@@ -799,6 +825,7 @@
                 const handleSyncPush = async (isSilent = false) => {
                     if(!gasUrl) { if(!isSilent) showToast('Vui lòng nhập link Script!', 'error'); return; }
                     if(!isSilent) setIsSyncing(true);
+                    startSyncRing('push');
                     try {
                         const allDates = Array.from(new Set([...Object.keys(foodsByDate), ...Object.keys(sleepByDate)]));
                         const syncDataPayload = allDates.map(dKey => {
@@ -822,8 +849,8 @@
                             return { date: dKey, sang: formatMeal('Sáng'), trua: formatMeal('Trưa'), chieu: formatMeal('Chiều'), ngoai_le: formatMeal('Ngoài lề'), ngu: sleepStr, totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein) };
                         });
                         const finalPayload = syncDataPayload.filter(item => item.sang !== 'X' || item.trua !== 'X' || item.chieu !== 'X' || item.ngoai_le !== 'X' || item.ngu !== '');
-                        // Thêm musicUrl vào payload
-                        const statsPayload = Object.keys(statsByDate).map(d => ({ date: d, mood: statsByDate[d].mood, outing: statsByDate[d].outing, summary: statsByDate[d].summary, images: (statsByDate[d].images || []).filter(img => img && typeof img === 'string'), musicUrl: statsByDate[d].musicUrl || '' }));
+                        // Thêm detail (cột H) và musicUrl (cột K) vào payload
+                        const statsPayload = Object.keys(statsByDate).map(d => ({ date: d, mood: statsByDate[d].mood, outing: statsByDate[d].outing, detail: statsByDate[d].detail || '', summary: statsByDate[d].summary, images: (statsByDate[d].images || []).filter(img => img && typeof img === 'string'), musicUrl: statsByDate[d].musicUrl || '' }));
                         let formattedWorkouts = [];
                         Object.keys(workoutsByDate).forEach(wDate => {
                             const wOut = workoutsByDate[wDate];
@@ -850,12 +877,13 @@
                         const res = await response.json();
                         if(res.status === 'success') { if(!isSilent) showToast(`✅ Đã đồng bộ thành công!`, 'success'); } else { if(!isSilent) showToast('❌ Lỗi: ' + res.error, 'error'); }
                     } catch (e) { if(!isSilent) showToast('❌ Lỗi: ' + e.message, 'error'); }
+                    finishSyncRing();
                     if(!isSilent) setIsSyncing(false);
                 };
 
                 const handleSyncPull = async (autoUrl = null) => {
                     const targetUrl = typeof autoUrl === 'string' ? autoUrl : gasUrl;
-                    if(!targetUrl) return; setIsSyncing(true);
+                    if(!targetUrl) return; setIsSyncing(true); startSyncRing('pull');
                     const parseRawDate = (raw) => {
                         if (!raw) return null; let s = String(raw).trim(); let p = s.split('/');
                         if (p.length === 3) return `${p[0].padStart(2,'0')}/${p[1].padStart(2,'0')}/${p[2]}`;
@@ -969,8 +997,8 @@
                                        const dClean = parseRawDate(r[0]); if(!dClean) continue;
                                        const rawMood = String(r[1] ?? '').trim();
                                        const parsedMood = (rawMood !== '' && !isNaN(Number(rawMood))) ? Number(rawMood) : 3;
-                                       // Parse thêm thuộc tính musicUrl ở cột thứ 11 (index 10)
-                                       nS[dClean] = { mood: parsedMood, outing: Number(r[2])||1, summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||'') };
+                                       // Parse thêm cột H (index 7: detail) và cột K (index 10: musicUrl)
+                                       nS[dClean] = { mood: parsedMood, outing: Number(r[2])||1, detail: String(r[7]||''), summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||'') };
                                    }
                                    return nS;
                                 });
@@ -1000,6 +1028,7 @@
                             if (typeof autoUrl !== 'string') showToast('☁️ Kéo dữ liệu Máy chủ thành công!', 'success');
                         }
                     } catch (e) { if (typeof autoUrl !== 'string') showToast('❌ Lỗi kết nối', 'error'); }
+                    finishSyncRing();
                     setIsSyncing(false);
                 };
 
@@ -1218,8 +1247,27 @@
                                     <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); }} className={`p-2.5 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-200 dark:bg-zinc-700 text-slate-500 dark:text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
                                         <DownloadIcon size={18} />
                                     </button>
-                                    <button onClick={() => setShowSettings(true)} className="p-2.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95 transition-all shadow-sm">
-                                        <CloudIcon size={18} />
+                                    <button onClick={() => setShowSettings(true)} className={`relative p-2.5 rounded-full transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center ${syncRing.active ? (syncRing.mode === 'pull' ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-500' : 'bg-blue-50 dark:bg-blue-500/15 text-blue-500') : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
+                                        {syncRing.active && (
+                                            <svg className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] -rotate-90 pointer-events-none" viewBox="0 0 44 44">
+                                                <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />
+                                                <circle
+                                                    cx="22" cy="22" r="19" fill="none"
+                                                    stroke={syncRing.mode === 'pull' ? '#10b981' : '#3b82f6'}
+                                                    strokeWidth="3"
+                                                    strokeLinecap="round"
+                                                    strokeDasharray={119.38}
+                                                    strokeDashoffset={119.38 - (119.38 * syncRing.progress) / 100}
+                                                    style={{ transition: 'stroke-dashoffset 0.18s ease-out' }}
+                                                />
+                                            </svg>
+                                        )}
+                                        <CloudIcon size={18} className={syncRing.active ? 'animate-pulse' : ''} />
+                                        {syncRing.active && (
+                                            <span className={`absolute -bottom-2 px-1.5 py-0.2 rounded-full text-[8px] font-black text-white shadow-sm leading-tight ${syncRing.mode === 'pull' ? 'bg-emerald-500' : 'bg-blue-500'}`}>
+                                                {syncRing.progress}%
+                                            </span>
+                                        )}
                                     </button>
                                 </div>
                             </div>
@@ -2514,10 +2562,12 @@
                                             <div className="flex justify-between items-center pb-5 border-b border-slate-100 dark:border-zinc-800/50">
                                                 {(() => {
                                                     const cMood = MOODS.find(m => m.val === currentStat.mood) || MOODS[3];
+                                                    const hasSecret = !!(currentStat.detail && currentStat.detail.trim());
                                                     return (
-                                                        <span className={`px-4 py-2 rounded-2xl text-sm font-black ${cMood.twBg} ${cMood.twText} border ${cMood.twBorder} shadow-sm flex items-center gap-2`}>
+                                                        <button type="button" onClick={(e) => { e.stopPropagation(); setSecretBubble({ dateKey, isEditing: !hasSecret, text: currentStat.detail || '' }); }} className={`relative px-4 py-2 rounded-2xl text-sm font-black ${cMood.twBg} ${cMood.twText} border ${cMood.twBorder} shadow-sm flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer`} title="Bấm để mở Bong bóng hồi tưởng">
                                                             {React.createElement(cMood.icon, {size: 18, strokeWidth: 2.5})} {cMood.label}
-                                                        </span>
+                                                            {hasSecret && <span className="ml-0.5 text-[11px] animate-pulse">✦</span>}
+                                                        </button>
                                                     );
                                                 })()}
                                                 <div className="flex items-center gap-2">
@@ -2674,8 +2724,9 @@
                                                                 <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
                                                                     {VN_DAYS[day.getDay()]} <span className="opacity-50 text-[10px] font-bold">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span>
                                                                 </span>
-                                                                <span className={`${sDay ? moodColor.twBg + ' ' + moodColor.twText + ' border ' + moodColor.twBorder : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-500 border border-slate-200 dark:border-zinc-700'} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-sm`}>
+                                                                <span onClick={(e) => { e.stopPropagation(); setSecretBubble({ dateKey: dKey, isEditing: !(sDay?.detail && sDay.detail.trim()), text: sDay?.detail || '' }); }} className={`${sDay ? moodColor.twBg + ' ' + moodColor.twText + ' border ' + moodColor.twBorder : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-500 border border-slate-200 dark:border-zinc-700'} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer`} title="Bấm để mở Bong bóng hồi tưởng">
                                                                     {React.createElement(moodIcon, {size: 14, strokeWidth: 2.5})} {sDay ? moodColor.label : 'Chưa có'}
+                                                                    {sDay?.detail && sDay.detail.trim() !== '' && <span className="text-[10px] animate-pulse">✦</span>}
                                                                 </span>
                                                             </div>
                                                             
@@ -3437,6 +3488,94 @@
                             </div>
                         </div>
                     )}
+                    {/* BONG BÓNG HỒI TƯỞNG (SECRET TRONG TÂM TRẠNG - CỘT H SHEET STAT) */}
+                    {secretBubble && (() => {
+                        const bStat = statsByDate[secretBubble.dateKey] || { mood: 3, outing: 1, detail: '', summary: '', images: [], musicUrl: '' };
+                        const bMood = MOODS.find(m => m.val === bStat.mood) || MOODS[3];
+                        const bOut = OUTINGS.find(o => o.val === bStat.outing) || OUTINGS[0];
+                        return (
+                            <div className="fixed inset-0 z-[180] flex justify-center items-center p-5">
+                                <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-md modal-overlay" onClick={() => setSecretBubble(null)}></div>
+                                <div className="relative z-10 w-full max-w-sm animate-[fadeScale_0.25s_cubic-bezier(0.16,1,0.3,1)] flex flex-col items-center">
+                                    {/* Đám mây hồi tưởng chính */}
+                                    <div className={`w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl border-2 ${bMood.twBorder} relative overflow-hidden`}>
+                                        <div className={`absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-30 pointer-events-none ${bMood.twBg}`}></div>
+                                        
+                                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100 dark:border-zinc-800/80">
+                                            <div className="flex items-center gap-2.5">
+                                                <span className={`px-3 py-1.5 rounded-xl text-xs font-black ${bMood.twBg} ${bMood.twText} border ${bMood.twBorder} flex items-center gap-1.5 shadow-sm`}>
+                                                    {React.createElement(bMood.icon, {size: 15, strokeWidth: 2.5})} {bMood.label}
+                                                </span>
+                                                <span className="text-xs font-black text-slate-400 dark:text-zinc-500 tracking-wider">{secretBubble.dateKey}</span>
+                                            </div>
+                                            <button onClick={() => setSecretBubble(null)} className="p-2 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 active:scale-90 transition-all"><XIcon size={16}/></button>
+                                        </div>
+
+                                        <div className="mb-2 flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-purple-500 dark:text-purple-400 flex items-center gap-1.5">
+                                                <SparklesIcon size={13}/> Bong bóng hồi tưởng
+                                            </span>
+                                            <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 flex items-center gap-1">
+                                                <bOut.Icon size={12} className={bOut.color}/> {bOut.label}
+                                            </span>
+                                        </div>
+
+                                        {secretBubble.isEditing ? (
+                                            <div className="space-y-3 mt-3">
+                                                <textarea
+                                                    autoFocus
+                                                    value={secretBubble.text}
+                                                    onChange={(e) => setSecretBubble(p => ({ ...p, text: e.target.value }))}
+                                                    placeholder="Ngày hôm đó mình có cảm xúc gì sâu kín, đã làm những chuyện gì..."
+                                                    className="w-full bg-slate-50 dark:bg-zinc-800/80 border border-purple-200 dark:border-purple-500/30 rounded-2xl p-4 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium text-slate-800 dark:text-zinc-100 min-h-[130px] resize-none leading-relaxed shadow-inner"
+                                                />
+                                                <div className="flex gap-2 pt-1">
+                                                    <button type="button" onClick={() => setSecretBubble(p => ({ ...p, isEditing: false, text: bStat.detail || '' }))} className="flex-1 py-3 rounded-xl text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 active:scale-95 transition-all">Hủy</button>
+                                                    <button type="button" onClick={() => {
+                                                        const newDetail = secretBubble.text.trim();
+                                                        setStatsByDate(prev => ({
+                                                            ...prev,
+                                                            [secretBubble.dateKey]: {
+                                                                ...(prev[secretBubble.dateKey] || { mood: 3, outing: 1, summary: '', images: [], musicUrl: '' }),
+                                                                detail: newDetail
+                                                            }
+                                                        }));
+                                                        setSecretBubble(p => ({ ...p, isEditing: false, text: newDetail }));
+                                                        showToast('💭 Đã cất giữ vào Bong bóng hồi tưởng!', 'success');
+                                                    }} className="flex-1 py-3 rounded-xl text-xs font-black bg-purple-600 text-white shadow-lg shadow-purple-500/30 active:scale-95 transition-all flex items-center justify-center gap-1.5">
+                                                        <CheckCircleIcon size={14}/> Lưu Hồi Tưởng
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-3 space-y-4">
+                                                {bStat.detail && bStat.detail.trim() !== '' ? (
+                                                    <div onClick={() => setSecretBubble(p => ({ ...p, isEditing: true }))} className="bg-slate-50/90 dark:bg-zinc-800/60 p-4 rounded-2xl border border-slate-100 dark:border-zinc-700/60 text-sm font-medium text-slate-700 dark:text-zinc-200 whitespace-pre-wrap break-words leading-relaxed max-h-[45vh] overflow-y-auto no-scrollbar cursor-pointer hover:border-purple-300 dark:hover:border-purple-500/40 transition-colors">
+                                                        {bStat.detail}
+                                                    </div>
+                                                ) : (
+                                                    <div onClick={() => setSecretBubble(p => ({ ...p, isEditing: true }))} className="py-8 px-4 text-center border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-2xl cursor-pointer hover:border-purple-400 transition-colors">
+                                                        <p className="text-xs font-bold text-slate-400 dark:text-zinc-500">Chưa có dòng hồi tưởng sâu kín nào cho ngày này.</p>
+                                                        <p className="text-[10px] font-black text-purple-500 uppercase tracking-widest mt-2">+ Bấm để ghi lại cảm xúc</p>
+                                                    </div>
+                                                )}
+                                                <button type="button" onClick={() => setSecretBubble(p => ({ ...p, isEditing: true, text: bStat.detail || '' }))} className="w-full py-3 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                                                    <PencilIcon size={14}/> {bStat.detail ? 'Chỉnh sửa hồi tưởng' : 'Viết hồi tưởng'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Đuôi bong bóng suy nghĩ lơ lửng */}
+                                    <div className="flex flex-col items-center -mt-1 pointer-events-none">
+                                        <div className={`w-5 h-5 rounded-full bg-white dark:bg-zinc-900 border-2 ${bMood.twBorder} shadow-md`}></div>
+                                        <div className={`w-3 h-3 rounded-full bg-white dark:bg-zinc-900 border-2 ${bMood.twBorder} shadow-md mt-1.5 mr-4`}></div>
+                                        <div className={`w-2 h-2 rounded-full bg-white dark:bg-zinc-900 border ${bMood.twBorder} shadow-sm mt-1 mr-8`}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     {/* Modal Thêm Nhật Ký (STAT) */}
                     {isAddingStat && (appMode === 'stat' || appMode === 'journal') && (
                         <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center">
@@ -3464,11 +3603,15 @@
                                         <h3 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-4 flex items-center gap-1.5"><SmileIcon size={14}/> Tâm trạng hôm nay</h3>
                                         <div className="grid grid-cols-3 gap-3">
                                            {MOODS.map(m => (
-                                                <button key={m.val} onClick={() => setStatFormData(p=>({...p, mood: m.val}))} className={`py-3 px-1 rounded-xl text-xs font-bold border transition-all active:scale-95 flex flex-col items-center gap-1.5 ${statFormData.mood === m.val ? `${m.twBg} ${m.twText} ${m.twBorder} ring-2 ring-current shadow-md scale-105` : 'bg-white dark:bg-zinc-900 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm'}`}>
+                                                <button key={m.val} onClick={() => setStatFormData(p=>({...p, mood: m.val}))} className={`py-3 px-1 rounded-xl text-xs font-bold border transition-all active:scale-95 flex flex-col items-center gap-1.5 ${statFormData.mood === m.val ? `${m.twBg} ${m.twText}${m.twBorder} ring-2 ring-current shadow-md scale-105` : 'bg-white dark:bg-zinc-900 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 shadow-sm'}`}>
                                                     {React.createElement(m.icon, {size: 20, strokeWidth: 2.5})}
                                                     <span className="uppercase tracking-wider text-[9px]">{m.label}</span>
                                                 </button>
                                             ))}
+                                        </div>
+                                        <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-zinc-700/60">
+                                            <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><SparklesIcon size={13}/> Secret tâm trạng / Chi tiết (Cột H)</label>
+                                            <textarea value={statFormData.detail || ''} onChange={(e) => setStatFormData(p=>({...p, detail: e.target.value}))} placeholder="Góc khuất cảm xúc hôm nay: mình đã nghĩ gì, cảm thấy sao, làm những gì..." className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl px-4 py-3 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 font-medium text-xs text-slate-800 dark:text-zinc-200 min-h-[85px] resize-none transition-all shadow-sm" />
                                         </div>
                                     </div>
 
