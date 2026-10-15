@@ -75,11 +75,22 @@
         .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .dark .glass-header { background: rgba(9, 9, 11, 0.85); }
         
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        / === TỌA ĐỘ 1 (CODE MỚI): MỞ KHÓA QUÁN TÍNH CAO TRÊN CHROME === /
+.no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 main, .overflow-y-auto, .overflow-x-auto, .snap-x {
 -webkit-overflow-scrolling: touch;
-scroll-behavior: auto;
+overscroll-behavior: contain;
+will-change: scroll-position;
+transform: translateZ(0);
+}
+/ Gỡ bỏ phanh gấp của Chrome để vẩy tay có quán tính mượt như app */
+.snap-always { scroll-snap-stop: normal !important; }
+.snap-mandatory { scroll-snap-type: x proximity !important; }
+#journal-week-scroll > button {
+transform: translateZ(0);
+backface-visibility: hidden;
+-webkit-backface-visibility: hidden;
 }
         
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; }
@@ -252,6 +263,9 @@ scroll-behavior: auto;
                 const [selectedDate, setSelectedDate] = useState(new Date());
                 const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
                 const [currentMonthStart, setCurrentMonthStart] = useState(getStartOfMonth(new Date()));
+                const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+                const lastScrollYRef = useRef(0);
+                const mainSwipeRef = useRef({ startX: 0, startY: 0, ignore: false });
                 
                 const [activeFilter, setActiveFilter] = useState(null);
                 const [journalDetailLevel, setJournalDetailLevel] = useState('simple');
@@ -1265,9 +1279,14 @@ scroll-behavior: auto;
                             const wOut = workoutsByDate[wDate];
                             if (wOut && ["Upper", "Lower", "Push", "Pull", "Leg"].includes(wOut.type)) {
                                 const exes = (wOut.exercises || []).map(ex => {
-                                    if (ex.rawText && ex.rawText.trim() !== '') return { name: ex.name, rawText: ex.rawText.trim(), sets: [{ reps: '', weight: '', unit: 'KG' }] };
                                     const vSets = (ex.sets || []).filter(s => s.weight.trim() !== '' || s.reps.trim() !== '');
-                                    return { name: ex.name, sets: vSets.map(s => ({ reps: s.reps, weight: s.weight, unit: s.unit.toUpperCase() })) };
+                                    if (vSets.length > 0) {
+                                        return { name: ex.name, sets: vSets.map(s => ({ reps: s.reps, weight: s.weight, unit: (s.unit || 'KG').toUpperCase() })) };
+                                    }
+                                    if (ex.rawText && ex.rawText.trim() !== '' && ex.rawText.trim().toUpperCase() !== 'X') {
+                                        return { name: ex.name, rawText: ex.rawText.trim(), sets: [{ reps: '', weight: '', unit: 'KG' }] };
+                                    }
+                                    return { name: ex.name, sets: [] };
                                 });
                                 // MÀNG LỌC DIỆT BÓNG MA: Tránh đẩy lịch rỗng (toàn X) lên làm mất dữ liệu
                                 let hasRealData = false;
@@ -1559,6 +1578,8 @@ scroll-behavior: auto;
                     }));
                 };
                 const handleAddSet = (exId) => setCurrentExercises(prev => prev.map(ex => { if (exId === ex.id) { const ls = ex.sets[ex.sets.length - 1] || { reps: '', weight: '', unit: 'KG' }; return { ...ex, sets: [...ex.sets, { ...ls }] }; } return ex; }));
+                const [confirmClearScratchpad, setConfirmClearScratchpad] = useState(false);
+
                 const handleUpdateSet = (exId, sIdx, field, val) => setCurrentExercises(p => { 
                     let triggerTimer = false;
                     const nextState = p.map(ex => { 
@@ -1568,7 +1589,7 @@ scroll-behavior: auto;
                             ns[sIdx] = { ...ns[sIdx], [field]: val }; 
                             const isNowDone = ns[sIdx].weight.trim() !== '' && ns[sIdx].reps.trim() !== '';
                             if (!wasDone && isNowDone) { triggerTimer = true; }
-                            return { ...ex, sets: ns }; 
+                            return { ...ex, rawText: val.trim() !== '' ? '' : ex.rawText, sets: ns }; 
                         } 
                         return ex; 
                     });
@@ -1582,9 +1603,48 @@ scroll-behavior: auto;
 
                 const handleSaveStat = () => { setStatsByDate(p => ({ ...p, [dateKey]: { ...statFormData } })); setIsAddingStat(false); showToast('📓 Đã ghi nhận nhật ký!', 'success'); };
 
-                const changeDate = (o) => { const n = new Date(selectedDate); n.setDate(n.getDate() + o); setSelectedDate(n); };
-                const changeWeek = (o) => { const n = new Date(currentWeekStart); n.setDate(n.getDate() + (o * 7)); setCurrentWeekStart(n); };
-                const changeMonth = (o) => { const n = new Date(currentMonthStart); n.setMonth(n.getMonth() + o); setCurrentMonthStart(n); };
+                // Đồng bộ tự động Tuần & Tháng mỗi khi selectedDate thay đổi (khi bấm chọn 1 ngày bất kỳ)
+                useEffect(() => {
+                    setCurrentWeekStart(getStartOfWeek(selectedDate));
+                    setCurrentMonthStart(getStartOfMonth(selectedDate));
+                }, [selectedDate]);
+
+                const changeDate = (o) => {
+                    const n = new Date(selectedDate);
+                    n.setDate(n.getDate() + o);
+                    setSelectedDate(n);
+                    setCurrentWeekStart(getStartOfWeek(n));
+                    setCurrentMonthStart(getStartOfMonth(n));
+                };
+
+                const changeWeek = (o) => {
+                    const n = new Date(currentWeekStart);
+                    n.setDate(n.getDate() + (o * 7));
+                    setCurrentWeekStart(n);
+                    // Nếu lùi về tuần trước (o < 0) -> chọn CN tuần rồi; nếu tiến qua tuần sau (o > 0) -> chọn T2 tuần sau
+                    const targetSel = new Date(n);
+                    if (o < 0) targetSel.setDate(targetSel.getDate() + 6);
+                    setSelectedDate(targetSel);
+                    setCurrentMonthStart(getStartOfMonth(targetSel));
+                    setTimeout(() => {
+                        const el = document.getElementById('journal-week-scroll');
+                        if (el) {
+                            el.dataset.scrollEdge = o < 0 ? 'end' : 'start';
+                            delete el.dataset.scrolledToday;
+                        }
+                    }, 10);
+                };
+
+                const changeMonth = (o) => {
+                    const n = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() + o, 1);
+                    setCurrentMonthStart(n);
+                    const now = new Date();
+                    const targetDay = (n.getFullYear() === now.getFullYear() && n.getMonth() === now.getMonth())
+                        ? now
+                        : new Date(n.getFullYear(), n.getMonth(), Math.min(selectedDate.getDate(), getDaysInMonth(n.getFullYear(), n.getMonth())));
+                    setSelectedDate(targetDay);
+                    setCurrentWeekStart(getStartOfWeek(targetDay));
+                };
 
                 const weekDays = [...Array(7)].map((_, i) => { const d = new Date(currentWeekStart); d.setDate(d.getDate() + i); return d; });
                 const monthDays = [...Array(getDaysInMonth(currentMonthStart.getFullYear(), currentMonthStart.getMonth()))].map((_, i) => new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), i + 1));
@@ -1593,14 +1653,16 @@ scroll-behavior: auto;
                 const monthWeeks = []; let tempWeek = [];
                 monthDays.forEach((day, index) => { tempWeek.push(day); if (day.getDay() === 0 || index === monthDays.length - 1) { monthWeeks.push(tempWeek); tempWeek = []; } });
 
-                let weekThieuDam = 0, weekCheatDay = 0, weekLateSleep = 0, weekLateWake = 0, weekWorkout = 0;
+                let weekThieuDam = 0, weekCheatDay = 0, weekLateSleep = 0, weekLateWake = 0, weekWorkout = 0, weekSleepDaysCount = 0;
                 weekDays.forEach(day => {
                     const dKey = formatDate(day); const fDay = foodsByDate[dKey] || [];
                     if (fDay.length > 0) { const tots = calculateTotals(fDay); if (tots.protein < 115) weekThieuDam++; if (Math.round(tots.kcal) > 2500) weekCheatDay++; }
                     const sDay = sleepByDate[dKey] || [];
-                    if (sDay.length > 0) { const cWarn = getCircadianWarning(sDay); if (cWarn === 'late_sleep' || cWarn === 'bomb') weekLateSleep++; if (cWarn === 'late_wake' || cWarn === 'bomb') weekLateWake++; }
+                    if (sDay.length > 0) { weekSleepDaysCount++; const cWarn = getCircadianWarning(sDay); if (cWarn === 'late_sleep' || cWarn === 'bomb') weekLateSleep++; if (cWarn === 'late_wake' || cWarn === 'bomb') weekLateWake++; }
                     if (workoutsByDate[dKey]) weekWorkout++;
                 });
+                const pctWeekLateSleep = Math.round((weekLateSleep / (weekSleepDaysCount || 1)) * 100) || 0;
+                const pctWeekLateWake = Math.round((weekLateWake / (weekSleepDaysCount || 1)) * 100) || 0;
 
                 let monthThieuDam = 0, monthCheatDay = 0, monthLateSleep = 0, monthLateWake = 0, monthWorkout = 0, monthSleepDaysCount = 0;
                 monthDays.forEach(day => {
@@ -1638,27 +1700,28 @@ scroll-behavior: auto;
 
                    {/* TOP HEADER GLASSMORPHISM */}
                     <header className="shrink-0 z-40 glass-header border-b border-slate-200/60 dark:border-zinc-800/60 flex justify-center transition-colors">
-                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} w-full px-3.5 sm:px-5 pt-3 pb-2.5 flex flex-col gap-2.5 transition-all duration-500`}>
+                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} w-full px-3.5 sm:px-5 pt-2.5 pb-2 flex flex-col transition-all duration-300`}>
                             <div className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                     <h1 className="text-lg sm:text-2xl font-black tracking-tight bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 bg-clip-text text-transparent drop-shadow-sm shrink-0">Calasu</h1>
+                                    <div className="h-4 w-px bg-zinc-800 shrink-0"></div>
                                     
                                     {/* COMPACT DATE PILL TRÊN HEADER (TÁCH RỜI NÚT < > VÀ CHỮ NGÀY THÁNG) */}
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                        <div className="bg-white/5 dark:bg-white/5 rounded-full p-0.5 flex items-center border border-white/10 shrink-0">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-full flex items-center p-0.5 gap-0.5 shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => currentView === 'day' ? changeDate(-1) : currentView === 'week' ? changeWeek(-1) : changeMonth(-1)}
-                                                className="p-1 text-zinc-400 hover:text-white rounded-full active:scale-90 transition-all"
+                                                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 rounded-full active:scale-90 transition-all"
                                             >
-                                                <ChevronLeftIcon size={13} />
+                                                <ChevronLeftIcon size={16} />
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => currentView === 'day' ? changeDate(1) : currentView === 'week' ? changeWeek(1) : changeMonth(1)}
-                                                className="p-1 text-zinc-400 hover:text-white rounded-full active:scale-90 transition-all"
+                                                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/80 rounded-full active:scale-90 transition-all"
                                             >
-                                                <ChevronRightIcon size={13} />
+                                                <ChevronRightIcon size={16} />
                                             </button>
                                         </div>
                                         <button
@@ -1678,47 +1741,65 @@ scroll-behavior: auto;
                                                 }, 50);
                                             }}
                                             title="Bấm để về Hôm nay"
-                                            className="text-left text-[11px] sm:text-xs font-extrabold text-zinc-300 hover:text-white tracking-tight truncate active:scale-95 transition-all"
+                                            className="text-left tabular-nums tracking-tight truncate active:scale-95 transition-all"
                                         >
                                             {(() => {
                                                 if (currentView === 'day') {
                                                     const isDiffYear = selectedDate.getFullYear() !== new Date().getFullYear();
-                                                    return `${VN_DAYS[selectedDate.getDay()]}, ${String(selectedDate.getDate()).padStart(2,'0')} Thg ${String(selectedDate.getMonth()+1).padStart(2,'0')}${isDiffYear ? ', ' + selectedDate.getFullYear() : ''}`;
+                                                    const dayNumStr = `${String(selectedDate.getDate()).padStart(2,'0')}.${String(selectedDate.getMonth()+1).padStart(2,'0')}${isDiffYear ? '.' + selectedDate.getFullYear() : ''}`;
+                                                    return (
+                                                        <span className="inline-flex items-baseline gap-1.5 text-xs sm:text-sm">
+                                                            <span className="text-zinc-400 font-medium">{VN_DAYS[selectedDate.getDay()]}</span>
+                                                            <span className="text-zinc-100 font-bold">{dayNumStr}</span>
+                                                        </span>
+                                                    );
                                                 }
                                                 if (currentView === 'week') {
                                                     const wEnd = new Date(currentWeekStart);
                                                     wEnd.setDate(wEnd.getDate() + 6);
-                                                    return `Tuần ${String(currentWeekStart.getDate()).padStart(2,'0')}/${String(currentWeekStart.getMonth()+1).padStart(2,'0')} - ${String(wEnd.getDate()).padStart(2,'0')}/${String(wEnd.getMonth()+1).padStart(2,'0')}`;
+                                                    const startStr = `${String(currentWeekStart.getDate()).padStart(2,'0')}.${String(currentWeekStart.getMonth()+1).padStart(2,'0')}`;
+                                                    const endStr = `${String(wEnd.getDate()).padStart(2,'0')}.${String(wEnd.getMonth()+1).padStart(2,'0')}`;
+                                                    return (
+                                                        <span className="inline-flex items-baseline gap-1.5">
+                                                            <span className="text-zinc-500 font-medium text-[11px]">Tuần</span>
+                                                            <span className="text-zinc-100 font-bold text-xs">{startStr} – {endStr}</span>
+                                                        </span>
+                                                    );
                                                 }
-                                                return `Tháng ${String(currentMonthStart.getMonth() + 1).padStart(2,'0')}, ${currentMonthStart.getFullYear()}`;
+                                                return (
+                                                    <span className="inline-flex items-baseline gap-1.5">
+                                                        <span className="text-zinc-500 font-medium text-[11px]">Tháng</span>
+                                                        <span className="text-zinc-100 font-bold text-xs">{String(currentMonthStart.getMonth() + 1).padStart(2,'0')}.{currentMonthStart.getFullYear()}</span>
+                                                    </span>
+                                                );
                                             })()}
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1 sm:gap-2 justify-end shrink-0">
+                                <div className="flex items-center gap-1 sm:gap-1.5 justify-end shrink-0">
                                     {((appMode === 'journal' || appMode === 'stat') && currentView === 'week') && (
                                         <button
                                             type="button"
                                             onClick={() => setJournalDetailLevel(prev => prev === 'simple' ? 'detail' : prev === 'detail' ? 'all' : 'simple')}
-                                            className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm border ${journalDetailLevel === 'simple' ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center tabular-nums font-extrabold text-[10px] tracking-tighter transition-all active:scale-95 shadow-sm border ${journalDetailLevel === 'simple' ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}
                                             title="Đổi mức chi tiết thẻ tuần"
                                         >
-                                            {journalDetailLevel === 'simple' ? 'Gọn' : journalDetailLevel === 'detail' ? 'Vừa' : 'Full'}
+                                            {journalDetailLevel === 'simple' ? '1x' : journalDetailLevel === 'detail' ? '2x' : '3x'}
                                         </button>
                                     )}
-                                    <button onClick={() => setIsDesktopMode(!isDesktopMode)} className="p-1.5 sm:p-2 rounded-full bg-zinc-800 text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
+                                    <button onClick={() => setIsDesktopMode(!isDesktopMode)} className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-800 text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
                                         {isDesktopMode ? <SmartphoneIcon size={15}/> : <MonitorIcon size={15}/>}
                                     </button>
                                     {(appMode === 'journal' || appMode === 'stat') && (
-                                        <button onClick={() => setShowFilterModal(true)} className={`p-1.5 sm:p-2 rounded-full hover:scale-105 active:scale-95 transition-all shadow-sm ${isFiltering ? 'bg-purple-500 text-white shadow-purple-500/30' : 'bg-zinc-800 text-zinc-300'}`}>
+                                        <button onClick={() => setShowFilterModal(true)} className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm ${isFiltering ? 'bg-purple-500 text-white shadow-purple-500/30' : 'bg-zinc-800 text-zinc-300'}`}>
                                             <FilterIcon size={15}/>
                                         </button>
                                     )}
-                                    <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); }} className={`p-1.5 sm:p-2 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
+                                    <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); }} className={`w-8 h-8 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
                                         <DownloadIcon size={15} />
                                     </button>
-                                    <button onClick={() => setShowSettings(true)} className={`relative p-1.5 sm:p-2 rounded-full transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center ${syncRing.active ? (syncRing.mode === 'pull' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-blue-500/15 text-blue-500') : 'bg-blue-500/10 text-blue-400'}`}>
+                                    <button onClick={() => setShowSettings(true)} className={`relative w-8 h-8 rounded-full transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center ${syncRing.active ? (syncRing.mode === 'pull' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-blue-500/15 text-blue-500') : 'bg-blue-500/10 text-blue-400'}`}>
                                         {syncRing.active && (
                                             <svg className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] -rotate-90 pointer-events-none" viewBox="0 0 44 44">
                                                 <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-20" />
@@ -1743,24 +1824,26 @@ scroll-behavior: auto;
                                 </div>
                             </div>
                             
-                            {/* VIEW MODE TOGGLE */}
-                            <div className="flex bg-slate-200/50 dark:bg-zinc-800/50 p-1 rounded-2xl w-full mx-auto relative backdrop-blur-md shadow-inner border border-slate-200/50 dark:border-zinc-700/50">
-                                {['day', 'week', 'month'].map(view => {
-                                    const isActive = currentView === view;
-                                    let activeCls = 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200';
-                                    if(isActive) {
-                                        if (appMode === 'macro') activeCls = 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'; 
-                                        else if (appMode === 'sleep') activeCls = 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'; 
-                                        else if (appMode === 'workout') activeCls = 'bg-orange-500 text-white shadow-md shadow-orange-500/20';
-                                        else if (appMode === 'journal' || appMode === 'stat') activeCls = 'bg-purple-500 text-white shadow-md shadow-purple-500/20';
-                                        else if (appMode === 'work') activeCls = 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20';
-                                    }
-                                    return (
-                                        <button key={view} onClick={() => setCurrentView(view)} className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
-                                            {view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}
-                                        </button>
-                                    );
-                                })}
+                            {/* VIEW MODE TOGGLE (TỰ ĐỘNG THU GỌN KHI CUỘN XUỐNG) */}
+                            <div className={`w-full transition-all duration-300 ${isHeaderCollapsed ? 'max-h-0 opacity-0 overflow-hidden py-0 my-0 pointer-events-none' : 'max-h-12 opacity-100 mt-2'}`}>
+                                <div className="flex max-w-[260px] sm:max-w-[300px] w-full mx-auto p-0.5 rounded-full bg-zinc-900/90 border border-zinc-800/80 relative backdrop-blur-md shadow-inner">
+                                    {['day', 'week', 'month'].map(view => {
+                                        const isActive = currentView === view;
+                                        let activeCls = 'text-zinc-400 hover:text-zinc-200';
+                                        if(isActive) {
+                                            if (appMode === 'macro') activeCls = 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'; 
+                                            else if (appMode === 'sleep') activeCls = 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'; 
+                                            else if (appMode === 'workout') activeCls = 'bg-orange-500 text-white shadow-md shadow-orange-500/20';
+                                            else if (appMode === 'journal' || appMode === 'stat') activeCls = 'bg-purple-500 text-white shadow-md shadow-purple-500/20';
+                                            else if (appMode === 'work') activeCls = 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20';
+                                        }
+                                        return (
+                                            <button key={view} onClick={() => setCurrentView(view)} className={`flex-1 py-1 rounded-full text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
+                                                {view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </header>
@@ -1797,7 +1880,42 @@ scroll-behavior: auto;
                         </div>
                     )}
 
-                    <main className="flex-1 overflow-y-auto no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <main
+                        className="flex-1 overflow-y-auto no-scrollbar"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                        onScroll={(e) => {
+                            const scrollTop = e.currentTarget.scrollTop;
+                            const lastScrollY = lastScrollYRef.current;
+                            if (scrollTop > lastScrollY + 12 && scrollTop > 40) {
+                                if (!isHeaderCollapsed) setIsHeaderCollapsed(true);
+                            } else if (scrollTop < lastScrollY - 8 || scrollTop < 20) {
+                                if (isHeaderCollapsed) setIsHeaderCollapsed(false);
+                            }
+                            lastScrollYRef.current = scrollTop;
+                        }}
+                        onTouchStart={(e) => {
+                            if (!e.touches || e.touches.length !== 1) return;
+                            const target = e.target;
+                            const shouldIgnore = !!(target && target.closest && target.closest('.overflow-x-auto, .snap-x, input, textarea, .recharts-wrapper'));
+                            mainSwipeRef.current = {
+                                startX: e.touches[0].clientX,
+                                startY: e.touches[0].clientY,
+                                ignore: shouldIgnore
+                            };
+                        }}
+                        onTouchEnd={(e) => {
+                            if (mainSwipeRef.current.ignore || !e.changedTouches || e.changedTouches.length === 0) return;
+                            const diffX = mainSwipeRef.current.startX - e.changedTouches[0].clientX;
+                            const diffY = mainSwipeRef.current.startY - e.changedTouches[0].clientY;
+                            if (Math.abs(diffX) > 65 && Math.abs(diffX) > Math.abs(diffY) * 1.8) {
+                                if (diffX > 65) {
+                                    currentView === 'day' ? changeDate(1) : currentView === 'week' ? changeWeek(1) : changeMonth(1);
+                                } else if (diffX < -65) {
+                                    currentView === 'day' ? changeDate(-1) : currentView === 'week' ? changeWeek(-1) : changeMonth(-1);
+                                }
+                            }
+                        }}
+                    >
                         <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} mx-auto p-4 space-y-5 pb-24 transition-all duration-500`}>
                             
                             {appMode === 'work' && currentView === 'day' && (() => {
@@ -2259,12 +2377,43 @@ scroll-behavior: auto;
                                                     <h3 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
                                                         <PencilIcon size={14} /> Nháp
                                                     </h3>
-                                                    <button
-                                                        onClick={handleClearScratchpad}
-                                                        className="p-2 rounded-xl text-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all active:scale-90"
-                                                    >
-                                                        <Trash2Icon size={16} />
-                                                    </button>
+                                                    {confirmClearScratchpad ? (
+                                                        <div className="flex items-center gap-1.5 animate-[fadeScale_0.15s_ease-out]">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    handleClearScratchpad();
+                                                                    setConfirmClearScratchpad(false);
+                                                                    showToast('🗑️ Đã xóa trắng giấy nháp!', 'success');
+                                                                }}
+                                                                className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 transition-all"
+                                                            >
+                                                                Xóa sạch
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setConfirmClearScratchpad(false)}
+                                                                className="px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 text-[10px] font-bold active:scale-95 transition-all"
+                                                            >
+                                                                Hủy
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (!scratchpad || !scratchpad.trim()) {
+                                                                    showToast('Giấy nháp đang trống!', 'error');
+                                                                    return;
+                                                                }
+                                                                setConfirmClearScratchpad(true);
+                                                            }}
+                                                            title="Xóa nháp"
+                                                            className="p-2 rounded-xl text-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all active:scale-90"
+                                                        >
+                                                            <Trash2Icon size={16} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <textarea
                                                     value={scratchpad || ''}
@@ -2677,14 +2826,26 @@ scroll-behavior: auto;
                                 </div>
                             )}
 
+               
                             {appMode === 'workout' && currentView === 'day' && (
                                 <div className="animate-[fadeScale_0.3s_ease-out]">
                                     {currentWorkout ? (
                                         <div className="mb-6">
                                             {(() => {
-                                                const wCol = getWorkoutColor(currentWorkout.type);
+                                                const wType = currentWorkout.type;
+                                                const gradMap = {
+                                                    Upper: { cls: 'from-orange-500 to-amber-600 shadow-orange-500/30', bg: 'linear-gradient(135deg, #f97316 0%, #d97706 100%)' },
+                                                    Lower: { cls: 'from-yellow-400 to-amber-500 shadow-yellow-500/30', bg: 'linear-gradient(135deg, #eab308 0%, #f59e0b 100%)' },
+                                                    Push:  { cls: 'from-emerald-500 to-teal-600 shadow-emerald-500/30', bg: 'linear-gradient(135deg, #10b981 0%, #0d9488 100%)' },
+                                                    Pull:  { cls: 'from-blue-500 to-indigo-600 shadow-blue-500/30', bg: 'linear-gradient(135deg, #3b82f6 0%, #4f46e5 100%)' },
+                                                    Leg:   { cls: 'from-purple-500 to-fuchsia-600 shadow-purple-500/30', bg: 'linear-gradient(135deg, #a855f7 0%, #c026d3 100%)' }
+                                                };
+                                                const gStyle = gradMap[wType] || gradMap.Upper;
                                                 return (
-                                                    <div className={`bg-gradient-to-br from-${wCol.fill.split('-')[1]}-500 to-${wCol.fill.split('-')[1]}-600 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-${wCol.fill.split('-')[1]}-500/30 mb-6 relative overflow-hidden flex justify-between items-center transition-colors min-h-[160px]`}>
+                                                    <div
+                                                        style={{ background: gStyle.bg }}
+                                                        className={`bg-gradient-to-br ${gStyle.cls} rounded-[2.5rem] p-8 text-white shadow-2xl mb-6 relative overflow-hidden flex justify-between items-center transition-all min-h-[160px]`}
+                                                    >
                                                         <div className="relative z-10">
                                                             <p className="font-bold text-sm mb-2 flex items-center gap-2 opacity-90 uppercase tracking-widest"><DumbbellIcon size={16}/> Hôm nay tập</p>
                                                             <h2 className="text-5xl font-black tracking-tighter drop-shadow-md">{currentWorkout.type}</h2>
@@ -3044,18 +3205,19 @@ scroll-behavior: auto;
                                                     )}
                                                 </div>
 
+                                       
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <button onClick={() => handleFilterClick('late_sleep')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_sleep' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
-                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateSleep}%`}}></div></div>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctWeekLateSleep}%`}}></div></div>
                                                         <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Thức khuya</p>
-                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
-                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateSleep}%</span></div>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{weekLateSleep}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {weekSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctWeekLateSleep}%</span></div>
                                                     </button>
                                                     <button onClick={() => handleFilterClick('late_wake')} className={`w-full bg-slate-50 dark:bg-zinc-800 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === 'late_wake' ? 'ring-2 ring-indigo-500 border-transparent shadow-lg shadow-indigo-500/20' : 'border-slate-200 dark:border-zinc-700'}`}>
-                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctLateWake}%`}}></div></div>
+                                                        <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-slate-200 dark:bg-zinc-700"><div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-1000 rounded-t" style={{height: `${pctWeekLateWake}%`}}></div></div>
                                                         <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3">Ngủ nướng</p>
-                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{monthLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {monthSleepDaysCount}</span></div>
-                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctLateWake}%</span></div>
+                                                        <div className="flex items-baseline justify-center gap-1.5 mb-3"><span className="text-4xl font-black text-slate-800 dark:text-white leading-none">{weekLateWake}</span><span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">/ {weekSleepDaysCount}</span></div>
+                                                        <div className="bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl border border-slate-100 dark:border-zinc-800 inline-block shadow-sm"><span className="text-sm font-black text-slate-600 dark:text-zinc-300">{pctWeekLateWake}%</span></div>
                                                     </button>
                                                 </div>
                                             </div>
@@ -3251,8 +3413,13 @@ scroll-behavior: auto;
                                             return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
                                         };
 
-                                        return (
-                                            <div className="space-y-6">
+ 
+                                       return (
+                                            <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors space-y-6">
+                                                <div className="flex justify-between items-center">
+                                                    <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tháng</h3>
+                                                    <button onClick={() => { setShowAvgModal(true); setAvgResult(null); }} className="text-[10px] font-black text-blue-500 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"><CalendarIcon size={12}/> TÍNH TB</button>
+                                                </div>
                                                 <div className="bg-slate-800 dark:bg-black p-4 sm:p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20 border border-slate-700 dark:border-zinc-800 transition-colors">
                                                     
                                                     {/* KẾT QUẢ TRUNG BÌNH & NÚT PHÂN TÍCH THÁNG NÀY */}
@@ -3360,7 +3527,7 @@ scroll-behavior: auto;
                                         );
                                     })()}
 
-                                    <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
+                                    <div className={`bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors ${appMode === 'sleep' ? 'hidden' : ''}`}>
                                         <div className="flex justify-between items-center mb-5">
                                             <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight"><ActivityIcon size={20} className="text-blue-500" /> Phân tích tháng</h3>
                                             </div>
@@ -3616,22 +3783,62 @@ scroll-behavior: auto;
                                         </div>
                                     )}
 
+                              
                                     <div 
                                         id="journal-week-scroll"
                                         ref={(el) => {
                                             if (el && !el.dataset.scrolledToday && !isFiltering) {
                                                 el.dataset.scrolledToday = 'true';
-                                                setTimeout(() => {
-                                                    const todayCard = el.querySelector('[data-today="true"]') || el.querySelector('[data-selected="true"]');
-                                                    if (todayCard) {
-                                                        const scrollPos = todayCard.offsetLeft - (el.clientWidth / 2) + (todayCard.clientWidth / 2);
-                                                        el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'auto' });
+                                                const edge = el.dataset.scrollEdge;
+                                                delete el.dataset.scrollEdge;
+                                                requestAnimationFrame(() => {
+                                                    if (edge === 'start') {
+                                                        el.scrollTo({ left: 0, behavior: 'auto' });
+                                                    } else if (edge === 'end') {
+                                                        el.scrollTo({ left: el.scrollWidth, behavior: 'auto' });
+                                                    } else {
+                                                        const targetCard = el.querySelector('[data-selected="true"]') || el.querySelector('[data-today="true"]');
+                                                        if (targetCard) {
+                                                            const scrollPos = targetCard.offsetLeft - (el.clientWidth / 2) + (targetCard.clientWidth / 2);
+                                                            el.scrollTo({ left: Math.max(0, scrollPos), behavior: 'auto' });
+                                                        }
                                                     }
-                                                }, 40);
+                                                });
                                             }
                                         }}
-                                        style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}
-                                        className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-6 pt-1.5 px-1 no-scrollbar items-stretch"
+                                        onTouchStart={(e) => {
+                                            if (isFiltering) return;
+                                            const el = e.currentTarget;
+                                            el.dataset.startX = e.touches[0].clientX;
+                                            el.dataset.startY = e.touches[0].clientY;
+                                            el.dataset.startScroll = el.scrollLeft;
+                                        }}
+                                        onTouchEnd={(e) => {
+                                            if (isFiltering) return;
+                                            const el = e.currentTarget;
+                                            const startX = parseFloat(el.dataset.startX || 0);
+                                            const startY = parseFloat(el.dataset.startY || 0);
+                                            const startScroll = parseFloat(el.dataset.startScroll || 0);
+                                            const endX = e.changedTouches[0].clientX;
+                                            const endY = e.changedTouches[0].clientY;
+                                            const diffX = startX - endX;
+                                            const diffY = Math.abs(startY - endY);
+                                            const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+
+                                            // Chỉ kích hoạt chuyển tuần khi vuốt ngang rõ rệt
+                                            if (Math.abs(diffX) > 45 && Math.abs(diffX) > diffY) {
+                                                // Đang ở cuối tuần (CN) và vuốt tiếp qua phải -> Sang Thứ 2 tuần sau
+                                                if ((el.scrollLeft >= maxScroll - 25 || startScroll >= maxScroll - 25) && diffX > 45) {
+                                                    changeWeek(1);
+                                                }
+                                                // Đang ở đầu tuần (T2) và vuốt lùi qua trái -> Về Chủ Nhật tuần rồi
+                                                else if ((el.scrollLeft <= 25 || startScroll <= 25) && diffX < -45) {
+                                                    changeWeek(-1);
+                                                }
+                                            }
+                                        }}
+                                        style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', touchAction: 'pan-x pan-y' }}
+                                        className="flex overflow-x-auto snap-x snap-proximity gap-4 pb-6 pt-1.5 px-1 no-scrollbar items-stretch"
                                     >
                                         {(() => {
                                             // LOGIC RENDER: Nếu có lọc thì lôi hết lịch sử ra, nếu không thì hiện tuần hiện tại
@@ -3658,19 +3865,18 @@ scroll-behavior: auto;
                                             }
 
                                             const todayStr = formatDate(new Date());
-                                            const hasTodayInWeek = !isFiltering && renderDays.some(d => formatDate(d) === todayStr);
 
                                             return renderDays.map(day => {
                                                 const dKey = formatDate(day); const isToday = todayStr === dKey;
                                                 const isSelectedDay = formatDate(selectedDate) === dKey;
-                                                const isHighlightedCard = !isFiltering && (hasTodayInWeek ? isToday : isSelectedDay);
+                                                const isHighlightedCard = !isFiltering && isSelectedDay;
                                                 const sDay = statsByDate[dKey]; const sleepDay = sleepByDate[dKey] || []; const workDay = workoutsByDate[dKey]; const foodDay = foodsByDate[dKey] || []; const foodTotals = calculateTotals(foodDay);
                                                 
                                                 let moodColor = MOODS[3]; let outIcon = OUTINGS[0]; let moodIcon = MOODS[3].icon;
                                                 if (sDay) { moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3]; outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0]; moodIcon = moodColor.icon; }
 
                                                 return (
-                                                    <button key={dKey} data-today={isToday && !isFiltering ? "true" : "false"} data-selected={isSelectedDay && !isFiltering ? "true" : "false"} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-lg dark:shadow-none text-left transition-transform active:scale-[0.98] border border-slate-100 dark:border-zinc-800 ${isHighlightedCard ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : ''} w-[85vw] max-w-[340px] shrink-0 snap-center snap-always min-h-[200px] flex flex-col overflow-hidden`}>
+                                                    <button key={dKey} data-today={isToday && !isFiltering ? "true" : "false"} data-selected={isSelectedDay && !isFiltering ? "true" : "false"} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-lg dark:shadow-none text-left border border-slate-100 dark:border-zinc-800 ${isHighlightedCard ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : ''} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
                                                         <div className="flex justify-between items-start mb-5 relative z-10 w-full">
                                                             <div className="flex flex-col gap-2.5 items-start">
                                                                 <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
@@ -4432,6 +4638,28 @@ scroll-behavior: auto;
                                                                             className={`w-full bg-slate-50/80 dark:bg-zinc-950/60 border border-slate-200/80 dark:border-zinc-800 focus:border-slate-400 dark:focus:border-zinc-600 rounded-xl px-3.5 py-2.5 mb-3.5 outline-none font-black text-base sm:text-lg transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`}
                                                                         />
 
+                                                                        {ex.rawText && ex.rawText.toUpperCase() !== 'X' && (
+                                                                            <div className="mb-3.5 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                                                                                <div className="flex justify-between items-center gap-2">
+                                                                                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">Ghi chú tự do (Dữ liệu cũ)</span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleUpdateRawText(ex.id, '')}
+                                                                                        className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-black uppercase transition-all active:scale-95"
+                                                                                    >
+                                                                                        Xóa để nhập Tạ × Reps
+                                                                                    </button>
+                                                                                </div>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={ex.rawText}
+                                                                                    onChange={e => handleUpdateRawText(ex.id, e.target.value)}
+                                                                                    placeholder="Nội dung ghi chú bài tập..."
+                                                                                    className="w-full bg-zinc-950/80 border border-amber-500/30 rounded-xl px-3 py-2 outline-none text-xs font-bold text-amber-200"
+                                                                                />
+                                                                            </div>
+                                                                        )}
+
                                                                         {}
                                                                         {/* DANH SÁCH HIỆP TẬP THẲNG HÀNG DỌC TUYỆT ĐỐI */}
                                                                         <div className="space-y-2.5 flex-1">
@@ -5134,11 +5362,11 @@ scroll-behavior: auto;
                                         <input type="text" value={geminiApiKey} onChange={(e) => setGeminiApiKey(e.target.value)} placeholder="Nhập API Key để dùng AI..." className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-3.5 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 mt-2">
-                                        <button onClick={() => handleSyncPush(false)} disabled={isSyncing} className="py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-blue-500/30">
+                                        <button onClick={() => { setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); handleSyncPush(false); }} disabled={isSyncing} className="py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-blue-500/30">
                                             <UploadIcon size={24} className="mb-1" />
                                             <span className="text-xs uppercase tracking-widest">Đẩy lên Sheet</span>
                                         </button>
-                                        <button onClick={() => handleSyncPull()} disabled={isSyncing} className="py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-emerald-500/30">
+                                        <button onClick={() => { setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); handleSyncPull(); }} disabled={isSyncing} className="py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-emerald-500/30">
                                             <DownloadIcon size={24} className="mb-1" />
                                             <span className="text-xs uppercase tracking-widest">Tải từ Sheet</span>
                                         </button>
