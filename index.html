@@ -609,8 +609,12 @@
 
                 const [timerSeconds, setTimerSeconds] = useState(null);
                 const [isRinging, setIsRinging] = useState(false);
+                const [showWorkoutNoteInput, setShowWorkoutNoteInput] = useState(false);
                 const timerRef = useRef(null);
+                const timerEndTimeRef = useRef(null);
                 const ringIntervalRef = useRef(null);
+                const audioCtxRef = useRef(null);
+                const wakeLockRef = useRef(null);
                 const [vibrateEnabled, setVibrateEnabled] = useState(() => {
                     const saved = localStorage.getItem('vibrate_enabled');
                     return saved !== null ? JSON.parse(saved) : true;
@@ -619,37 +623,140 @@
                 const vibrateEnabledRef = useRef(vibrateEnabled);
                 useEffect(() => { vibrateEnabledRef.current = vibrateEnabled; }, [vibrateEnabled]);
 
+                const playTimerAlarmBeep = () => {
+                    try {
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (!AudioCtx) return;
+                        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+                            audioCtxRef.current = new AudioCtx();
+                        }
+                        const ctx = audioCtxRef.current;
+                        if (ctx.state === 'suspended') ctx.resume();
+                        [0, 0.18, 0.36].forEach((offset, idx) => {
+                            const osc = ctx.createOscillator();
+                            const gain = ctx.createGain();
+                            osc.type = 'sine';
+                            osc.frequency.setValueAtTime(idx === 2 ? 1046.5 : 880, ctx.currentTime + offset);
+                            gain.gain.setValueAtTime(0.001, ctx.currentTime + offset);
+                            gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + offset + 0.02);
+                            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.14);
+                            osc.connect(gain);
+                            gain.connect(ctx.destination);
+                            osc.start(ctx.currentTime + offset);
+                            osc.stop(ctx.currentTime + offset + 0.15);
+                        });
+                    } catch (e) {}
+                };
+
+                const triggerRestTimerAlarm = () => {
+                    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+                    timerEndTimeRef.current = null;
+                    setTimerSeconds(0);
+                    setIsRinging(true);
+                    playTimerAlarmBeep();
+                    if (vibrateEnabledRef.current && navigator.vibrate) {
+                        try { navigator.vibrate([500, 200, 500]); } catch (e) {}
+                    }
+                    if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
+                    ringIntervalRef.current = setInterval(() => {
+                        playTimerAlarmBeep();
+                        if (vibrateEnabledRef.current && navigator.vibrate) {
+                            try { navigator.vibrate([500, 200, 500]); } catch (e) {}
+                        }
+                    }, 1600);
+                    try {
+                        if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') {
+                            new Notification('⏱️ Hết giờ nghỉ rồi Calasu!', {
+                                body: 'Vào hiệp tiếp theo chiến tiếp thôi! 🔥',
+                                silent: false
+                            });
+                        }
+                    } catch (e) {}
+                };
+
+                const syncRestTimerRemaining = () => {
+                    if (!timerEndTimeRef.current) return;
+                    const diffMs = timerEndTimeRef.current - Date.now();
+                    if (diffMs <= 0) {
+                        triggerRestTimerAlarm();
+                    } else {
+                        setTimerSeconds(Math.ceil(diffMs / 1000));
+                    }
+                };
+
                 const startRestTimer = (seconds) => {
                     if (timerRef.current) clearInterval(timerRef.current);
                     if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
-                    if (navigator.vibrate) navigator.vibrate(0);
+                    if (navigator.vibrate) { try { navigator.vibrate(0); } catch (e) {} }
+                    try {
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        if (AudioCtx) {
+                            if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') audioCtxRef.current = new AudioCtx();
+                            if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+                        }
+                        if ('Notification' in window && Notification.permission === 'default') {
+                            Notification.requestPermission().catch(() => {});
+                        }
+                    } catch (e) {}
                     setIsRinging(false);
+                    timerEndTimeRef.current = Date.now() + (seconds * 1000);
                     setTimerSeconds(seconds);
-                    timerRef.current = setInterval(() => {
-                        setTimerSeconds((prev) => {
-                            if (prev <= 1) { 
-                                clearInterval(timerRef.current); 
-                                setIsRinging(true);
-                                if (vibrateEnabledRef.current && navigator.vibrate) {
-                                    navigator.vibrate([500, 200, 500]); // Rung lần đầu
-                                    ringIntervalRef.current = setInterval(() => {
-                                        navigator.vibrate([500, 200, 500]); // Lặp lại rung báo thức
-                                    }, 1500);
-                                }
-                                return 0; 
-                            }
-                            return prev - 1;
-                        });
-                    }, 1000);
+                    timerRef.current = setInterval(syncRestTimerRemaining, 250);
                 };
-                const stopRestTimer = () => { 
-                    if (timerRef.current) clearInterval(timerRef.current); 
-                    if (ringIntervalRef.current) clearInterval(ringIntervalRef.current);
-                    if (navigator.vibrate) navigator.vibrate(0); // Tắt hẳn rung
-                    setTimerSeconds(null); 
+
+                const stopRestTimer = () => {
+                    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+                    if (ringIntervalRef.current) { clearInterval(ringIntervalRef.current); ringIntervalRef.current = null; }
+                    timerEndTimeRef.current = null;
+                    if (navigator.vibrate) { try { navigator.vibrate(0); } catch (e) {} }
+                    setTimerSeconds(null);
                     setIsRinging(false);
                 };
-                useEffect(() => { if (!isAddingWorkout) stopRestTimer(); }, [isAddingWorkout]);
+
+                useEffect(() => {
+                    const onVisChange = () => {
+                        if (document.visibilityState === 'visible' && timerEndTimeRef.current) {
+                            syncRestTimerRemaining();
+                        }
+                    };
+                    document.addEventListener('visibilitychange', onVisChange);
+                    return () => document.removeEventListener('visibilitychange', onVisChange);
+                }, []);
+
+                useEffect(() => {
+                    if (!isAddingWorkout) {
+                        stopRestTimer();
+                        setShowWorkoutNoteInput(false);
+                        if (wakeLockRef.current) {
+                            wakeLockRef.current.release().catch(() => {});
+                            wakeLockRef.current = null;
+                        }
+                        return;
+                    }
+                    let isCancelled = false;
+                    const requestWakeLock = async () => {
+                        try {
+                            if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+                                const lock = await navigator.wakeLock.request('screen');
+                                if (!isCancelled) wakeLockRef.current = lock;
+                                else lock.release().catch(() => {});
+                            }
+                        } catch (e) {}
+                    };
+                    requestWakeLock();
+                    const handleReacquireWakeLock = () => {
+                        if (document.visibilityState === 'visible' && isAddingWorkout) requestWakeLock();
+                    };
+                    document.addEventListener('visibilitychange', handleReacquireWakeLock);
+                    return () => {
+                        isCancelled = true;
+                        document.removeEventListener('visibilitychange', handleReacquireWakeLock);
+                        if (wakeLockRef.current) {
+                            wakeLockRef.current.release().catch(() => {});
+                            wakeLockRef.current = null;
+                        }
+                    };
+                }, [isAddingWorkout]);
 
                 const dateKey = formatDate(selectedDate);
                 const currentFoods = foodsByDate[dateKey] || [];
@@ -739,23 +846,155 @@
                     });
                 };
                 const todoTimerRef = useRef({});
+                const fetchedWorkDatesRef = useRef(new Set());
                 const [urgentList, setUrgentList] = useState(() => { try { const saved = localStorage.getItem('work_urgents'); return saved ? JSON.parse(saved) : []; } catch(e) { return []; } });
                 const [scratchpad, setScratchpad] = useState(() => localStorage.getItem('work_scratchpad') || '');
                 const scratchpadTimerRef = useRef(null);
 
+                // State cho đại tu phân khu Work: Ghim tâm điểm, Thu gọn Chú ý, Thanh nhập thông minh & Sửa trực tiếp
+                const [focusTaskId, setFocusTaskId] = useState(() => localStorage.getItem('work_focus_task') || null);
+                const [isUrgentExpanded, setIsUrgentExpanded] = useState(false);
+                const [newTodoCategory, setNewTodoCategory] = useState('must');
+                const [newTodoText, setNewTodoText] = useState('');
+                const [editingTodo, setEditingTodo] = useState(null); // { category, id, text }
+
                 useEffect(() => { localStorage.setItem('work_todos', JSON.stringify(todoCache)); }, [todoCache]);
                 useEffect(() => { localStorage.setItem('work_urgents', JSON.stringify(urgentList)); }, [urgentList]);
+                useEffect(() => {
+                    if (focusTaskId) localStorage.setItem('work_focus_task', focusTaskId);
+                    else localStorage.removeItem('work_focus_task');
+                }, [focusTaskId]);
 
+                // Hàm tính điểm hiệu suất trọng số: Must = 3đ, Should = 2đ, Can = 1đ
+                const calculateWorkStats = (dayTodo) => {
+                    const must = dayTodo?.must || [];
+                    const should = dayTodo?.should || [];
+                    const can = dayTodo?.can || [];
+                    const mustDone = must.filter(t => t.done).length;
+                    const shouldDone = should.filter(t => t.done).length;
+                    const canDone = can.filter(t => t.done).length;
+                    const totalPoints = (must.length * 3) + (should.length * 2) + (can.length * 1);
+                    const earnedPoints = (mustDone * 3) + (shouldDone * 2) + (canDone * 1);
+                    const totalTasks = must.length + should.length + can.length;
+                    const totalDone = mustDone + shouldDone + canDone;
+                    const pct = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+                    return {
+                        pct,
+                        earnedPoints,
+                        totalPoints,
+                        totalTasks,
+                        totalDone,
+                        mustDone,
+                        mustTotal: must.length,
+                        hasData: totalTasks > 0
+                    };
+                };
+
+                // Hàm lấy màu trạng thái chuẩn hóa cho lịch Tuần & Tháng (80% Xanh ngọc, 50% Vàng, <50% Đỏ)
+                const getWorkStatus = (pct, hasData) => {
+                    if (!hasData) return null;
+                    if (pct >= 80) return { bg: 'bg-emerald-500', border: 'border-emerald-600', text: 'text-white', subText: 'text-white/80', shadow: 'shadow-emerald-500/20' };
+                    if (pct >= 50) return { bg: 'bg-yellow-400', border: 'border-yellow-500', text: 'text-slate-900', subText: 'text-slate-800/80', shadow: 'shadow-yellow-400/20' };
+                    return { bg: 'bg-red-500', border: 'border-red-600', text: 'text-white', subText: 'text-white/80', shadow: 'shadow-red-500/20' };
+                };
+
+                // Đồng bộ đẩy danh sách việc kèm vòng xoay đám mây trên Header
                 const scheduleTodoSync = (data, targetDateKey = null) => {
                     const dKey = targetDateKey || formatDate(selectedDate);
                     if (todoTimerRef.current[dKey]) clearTimeout(todoTimerRef.current[dKey]);
                     todoTimerRef.current[dKey] = setTimeout(async () => {
-                        try { await fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'TODO', date: dKey, data }) }); } catch (e) {}
+                        if (!gasUrl) return;
+                        startSyncRing('push');
+                        try {
+                            await fetch(gasUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                body: JSON.stringify({ type: 'TODO', date: dKey, data })
+                            });
+                        } catch (e) {
+                            console.error(e);
+                        } finally {
+                            finishSyncRing();
+                        }
                     }, 800);
                 };
 
+                // Tự động kiểm tra và kéo ngầm dữ liệu công việc cho ngày/tuần/tháng chưa có trong bộ nhớ đệm
+                useEffect(() => {
+                    if (appMode !== 'work' || !isAutoSyncEnabled || !gasUrl) return;
+                    let datesToCheck = [];
+                    if (currentView === 'day') {
+                        const yest = new Date(selectedDate);
+                        yest.setDate(yest.getDate() - 1);
+                        datesToCheck = [formatDate(selectedDate), formatDate(yest)];
+                    } else if (currentView === 'week') {
+                        datesToCheck = [...Array(7)].map((_, i) => {
+                            const d = new Date(currentWeekStart);
+                            d.setDate(d.getDate() + i);
+                            return formatDate(d);
+                        });
+                    } else if (currentView === 'month') {
+                        const numDays = getDaysInMonth(currentMonthStart.getFullYear(), currentMonthStart.getMonth());
+                        const now = new Date();
+                        datesToCheck = [...Array(numDays)]
+                            .map((_, i) => new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), i + 1))
+                            .filter(d => d <= now)
+                            .map(d => formatDate(d));
+                    }
+
+                    const missingDates = datesToCheck.filter(dKey => {
+                        const cached = todoCache[dKey];
+                        const isEmpty = !cached || ((!cached.must || cached.must.length === 0) && (!cached.should || cached.should.length === 0) && (!cached.can || cached.can.length === 0));
+                        return isEmpty && !fetchedWorkDatesRef.current.has(dKey);
+                    });
+
+                    if (missingDates.length === 0) return;
+                    missingDates.forEach(dKey => fetchedWorkDatesRef.current.add(dKey));
+
+                    let isCancelled = false;
+                    const pullMissingWorkDates = async () => {
+                        startSyncRing('pull');
+                        try {
+                            await Promise.all(missingDates.map(async (dKey) => {
+                                try {
+                                    const res = await fetch(`${gasUrl}?type=WORK&date=${dKey}`);
+                                    const json = await res.json();
+                                    if (!isCancelled && json.status === 'success' && json.data) {
+                                        if (json.data.todo) {
+                                            const td = json.data.todo;
+                                            const hasRemote = (td.must && td.must.length > 0) || (td.should && td.should.length > 0) || (td.can && td.can.length > 0);
+                                            if (hasRemote) {
+                                                setTodoCache(prev => ({
+                                                    ...prev,
+                                                    [dKey]: {
+                                                        must: td.must || [],
+                                                        should: td.should || [],
+                                                        can: td.can || []
+                                                    }
+                                                }));
+                                            }
+                                        }
+                                        if (dKey === formatDate(selectedDate)) {
+                                            if (json.data.urgent) setUrgentList(json.data.urgent || []);
+                                            if (json.data.scratchpad !== undefined) {
+                                                setScratchpad(json.data.scratchpad);
+                                                localStorage.setItem('work_scratchpad', json.data.scratchpad);
+                                            }
+                                        }
+                                    }
+                                } catch (err) {}
+                            }));
+                        } finally {
+                            if (!isCancelled) finishSyncRing();
+                        }
+                    };
+                    pullMissingWorkDates();
+                    return () => { isCancelled = true; };
+                }, [appMode, currentView, selectedDate, currentWeekStart, currentMonthStart, isAutoSyncEnabled, gasUrl]);
+
                 const handleAddTodo = (category, text) => {
-                    const newTask = { id: Date.now().toString(), text, done: false };
+                    if (!text || !text.trim()) return;
+                    const newTask = { id: Date.now().toString() + Math.random().toString(36).slice(2, 5), text: text.trim(), done: false };
                     const dKey = formatDate(selectedDate);
                     setTodoCache(prev => {
                         const curr = prev[dKey] || { must: [], should: [], can: [] };
@@ -764,17 +1003,34 @@
                         return { ...prev, [dKey]: nData };
                     });
                 };
+
                 const handleToggleTodo = (category, taskId) => {
                     const dKey = formatDate(selectedDate);
                     setTodoCache(prev => {
                         const curr = prev[dKey] || { must: [], should: [], can: [] };
-                        const nData = { ...curr, [category]: (curr[category] || []).map(t => t.id === taskId ? { ...t, done: !t.done } : t) };
+                        let becameDone = false;
+                        const nData = {
+                            ...curr,
+                            [category]: (curr[category] || []).map(t => {
+                                if (t.id === taskId) {
+                                    becameDone = !t.done;
+                                    return { ...t, done: !t.done };
+                                }
+                                return t;
+                            })
+                        };
+                        if (becameDone && focusTaskId === taskId) {
+                            setFocusTaskId(null);
+                            showToast('🎯 Đã giải quyết gọn mục tiêu tâm điểm!', 'success');
+                        }
                         scheduleTodoSync(nData, dKey);
                         return { ...prev, [dKey]: nData };
                     });
                 };
+
                 const handleDeleteTodo = (category, taskId) => {
                     const dKey = formatDate(selectedDate);
+                    if (focusTaskId === taskId) setFocusTaskId(null);
                     setTodoCache(prev => {
                         const curr = prev[dKey] || { must: [], should: [], can: [] };
                         const nData = { ...curr, [category]: (curr[category] || []).filter(t => t.id !== taskId) };
@@ -783,21 +1039,155 @@
                     });
                 };
 
-                const handleAddUrgent = (content) => {
-                    const newItem = { id: Date.now().toString(), content };
-                    setUrgentList(prev => [...(prev || []), newItem]);
-                    fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'URGENT_ADD', item: newItem }) }).catch(e=>console.error(e));
+                const handleSaveEditTodo = () => {
+                    if (!editingTodo) return;
+                    const { category, id, text } = editingTodo;
+                    if (!text || !text.trim()) {
+                        setEditingTodo(null);
+                        return;
+                    }
+                    const dKey = formatDate(selectedDate);
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        const nData = {
+                            ...curr,
+                            [category]: (curr[category] || []).map(t => t.id === id ? { ...t, text: text.trim() } : t)
+                        };
+                        scheduleTodoSync(nData, dKey);
+                        return { ...prev, [dKey]: nData };
+                    });
+                    setEditingTodo(null);
                 };
-                const handleDeleteUrgent = (id) => {
+
+                // Kế thừa thông minh: Chỉ lọc việc chưa xong của hôm qua và chưa có trong danh sách hôm nay
+                const handleCarryOverYesterday = () => {
+                    const yesterday = new Date(selectedDate);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yKey = formatDate(yesterday);
+                    const yData = todoCache[yKey];
+                    const totalYesterday = (yData?.must?.length || 0) + (yData?.should?.length || 0) + (yData?.can?.length || 0);
+                    if (!yData || totalYesterday === 0) {
+                        showToast('Hôm qua không có công việc nào được ghi nhận!', 'error');
+                        return;
+                    }
+                    const dKey = formatDate(selectedDate);
+                    const curr = todoCache[dKey] || { must: [], should: [], can: [] };
+                    const existingTexts = new Set(
+                        [...(curr.must || []), ...(curr.should || []), ...(curr.can || [])].map(t => t.text.trim().toLowerCase())
+                    );
+                    let addedCount = 0;
+                    const filterUnfinished = (list) => (list || [])
+                        .filter(t => !t.done && !existingTexts.has(t.text.trim().toLowerCase()))
+                        .map(t => {
+                            addedCount++;
+                            existingTexts.add(t.text.trim().toLowerCase());
+                            return { ...t, id: Date.now().toString() + Math.random().toString(36).slice(2, 6), done: false };
+                        });
+
+                    const nextMust = [...(curr.must || []), ...filterUnfinished(yData.must)];
+                    const nextShould = [...(curr.should || []), ...filterUnfinished(yData.should)];
+                    const nextCan = [...(curr.can || []), ...filterUnfinished(yData.can)];
+
+                    if (addedCount === 0) {
+                        showToast('🎉 Chúc mừng! Hôm qua không còn việc tồn đọng!', 'success');
+                        return;
+                    }
+                    const nData = { must: nextMust, should: nextShould, can: nextCan };
+                    setTodoCache(prev => ({ ...prev, [dKey]: nData }));
+                    scheduleTodoSync(nData, dKey);
+                    showToast(`✨ Đã kế thừa ${addedCount} việc tồn đọng từ hôm qua!`, 'success');
+                };
+
+                // Dời 1 chạm công việc đang kẹt lịch sang ngày mai & tự động lưu cả 2 ngày
+                const handleMoveTodoToTomorrow = (category, taskId) => {
+                    const dKey = formatDate(selectedDate);
+                    const tomorrow = new Date(selectedDate);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    const tomKey = formatDate(tomorrow);
+
+                    const currToday = todoCache[dKey] || { must: [], should: [], can: [] };
+                    const taskToMove = (currToday[category] || []).find(t => t.id === taskId);
+                    if (!taskToMove) return;
+
+                    if (focusTaskId === taskId) setFocusTaskId(null);
+
+                    const nextToday = {
+                        ...currToday,
+                        [category]: (currToday[category] || []).filter(t => t.id !== taskId)
+                    };
+
+                    const currTom = todoCache[tomKey] || { must: [], should: [], can: [] };
+                    const alreadyInTom = (currTom[category] || []).some(t => t.text.trim().toLowerCase() === taskToMove.text.trim().toLowerCase());
+                    const movedTask = { ...taskToMove, id: Date.now().toString() + Math.random().toString(36).slice(2, 6), done: false };
+                    const nextTom = {
+                        ...currTom,
+                        [category]: alreadyInTom ? (currTom[category] || []) : [...(currTom[category] || []), movedTask]
+                    };
+
+                    setTodoCache(prev => ({
+                        ...prev,
+                        [dKey]: nextToday,
+                        [tomKey]: nextTom
+                    }));
+
+                    scheduleTodoSync(nextToday, dKey);
+                    scheduleTodoSync(nextTom, tomKey);
+                    showToast(`⏭️ Đã dời việc sang ngày mai (${tomKey.slice(0, 5)})!`, 'success');
+                };
+
+                const handleAddUrgent = async (content) => {
+                    if (!content || !content.trim()) return;
+                    const newItem = { id: Date.now().toString(), content: content.trim() };
+                    setUrgentList(prev => [...(prev || []), newItem]);
+                    if (!gasUrl) return;
+                    startSyncRing('push');
+                    try {
+                        await fetch(gasUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ type: 'URGENT_ADD', item: newItem })
+                        });
+                    } catch (e) {
+                        console.error(e);
+                    } finally {
+                        finishSyncRing();
+                    }
+                };
+                const handleDeleteUrgent = async (id) => {
                     setUrgentList(prev => (prev || []).filter(item => item.id !== id));
-                    fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'URGENT_DELETE', id }) }).catch(e=>console.error(e));
+                    if (!gasUrl) return;
+                    startSyncRing('push');
+                    try {
+                        await fetch(gasUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ type: 'URGENT_DELETE', id })
+                        });
+                    } catch (e) {
+                        console.error(e);
+                    } finally {
+                        finishSyncRing();
+                    }
                 };
 
                 const handleUpdateScratchpad = (val) => {
-                    setScratchpad(val); localStorage.setItem('work_scratchpad', val);
+                    setScratchpad(val);
+                    localStorage.setItem('work_scratchpad', val);
                     if (scratchpadTimerRef.current) clearTimeout(scratchpadTimerRef.current);
-                    scratchpadTimerRef.current = setTimeout(() => {
-                        fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ type: 'SCRATCHPAD', text: val }) }).catch(e=>console.error(e));
+                    scratchpadTimerRef.current = setTimeout(async () => {
+                        if (!gasUrl) return;
+                        startSyncRing('push');
+                        try {
+                            await fetch(gasUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                body: JSON.stringify({ type: 'SCRATCHPAD', text: val })
+                            });
+                        } catch (e) {
+                            console.error(e);
+                        } finally {
+                            finishSyncRing();
+                        }
                     }, 1500);
                 };
                 const handleClearScratchpad = () => { handleUpdateScratchpad(''); };
@@ -1327,200 +1717,628 @@
                                 </div>
                             )}
                             
-                            {appMode === 'work' && currentView === 'day' && (
-                                <div className="animate-[fadeScale_0.3s_ease-out] space-y-6">
-                                    {/* URGENT CARD */}
-                                    <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-5 rounded-[2rem] shadow-sm transition-colors">
-                                        <h3 className="text-xs font-black text-red-500 dark:text-red-400 mb-4 uppercase tracking-widest flex items-center gap-1.5"><AlertIcon size={16}/> Chú ý</h3>
-                                        <div className="flex flex-col gap-2 mb-4">
-                                            {typeof urgentList !== 'undefined' && (urgentList || []).map(note => (
-                                                <div key={note.id} className="bg-white dark:bg-zinc-800/80 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 px-4 py-3.5 rounded-2xl text-sm font-bold flex justify-between items-center shadow-sm animate-[slideUpSheet_0.2s_ease-out]">
-                                                    <span>{note.content}</span>
-                                                    <button onClick={() => typeof handleDeleteUrgent === 'function' && handleDeleteUrgent(note.id)} className="hover:bg-red-50 dark:hover:bg-red-500/10 text-red-400 hover:text-red-500 p-1.5 rounded-xl transition-all active:scale-90"><XIcon size={16}/></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        
-                                        {/* Ô NHẬP LIỆU GỌN GÀNG */}
-                                        <div className="flex items-center w-full bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900/50 rounded-2xl focus-within:border-red-400 focus-within:ring-4 focus-within:ring-red-500/10 transition-all shadow-sm overflow-hidden">
-                                            <input id="input-urgent" type="text" placeholder="Nhập chú ý..." 
-                                                onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim() && typeof handleAddUrgent === 'function') { handleAddUrgent(e.target.value); e.target.value = ''; } }}
-                                                className="flex-1 w-full bg-transparent px-4 py-3.5 outline-none text-sm font-bold text-slate-800 dark:text-zinc-200 placeholder-red-300 dark:placeholder-red-900/50" 
-                                            />
-                                        </div>
-                                    </div>
+                            {appMode === 'work' && currentView === 'day' && (() => {
+                                const dayWorkStats = calculateWorkStats(todoData);
+                                const isGoalReached = dayWorkStats.hasData && dayWorkStats.pct >= 80;
 
-                                    {/* TO-DO LIST */}
-                                    <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-6 rounded-[2rem] shadow-sm transition-colors">
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2"><CheckCircleIcon className="text-cyan-500" size={24}/> To-do list</h3>
-                                            <button onClick={() => {
-                                                const yesterday = new Date(selectedDate); yesterday.setDate(yesterday.getDate() - 1);
-                                                const yKey = formatDate(yesterday); const yData = todoCache[yKey];
-                                                if (!yData || (!yData.must?.length && !yData.should?.length && !yData.can?.length)) { showToast('Hôm qua không có task nào!', 'error'); return; }
-                                                const clone = (ts) => (ts||[]).map(t => ({...t, id: Date.now() + Math.random().toString(), done: false}));
-                                                const nData = { must: [...(todoData.must||[]), ...clone(yData.must)], should: [...(todoData.should||[]), ...clone(yData.should)], can: [...(todoData.can||[]), ...clone(yData.can)] };
-                                                setTodoData(nData); setTodoCache(c => ({...c, [dateKey]: nData})); scheduleTodoSync(nData); showToast('Đã chép việc hôm qua!', 'success');
-                                            }} className="p-2 bg-slate-50 dark:bg-zinc-800 text-blue-500 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/20 transition-all active:scale-95 shadow-sm border border-slate-100 dark:border-zinc-700 font-bold text-xs flex items-center gap-1.5"><CopyIcon size={14}/> Chép hôm qua</button>
-                                        </div>
+                                let focusedTask = null;
+                                if (focusTaskId) {
+                                    ['must', 'should', 'can'].forEach(cat => {
+                                        (todoData?.[cat] || []).forEach(t => {
+                                            if (t.id === focusTaskId && !t.done) {
+                                                focusedTask = { ...t, category: cat };
+                                            }
+                                        });
+                                    });
+                                }
 
-                                        <div className="space-y-8">
-                                            {/* MUST */}
-                                            <div>
-                                                <h4 className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><FlameIcon size={14}/> Việc bắt buộc (Must)</h4>
-                                                <div className="space-y-2 mb-3">
-                                                    {typeof todoData !== 'undefined' && (todoData?.must || []).map(t => (
-                                                        <div key={t.id} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all group">
-                                                            <button onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('must', t.id)} className={`relative flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all active:scale-90 ${t.done ? 'bg-red-500 border-red-500 text-white shadow-sm shadow-red-500/30' : 'border-slate-300 dark:border-zinc-600 text-transparent'}`}>
-                                                                <CheckIcon size={14} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3}/>
-                                                            </button>
-                                                            <span onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('must', t.id)} className={`flex-1 text-sm font-semibold transition-all duration-300 cursor-pointer ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}>{t.text}</span>
-                                                            <button onClick={(e) => { e.stopPropagation(); typeof handleDeleteTodo === 'function' && handleDeleteTodo('must', t.id); }} className="p-2 text-slate-300 hover:text-red-500 bg-white dark:bg-zinc-700/50 rounded-xl transition-all shadow-sm opacity-0 md:opacity-100 md:group-hover:opacity-100"><Trash2Icon size={16}/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <form onSubmit={(e) => { e.preventDefault(); const inp = document.getElementById('input-todo-must'); if (inp && inp.value.trim() && typeof handleAddTodo === 'function') { handleAddTodo('must', inp.value); inp.value = ''; } }} className="flex items-center w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl focus-within:border-red-400 focus-within:ring-4 focus-within:ring-red-500/10 transition-all shadow-sm overflow-hidden">
-                                                    <input id="input-todo-must" type="text" placeholder="Thêm việc..." onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const val = e.target.value.trim(); if (val && typeof handleAddTodo === 'function') { handleAddTodo('must', val); e.target.value = ''; } } }} className="flex-1 bg-transparent px-4 py-3 outline-none text-sm font-semibold text-slate-700 dark:text-zinc-200 placeholder-slate-400" />
-                                                </form>
-                                            </div>
+                                const priorityMeta = {
+                                    must: {
+                                        label: 'Việc bắt buộc (Must)',
+                                        shortLabel: 'Bắt buộc',
+                                        Icon: FlameIcon,
+                                        headerText: 'text-red-500 dark:text-red-400',
+                                        checkDone: 'bg-red-500 border-red-500 text-white shadow-sm shadow-red-500/30',
+                                        activeTab: 'bg-red-500 text-white shadow-md shadow-red-500/25 border-transparent'
+                                    },
+                                    should: {
+                                        label: 'Việc nên làm (Should)',
+                                        shortLabel: 'Nên làm',
+                                        Icon: SunIcon,
+                                        headerText: 'text-blue-500 dark:text-blue-400',
+                                        checkDone: 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-500/30',
+                                        activeTab: 'bg-blue-500 text-white shadow-md shadow-blue-500/25 border-transparent'
+                                    },
+                                    can: {
+                                        label: 'Việc phụ (Can)',
+                                        shortLabel: 'Việc phụ',
+                                        Icon: CoffeeIcon,
+                                        headerText: 'text-slate-500 dark:text-zinc-400',
+                                        checkDone: 'bg-slate-500 border-slate-500 text-white shadow-sm',
+                                        activeTab: 'bg-slate-700 dark:bg-zinc-600 text-white shadow-md border-transparent'
+                                    }
+                                };
 
-                                            {/* SHOULD */}
-                                            <div>
-                                                <h4 className="text-[10px] font-black text-blue-500 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><SunIcon size={14}/> Việc nên làm (Should)</h4>
-                                                <div className="space-y-2 mb-3">
-                                                    {typeof todoData !== 'undefined' && (todoData?.should || []).map(t => (
-                                                        <div key={t.id} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all group">
-                                                            <button onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('should', t.id)} className={`relative flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all active:scale-90 ${t.done ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-500/30' : 'border-slate-300 dark:border-zinc-600 text-transparent'}`}>
-                                                                <CheckIcon size={14} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3}/>
-                                                            </button>
-                                                            <span onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('should', t.id)} className={`flex-1 text-sm font-semibold transition-all duration-300 cursor-pointer ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}>{t.text}</span>
-                                                            <button onClick={(e) => { e.stopPropagation(); typeof handleDeleteTodo === 'function' && handleDeleteTodo('should', t.id); }} className="p-2 text-slate-300 hover:text-red-500 bg-white dark:bg-zinc-700/50 rounded-xl transition-all shadow-sm opacity-0 md:opacity-100 md:group-hover:opacity-100"><Trash2Icon size={16}/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <form onSubmit={(e) => { e.preventDefault(); const inp = document.getElementById('input-todo-should'); if (inp && inp.value.trim() && typeof handleAddTodo === 'function') { handleAddTodo('should', inp.value); inp.value = ''; } }} className="flex items-center w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all shadow-sm overflow-hidden">
-                                                    <input id="input-todo-should" type="text" placeholder="Thêm việc..." onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const val = e.target.value.trim(); if (val && typeof handleAddTodo === 'function') { handleAddTodo('should', val); e.target.value = ''; } } }} className="flex-1 bg-transparent px-4 py-3 outline-none text-sm font-semibold text-slate-700 dark:text-zinc-200 placeholder-slate-400" />
-                                                </form>
-                                            </div>
+                                const hasUrgentItems = Array.isArray(urgentList) && urgentList.length > 0;
 
-                                            {/* CAN */}
-                                            <div>
-                                                <h4 className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5"><CoffeeIcon size={14}/> Việc phụ (Can)</h4>
-                                                <div className="space-y-2 mb-3">
-                                                    {typeof todoData !== 'undefined' && (todoData?.can || []).map(t => (
-                                                        <div key={t.id} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all group">
-                                                            <button onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('can', t.id)} className={`relative flex items-center justify-center w-6 h-6 rounded-full border-2 transition-all active:scale-90 ${t.done ? 'bg-slate-500 border-slate-500 text-white shadow-sm' : 'border-slate-300 dark:border-zinc-600 text-transparent'}`}>
-                                                                <CheckIcon size={14} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3}/>
-                                                            </button>
-                                                            <span onClick={() => typeof handleToggleTodo === 'function' && handleToggleTodo('can', t.id)} className={`flex-1 text-sm font-semibold transition-all duration-300 cursor-pointer ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}>{t.text}</span>
-                                                            <button onClick={(e) => { e.stopPropagation(); typeof handleDeleteTodo === 'function' && handleDeleteTodo('can', t.id); }} className="p-2 text-slate-300 hover:text-red-500 bg-white dark:bg-zinc-700/50 rounded-xl transition-all shadow-sm opacity-0 md:opacity-100 md:group-hover:opacity-100"><Trash2Icon size={16}/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <form onSubmit={(e) => { e.preventDefault(); const inp = document.getElementById('input-todo-can'); if (inp && inp.value.trim() && typeof handleAddTodo === 'function') { handleAddTodo('can', inp.value); inp.value = ''; } }} className="flex items-center w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl focus-within:border-slate-400 focus-within:ring-4 focus-within:ring-slate-500/10 transition-all shadow-sm overflow-hidden">
-                                                    <input id="input-todo-can" type="text" placeholder="Thêm việc..." onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const val = e.target.value.trim(); if (val && typeof handleAddTodo === 'function') { handleAddTodo('can', val); e.target.value = ''; } } }} className="flex-1 bg-transparent px-4 py-3 outline-none text-sm font-semibold text-slate-700 dark:text-zinc-200 placeholder-slate-400" />
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
+                                return (
+                                    <div className={`animate-[fadeScale_0.3s_ease-out] ${isDesktopMode ? 'grid grid-cols-12 gap-6 items-start' : 'space-y-6'}`}>
+                                        {/* CỘT TRÁI (7 PHẦN TRÊN PC): THẺ TIẾN ĐỘ & TO-DO LIST */}
+                                        <div className={`${isDesktopMode ? 'col-span-7' : ''} space-y-6`}>
+                                            {/* HERO CARD BASIC */}
+                                            <div className={`relative overflow-hidden rounded-[2.5rem] p-6 sm:p-8 text-white transition-all duration-700 ${isGoalReached ? 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-700 dark:from-emerald-500 dark:via-emerald-600 dark:to-teal-800 shadow-2xl shadow-emerald-500/30' : 'bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 dark:from-cyan-600 dark:via-blue-700 dark:to-indigo-950 shadow-2xl shadow-cyan-500/20'}`}>
+                                                <div className="absolute -top-10 -right-10 w-52 h-52 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
+                                                <div className="absolute -bottom-12 -left-10 w-44 h-44 bg-cyan-300/20 rounded-full blur-3xl pointer-events-none"></div>
+                                                <BrainIcon size={140} className="absolute -right-6 -bottom-10 text-white/10 transform -rotate-12 pointer-events-none" />
 
-                                    {/* SCRATCHPAD */}
-                                    <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-[2rem] shadow-sm relative transition-colors group">
-                                        <div className="flex justify-between items-center mb-3 pb-3 border-b border-amber-200/50 dark:border-amber-500/20">
-                                            <h3 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1.5"><PencilIcon size={14}/> Giấy nháp tự do</h3>
-                                            <button onClick={() => typeof handleClearScratchpad === 'function' && handleClearScratchpad()} className="p-2 rounded-xl text-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all active:scale-90"><Trash2Icon size={16}/></button>
-                                        </div>
-                                        <textarea value={typeof scratchpad !== 'undefined' ? scratchpad || '' : ''} onChange={(e) => typeof handleUpdateScratchpad === 'function' && handleUpdateScratchpad(e.target.value)} placeholder="Gõ bất cứ suy nghĩ hay ghi chú nhanh nào vào đây..." className="w-full bg-transparent outline-none font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[140px] resize-none placeholder-amber-700/40 dark:placeholder-amber-500/40" />
-                                    </div>
-                                </div>
-                            )}
-
-                            {appMode === 'work' && currentView === 'week' && (
-                                <div className="animate-[fadeScale_0.3s_ease-out]">
-                                    <div className="flex overflow-x-auto snap-x gap-4 pb-4 no-scrollbar items-stretch">
-                                        {weekDays.map(day => {
-                                            const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                            const cache = todoCache[dKey] || { must: [], should: [], can: [] };
-                                            const hasData = (cache?.must?.length > 0) || (cache?.should?.length > 0) || (cache?.can?.length > 0);
-                                            const mustDone = (cache?.must || []).filter(t => t.done).length;
-                                            
-                                            return (
-                                                <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`snap-center shrink-0 w-[80vw] max-w-[280px] p-6 rounded-[2rem] text-left shadow-sm border transition-all active:scale-[0.98] ${isToday ? 'bg-slate-50 dark:bg-zinc-800 ring-2 ring-cyan-500 border-transparent shadow-lg shadow-cyan-500/10' : 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 hover:shadow-md'}`}>
-                                                    <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100 dark:border-zinc-800/50">
-                                                        <p className={`text-base font-black ${isToday ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-300'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-semibold opacity-70 ml-1">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                        {hasData && <CheckCircleIcon size={20} className={mustDone === cache.must.length && cache.must.length > 0 ? 'text-emerald-500' : 'text-slate-300 dark:text-zinc-600'} />}
+                                                <div className="relative z-10 flex items-end justify-between gap-4 mb-5">
+                                                    <div className="flex items-baseline gap-1.5">
+                                                        <h2 className="text-6xl sm:text-7xl font-black tracking-tighter drop-shadow-md leading-none">{dayWorkStats.pct}</h2>
+                                                        <span className="text-2xl sm:text-3xl font-black opacity-85">%</span>
                                                     </div>
-                                                    <div className="space-y-4">
-                                                        {hasData ? (
-                                                            <>
-                                                                {cache.must && cache.must.length > 0 && (
-                                                                    <div>
-                                                                        <div className="flex justify-between text-[10px] font-black text-red-500 dark:text-red-400 mb-1.5 uppercase tracking-wider"><span>MUST</span> <span>{cache.must.filter(t=>t.done).length}/{cache.must.length}</span></div>
-                                                                        {cache.must.map(t => <div key={t.id} className={`text-xs font-semibold line-clamp-1 mb-1 flex items-center gap-2 ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}><span className={t.done ? 'text-red-500/30' : 'text-red-500'}>•</span> {t.text}</div>)}
-                                                                    </div>
-                                                                )}
-                                                                {cache.should && cache.should.length > 0 && (
-                                                                    <div>
-                                                                        <div className="flex justify-between text-[10px] font-black text-blue-500 dark:text-blue-400 mb-1.5 uppercase tracking-wider"><span>SHOULD</span> <span>{cache.should.filter(t=>t.done).length}/{cache.should.length}</span></div>
-                                                                        {cache.should.map(t => <div key={t.id} className={`text-xs font-semibold line-clamp-1 mb-1 flex items-center gap-2 ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}><span className={t.done ? 'text-blue-500/30' : 'text-blue-500'}>•</span> {t.text}</div>)}
-                                                                    </div>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            <div className="flex flex-col items-center justify-center py-6 opacity-40 text-slate-500 dark:text-zinc-500">
-                                                                <BrainIcon size={32} className="mb-3" />
-                                                                <p className="text-[10px] font-black uppercase tracking-widest">Trống</p>
+                                                    <div className="px-3.5 py-1.5 rounded-full bg-black/20 backdrop-blur-md border border-white/15 text-xs font-black tracking-wider uppercase">
+                                                        {dayWorkStats.totalDone}/{dayWorkStats.totalTasks} việc
+                                                    </div>
+                                                </div>
+
+                                                {/* THANH TIẾN ĐỘ */}
+                                                <div className="relative z-10">
+                                                    <div className="w-full h-3.5 bg-black/25 rounded-full overflow-hidden backdrop-blur-sm p-0.5 relative">
+                                                        <div className="absolute top-0 bottom-0 left-[80%] w-0.5 bg-white/50 z-20"></div>
+                                                        <div
+                                                            className="h-full rounded-full bg-white transition-all duration-700 ease-out shadow-[0_0_12px_rgba(255,255,255,0.9)]"
+                                                            style={{ width: `${Math.min(100, dayWorkStats.pct)}%` }}
+                                                        ></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* VIỆC ĐANG GHIM (CHỈ HIỆN KHI CÓ GHIM) */}
+                                                {focusedTask && (
+                                                    <div className="relative z-10 mt-5 bg-white/15 dark:bg-black/30 backdrop-blur-xl border border-white/30 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-lg animate-[fadeScale_0.25s_ease-out]">
+                                                        <button
+                                                            onClick={() => handleToggleTodo(focusedTask.category, focusedTask.id)}
+                                                            className="w-8 h-8 rounded-full bg-white text-emerald-600 flex items-center justify-center shrink-0 shadow-md hover:scale-110 active:scale-90 transition-all"
+                                                        >
+                                                            <CheckIcon size={18} strokeWidth={3} />
+                                                        </button>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-1.5 mb-0.5">
+                                                                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-amber-300 text-slate-900 flex items-center gap-1">
+                                                                    <SparklesIcon size={10} /> Tâm điểm
+                                                                </span>
+                                                                <span className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                                                                    • {priorityMeta[focusedTask.category]?.shortLabel}
+                                                                </span>
                                                             </div>
+                                                            <p className="text-sm sm:text-base font-black text-white truncate">{focusedTask.text}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setFocusTaskId(null)}
+                                                            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all active:scale-90 shrink-0"
+                                                        >
+                                                            <XIcon size={16} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* KHUNG TO-DO LIST */}
+                                            <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-5 sm:p-6 rounded-[2rem] shadow-sm transition-colors">
+                                                <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
+                                                    <h3 className="text-xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2">
+                                                        <CheckCircleIcon className="text-cyan-500" size={24} /> To-do list
+                                                    </h3>
+                                                    <button
+                                                        onClick={handleCarryOverYesterday}
+                                                        className="px-3.5 py-2 bg-slate-50 dark:bg-zinc-800 text-cyan-600 dark:text-cyan-400 rounded-xl hover:bg-cyan-50 dark:hover:bg-cyan-500/20 transition-all active:scale-95 shadow-sm border border-slate-200/70 dark:border-zinc-700 font-black text-xs flex items-center gap-1.5"
+                                                    >
+                                                        <CopyIcon size={14} /> Việc hôm qua
+                                                    </button>
+                                                </div>
+
+                                                {/* Ô NHẬP LIỆU ĐƠN GIẢN */}
+                                                <form
+                                                    onSubmit={(e) => {
+                                                        e.preventDefault();
+                                                        if (!newTodoText.trim()) return;
+                                                        handleAddTodo(newTodoCategory, newTodoText);
+                                                        setNewTodoText('');
+                                                    }}
+                                                    className="mb-7 bg-slate-50 dark:bg-zinc-800/60 p-2.5 rounded-[1.5rem] border border-slate-200/80 dark:border-zinc-700/60 shadow-inner space-y-2.5"
+                                                >
+                                                    <div className="flex gap-1.5">
+                                                        {['must', 'should', 'can'].map(cat => {
+                                                            const meta = priorityMeta[cat];
+                                                            const isSel = newTodoCategory === cat;
+                                                            const CatIcon = meta.Icon;
+                                                            return (
+                                                                <button
+                                                                    key={cat}
+                                                                    type="button"
+                                                                    onClick={() => setNewTodoCategory(cat)}
+                                                                    className={`flex-1 py-2 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all active:scale-95 ${isSel ? meta.activeTab : 'bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200/60 dark:border-zinc-700 hover:text-slate-700'}`}
+                                                                >
+                                                                    <CatIcon size={12} />
+                                                                    <span>{meta.shortLabel}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 rounded-xl px-3.5 py-1.5 border border-slate-200/80 dark:border-zinc-700 focus-within:border-cyan-500 focus-within:ring-4 focus-within:ring-cyan-500/10 transition-all shadow-sm">
+                                                        <input
+                                                            type="text"
+                                                            value={newTodoText}
+                                                            onChange={(e) => setNewTodoText(e.target.value)}
+                                                            placeholder={`Nhập việc ${priorityMeta[newTodoCategory].shortLabel.toLowerCase()}...`}
+                                                            className="flex-1 bg-transparent py-2 outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-500"
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-600 text-white shadow-md shadow-cyan-500/20 active:scale-90 transition-all shrink-0"
+                                                        >
+                                                            <PlusIcon size={16} />
+                                                        </button>
+                                                    </div>
+                                                </form>
+
+                                                {/* DANH SÁCH 3 NHÓM CÔNG VIỆC */}
+                                                <div className="space-y-6">
+                                                    {['must', 'should', 'can'].map(cat => {
+                                                        const meta = priorityMeta[cat];
+                                                        const CatIcon = meta.Icon;
+                                                        const tasks = todoData?.[cat] || [];
+                                                        const doneCount = tasks.filter(t => t.done).length;
+
+                                                        return (
+                                                            <div key={cat}>
+                                                                <div className="flex justify-between items-center mb-3">
+                                                                    <h4 className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${meta.headerText}`}>
+                                                                        <CatIcon size={14} /> {meta.label}
+                                                                    </h4>
+                                                                    <span className="text-[10px] font-black text-slate-400 dark:text-zinc-500">
+                                                                        {doneCount}/{tasks.length}
+                                                                    </span>
+                                                                </div>
+
+                                                                {tasks.length === 0 ? (
+                                                                    <div className="py-3.5 px-4 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-800 text-center text-[11px] font-bold text-slate-400 dark:text-zinc-600">
+                                                                        Trống
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-2">
+                                                                        {tasks.map(t => {
+                                                                            const isFocused = focusedTask && focusedTask.id === t.id;
+                                                                            const isDimmed = focusedTask && focusedTask.id !== t.id;
+                                                                            const isEditing = editingTodo && editingTodo.id === t.id && editingTodo.category === cat;
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={t.id}
+                                                                                    className={`flex items-center gap-2.5 p-3 rounded-2xl border transition-all duration-300 group ${isFocused ? 'bg-cyan-50/70 dark:bg-cyan-950/30 border-cyan-400 dark:border-cyan-500 ring-2 ring-cyan-400/40 shadow-md' : 'bg-slate-50 dark:bg-zinc-800/50 border-slate-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md'} ${isDimmed ? 'opacity-40 hover:opacity-95' : 'opacity-100'}`}
+                                                                                >
+                                                                                    <button
+                                                                                        onClick={() => handleToggleTodo(cat, t.id)}
+                                                                                        className={`relative flex items-center justify-center w-6 h-6 rounded-full border-2 shrink-0 transition-all active:scale-90 ${t.done ? meta.checkDone : 'border-slate-300 dark:border-zinc-600 text-transparent'}`}
+                                                                                    >
+                                                                                        <CheckIcon size={14} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3} />
+                                                                                    </button>
+
+                                                                                    {isEditing ? (
+                                                                                        <div className="flex-1 flex items-center gap-1.5">
+                                                                                            <input
+                                                                                                autoFocus
+                                                                                                type="text"
+                                                                                                value={editingTodo.text}
+                                                                                                onChange={(e) => setEditingTodo(prev => ({ ...prev, text: e.target.value }))}
+                                                                                                onKeyDown={(e) => {
+                                                                                                    if (e.key === 'Enter') { e.preventDefault(); handleSaveEditTodo(); }
+                                                                                                    if (e.key === 'Escape') setEditingTodo(null);
+                                                                                                }}
+                                                                                                className="flex-1 bg-white dark:bg-zinc-900 border border-cyan-400 rounded-xl px-3 py-1.5 outline-none text-sm font-bold text-slate-800 dark:text-zinc-100"
+                                                                                            />
+                                                                                            <button onClick={handleSaveEditTodo} className="p-2 rounded-xl bg-emerald-500 text-white active:scale-90">
+                                                                                                <CheckIcon size={14} />
+                                                                                            </button>
+                                                                                            <button onClick={() => setEditingTodo(null)} className="p-2 rounded-xl bg-slate-200 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 active:scale-90">
+                                                                                                <XIcon size={14} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <span
+                                                                                            onClick={() => handleToggleTodo(cat, t.id)}
+                                                                                            onDoubleClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setEditingTodo({ category: cat, id: t.id, text: t.text });
+                                                                                            }}
+                                                                                            className={`flex-1 text-sm font-semibold transition-all duration-300 cursor-pointer select-none break-words ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}
+                                                                                        >
+                                                                                            {t.text}
+                                                                                        </span>
+                                                                                    )}
+
+                                                                                    {!isEditing && (
+                                                                                        <div className="flex items-center gap-1 shrink-0">
+                                                                                            {!t.done && (
+                                                                                                <button
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        setFocusTaskId(prev => prev === t.id ? null : t.id);
+                                                                                                    }}
+                                                                                                    className={`p-1.5 rounded-xl transition-all active:scale-90 ${isFocused ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-slate-400 hover:text-amber-500 bg-white dark:bg-zinc-700/60'}`}
+                                                                                                >
+                                                                                                    <SparklesIcon size={14} />
+                                                                                                </button>
+                                                                                            )}
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    setEditingTodo({ category: cat, id: t.id, text: t.text });
+                                                                                                }}
+                                                                                                className="p-1.5 text-slate-400 hover:text-blue-500 bg-white dark:bg-zinc-700/60 rounded-xl transition-all active:scale-90"
+                                                                                            >
+                                                                                                <PencilIcon size={14} />
+                                                                                            </button>
+                                                                                            {!t.done && (
+                                                                                                <button
+                                                                                                    onClick={(e) => {
+                                                                                                        e.stopPropagation();
+                                                                                                        handleMoveTodoToTomorrow(cat, t.id);
+                                                                                                    }}
+                                                                                                    className="p-1.5 text-slate-400 hover:text-cyan-500 bg-white dark:bg-zinc-700/60 rounded-xl transition-all active:scale-90"
+                                                                                                >
+                                                                                                    <ChevronRightIcon size={15} />
+                                                                                                </button>
+                                                                                            )}
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleDeleteTodo(cat, t.id);
+                                                                                                }}
+                                                                                                className="p-1.5 text-slate-300 hover:text-red-500 bg-white dark:bg-zinc-700/60 rounded-xl transition-all active:scale-90"
+                                                                                            >
+                                                                                                <Trash2Icon size={14} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* CỘT PHẢI (5 PHẦN TRÊN PC - GHIM CỐ ĐỊNH): CHÚ Ý & NHÁP */}
+                                        <div className={`${isDesktopMode ? 'col-span-5 sticky top-4' : ''} space-y-6`}>
+                                            {/* URGENT CARD */}
+                                            {!hasUrgentItems && !isUrgentExpanded ? (
+                                                <div className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 px-5 py-3.5 rounded-[1.75rem] shadow-sm flex items-center justify-between transition-all">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="p-2 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400">
+                                                            <AlertIcon size={16} />
+                                                        </div>
+                                                        <h3 className="text-xs font-black text-slate-700 dark:text-zinc-200 uppercase tracking-widest">Chú ý</h3>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setIsUrgentExpanded(true)}
+                                                        className="px-3.5 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-500 dark:text-red-400 text-xs font-black flex items-center gap-1 transition-all active:scale-95"
+                                                    >
+                                                        <PlusIcon size={14} /> Thêm
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-5 rounded-[2rem] shadow-sm transition-colors animate-[fadeScale_0.25s_ease-out]">
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h3 className="text-xs font-black text-red-500 dark:text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                            <AlertIcon size={16} /> Chú ý
+                                                        </h3>
+                                                        {!hasUrgentItems && (
+                                                            <button
+                                                                onClick={() => setIsUrgentExpanded(false)}
+                                                                className="text-[10px] font-black uppercase tracking-wider text-red-400 hover:text-red-600 px-2.5 py-1 rounded-lg bg-white/60 dark:bg-zinc-800/60"
+                                                            >
+                                                                Đóng
+                                                            </button>
                                                         )}
                                                     </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
+                                                    {hasUrgentItems && (
+                                                        <div className="flex flex-col gap-2 mb-4">
+                                                            {(urgentList || []).map(note => (
+                                                                <div key={note.id} className="bg-white dark:bg-zinc-800/90 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 px-4 py-3.5 rounded-2xl text-sm font-bold flex justify-between items-center shadow-sm animate-[slideUpSheet_0.2s_ease-out]">
+                                                                    <span className="break-words pr-2">{note.content}</span>
+                                                                    <button onClick={() => handleDeleteUrgent(note.id)} className="hover:bg-red-50 dark:hover:bg-red-500/10 text-red-400 hover:text-red-500 p-1.5 rounded-xl transition-all active:scale-90 shrink-0">
+                                                                        <XIcon size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center w-full bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900/50 rounded-2xl focus-within:border-red-400 focus-within:ring-4 focus-within:ring-red-500/10 transition-all shadow-sm overflow-hidden">
+                                                        <input
+                                                            id="input-urgent"
+                                                            type="text"
+                                                            placeholder="Nhập chú ý..."
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && e.target.value.trim()) {
+                                                                    handleAddUrgent(e.target.value);
+                                                                    e.target.value = '';
+                                                                }
+                                                            }}
+                                                            className="flex-1 w-full bg-transparent px-4 py-3.5 outline-none text-sm font-bold text-slate-800 dark:text-zinc-200 placeholder-red-300 dark:placeholder-red-900/50"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
 
-                            {appMode === 'work' && currentView === 'month' && (
-                                <div className="animate-[fadeScale_0.3s_ease-out] space-y-8">
-                                    {monthWeeks.map((week, wIndex) => (
-                                        <div key={wIndex} className="space-y-4">
-                                            <h4 className="text-[10px] font-black text-slate-500 dark:text-zinc-500 uppercase tracking-widest pl-2">Tuần {wIndex + 1}: {formatDate(week[0]).slice(0,5)} - {formatDate(week[week.length-1]).slice(0,5)}</h4>
-                                            <div className="flex overflow-x-auto snap-x gap-4 pb-4 no-scrollbar items-stretch">
-                                                {week.map(day => {
-                                                    const dKey = formatDate(day); const isToday = formatDate(new Date()) === dKey;
-                                                    const cache = todoCache[dKey] || { must: [], should: [], can: [] };
-                                                    const hasData = (cache?.must?.length > 0) || (cache?.should?.length > 0) || (cache?.can?.length > 0);
-                                                    
+                                            {/* NHÁP */}
+                                            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-5 rounded-[2rem] shadow-sm relative transition-colors group">
+                                                <div className="flex justify-between items-center mb-3 pb-3 border-b border-amber-200/50 dark:border-amber-500/20">
+                                                    <h3 className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                        <PencilIcon size={14} /> Nháp
+                                                    </h3>
+                                                    <button
+                                                        onClick={handleClearScratchpad}
+                                                        className="p-2 rounded-xl text-amber-500/50 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-all active:scale-90"
+                                                    >
+                                                        <Trash2Icon size={16} />
+                                                    </button>
+                                                </div>
+                                                <textarea
+                                                    value={scratchpad || ''}
+                                                    onChange={(e) => handleUpdateScratchpad(e.target.value)}
+                                                    placeholder="Ghi chú nhanh..."
+                                                    className={`w-full bg-transparent outline-none font-medium text-sm text-slate-800 dark:text-zinc-200 ${isDesktopMode ? 'min-h-[260px]' : 'min-h-[140px]'} resize-none placeholder-amber-700/40 dark:placeholder-amber-500/40 leading-relaxed`}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {appMode === 'work' && currentView === 'week' && (() => {
+                                let weekTargetDays = 0;
+                                let weekActiveDays = 0;
+                                let weekMustDoneTotal = 0;
+                                let weekMustCountTotal = 0;
+
+                                weekDays.forEach(day => {
+                                    const dKey = formatDate(day);
+                                    const wStats = calculateWorkStats(todoCache[dKey]);
+                                    if (wStats.hasData) {
+                                        weekActiveDays++;
+                                        if (wStats.pct >= 80) weekTargetDays++;
+                                        weekMustDoneTotal += wStats.mustDone;
+                                        weekMustCountTotal += wStats.mustTotal;
+                                    }
+                                });
+
+                                return (
+                                    <div className="animate-[fadeScale_0.3s_ease-out]">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {weekDays.map(day => {
+                                                const dKey = formatDate(day);
+                                                const isToday = formatDate(new Date()) === dKey;
+                                                const wStats = calculateWorkStats(todoCache[dKey]);
+                                                const wStatus = getWorkStatus(wStats.pct, wStats.hasData);
+
+                                                let cellBg = 'bg-slate-50 dark:bg-zinc-800/50';
+                                                let cellBorder = 'border-slate-100 dark:border-zinc-700/50';
+                                                let cellText = 'text-slate-800 dark:text-zinc-100';
+                                                let subText = 'text-slate-400 dark:text-zinc-500';
+                                                let dimCard = '';
+
+                                                if (wStats.hasData && wStatus) {
+                                                    cellBg = `${wStatus.bg} shadow-md ${wStatus.shadow}`;
+                                                    cellBorder = 'border-transparent';
+                                                    cellText = wStatus.text;
+                                                    subText = wStatus.subText;
+                                                }
+
+                                                if (activeFilter === 'work_target') {
+                                                    if (wStats.hasData && wStats.pct >= 80) {
+                                                        dimCard = 'ring-2 ring-emerald-500 scale-[1.02]';
+                                                    } else {
+                                                        dimCard = 'opacity-35 grayscale';
+                                                    }
+                                                }
+
+                                                return (
+                                                    <button
+                                                        key={dKey}
+                                                        onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
+                                                        className={`p-4 rounded-[2rem] text-left border shadow-sm transition-all active:scale-95 ${isToday ? 'bg-slate-50 dark:bg-zinc-800 ring-2 ring-cyan-500 border-transparent' : 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 hover:shadow-md'} ${dimCard}`}
+                                                    >
+                                                        <div className="flex justify-between items-center mb-3">
+                                                            <p className={`text-base font-black ${isToday ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-400'}`}>
+                                                                {VN_DAYS[day.getDay()]} <span className="text-[10px] font-bold opacity-70 ml-1">({String(day.getDate()).padStart(2, '0')}/{String(day.getMonth() + 1).padStart(2, '0')})</span>
+                                                            </p>
+                                                            {wStats.hasData && wStats.mustTotal > 0 && wStats.mustDone === wStats.mustTotal && (
+                                                                <CheckCircleIcon size={16} className="text-emerald-500 shrink-0" />
+                                                            )}
+                                                        </div>
+                                                        <div className={`rounded-2xl p-4 border flex flex-col justify-center items-center h-28 relative overflow-hidden transition-colors ${cellBg} ${cellBorder}`}>
+                                                            <span className={`text-3xl font-black tracking-tight ${cellText}`}>
+                                                                {wStats.hasData ? `${wStats.pct}%` : '-'}
+                                                            </span>
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest mt-0.5 ${subText}`}>
+                                                                {wStats.hasData ? `${wStats.earnedPoints}/${wStats.totalPoints} điểm` : 'Trống'}
+                                                            </span>
+                                                            {wStats.hasData && (
+                                                                <>
+                                                                    <div className={`h-px w-10 my-2 ${cellText === 'text-white' ? 'bg-white/30' : 'bg-slate-800/20'}`}></div>
+                                                                    <span className={`text-[11px] font-bold ${cellText}`}>
+                                                                        {wStats.totalDone}/{wStats.totalTasks} việc
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* KHUNG PHÂN TÍCH TUẦN - ĐỒNG BỘ VỚI DINH DƯỠNG & GIẤC NGỦ */}
+                                        <div className="mt-6 bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
+                                            <div className="flex justify-between items-center mb-5">
+                                                <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight">
+                                                    <ActivityIcon size={20} className="text-cyan-500" /> Phân tích tuần
+                                                </h3>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500">
+                                                    {weekActiveDays}/7 ngày có lịch
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <button
+                                                    onClick={() => handleFilterClick('work_target')}
+                                                    className={`w-full bg-emerald-50 dark:bg-emerald-500/10 p-5 rounded-3xl border text-center transition-all ${activeFilter === 'work_target' ? 'ring-2 ring-emerald-500 border-transparent shadow-lg shadow-emerald-500/20 scale-[1.02]' : 'border-emerald-100 dark:border-emerald-500/20 hover:scale-105 active:scale-95'}`}
+                                                >
+                                                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3">Đạt chuẩn ≥80%</p>
+                                                    <p className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{weekTargetDays}</p>
+                                                    <p className="text-[10px] font-bold text-emerald-500/80 mt-2 uppercase tracking-widest">/ {weekActiveDays || 0} ngày</p>
+                                                </button>
+                                                <div className="w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border border-red-100 dark:border-red-500/20 text-center">
+                                                    <p className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3">Việc Must đã xong</p>
+                                                    <p className="text-4xl font-black text-red-600 dark:text-red-400 leading-none">{weekMustDoneTotal}</p>
+                                                    <p className="text-[10px] font-bold text-red-400 mt-2 uppercase tracking-widest">/ {weekMustCountTotal} việc bắt buộc</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {appMode === 'work' && currentView === 'month' && (() => {
+                                let monthTargetDays = 0;
+                                let monthActiveDays = 0;
+                                let monthMustDoneTotal = 0;
+
+                                monthDays.forEach(day => {
+                                    const dKey = formatDate(day);
+                                    const wStats = calculateWorkStats(todoCache[dKey]);
+                                    if (wStats.hasData) {
+                                        monthActiveDays++;
+                                        if (wStats.pct >= 80) monthTargetDays++;
+                                        monthMustDoneTotal += wStats.mustDone;
+                                    }
+                                });
+
+                                const pctMonthWorkTarget = monthActiveDays > 0 ? Math.round((monthTargetDays / monthActiveDays) * 100) : 0;
+
+                                return (
+                                    <div className="animate-[fadeScale_0.3s_ease-out]">
+                                        {/* BẢNG LỊCH LƯỚI 7 CỘT CHUẨN XÁC */}
+                                        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 mb-6 transition-colors">
+                                            <div className="grid grid-cols-7 gap-2 mb-3">
+                                                {VN_DAYS.map(day => (
+                                                    <div key={day} className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500">{day}</div>
+                                                ))}
+                                            </div>
+                                            <div className="grid grid-cols-7 gap-2">
+                                                {[...Array(firstDayOfMonth)].map((_, i) => (
+                                                    <div key={`empty-work-${i}`} className="h-12 sm:h-14"></div>
+                                                ))}
+                                                {monthDays.map(day => {
+                                                    const dKey = formatDate(day);
+                                                    const isToday = formatDate(new Date()) === dKey;
+                                                    const wStats = calculateWorkStats(todoCache[dKey]);
+                                                    const wStatus = getWorkStatus(wStats.pct, wStats.hasData);
+
+                                                    let cellClass = 'bg-slate-50 dark:bg-zinc-800/50 text-slate-600 dark:text-zinc-400 border border-slate-100 dark:border-zinc-700/50';
+                                                    let textClass = 'font-bold text-slate-800 dark:text-zinc-100';
+
+                                                    if (wStats.hasData && wStatus) {
+                                                        cellClass = `${wStatus.bg} border-transparent shadow-sm`;
+                                                        textClass = `${wStatus.text} font-black text-[9px] sm:text-[10px]`;
+                                                    }
+
+                                                    if (activeFilter === 'work_target') {
+                                                        if (wStats.hasData && wStats.pct >= 80) {
+                                                            cellClass = 'bg-emerald-500 text-white border-transparent shadow-lg shadow-emerald-500/40 scale-105 z-10 ring-2 ring-emerald-300 ring-offset-1 dark:ring-offset-zinc-900';
+                                                            textClass = 'text-white font-black text-[10px]';
+                                                        } else {
+                                                            cellClass += ' opacity-20 grayscale';
+                                                        }
+                                                    } else if (isToday) {
+                                                        cellClass += ' ring-2 ring-cyan-500 ring-offset-2 dark:ring-offset-zinc-900';
+                                                    }
+
                                                     return (
-                                                        <button key={dKey} onClick={() => { setSelectedDate(day); setCurrentView('day'); }} className={`snap-center shrink-0 w-[80vw] max-w-[280px] p-6 rounded-[2rem] text-left shadow-sm border transition-all active:scale-[0.98] ${isToday ? 'bg-slate-50 dark:bg-zinc-800 ring-2 ring-cyan-500 border-transparent shadow-lg shadow-cyan-500/10' : 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 hover:shadow-md'}`}>
-                                                            <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100 dark:border-zinc-800/50">
-                                                                <p className={`text-base font-black ${isToday ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-zinc-300'}`}>{VN_DAYS[day.getDay()]} <span className="text-xs font-semibold opacity-70 ml-1">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span></p>
-                                                            </div>
-                                                            <div className="space-y-4">
-                                                                {hasData ? (
-                                                                    <>
-                                                                        {cache.must && cache.must.length > 0 && (
-                                                                            <div>
-                                                                                <div className="flex justify-between text-[10px] font-black text-red-500 dark:text-red-400 mb-1.5 uppercase tracking-wider"><span>MUST</span> <span>{cache.must.filter(t=>t.done).length}/{cache.must.length}</span></div>
-                                                                                {cache.must.map(t => <div key={t.id} className={`text-xs font-semibold line-clamp-1 mb-1 flex items-center gap-2 ${t.done ? 'text-slate-400 dark:text-zinc-600 line-through' : 'text-slate-700 dark:text-zinc-200'}`}><span className={t.done ? 'text-red-500/30' : 'text-red-500'}>•</span> {t.text}</div>)}
-                                                                            </div>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <div className="flex flex-col items-center justify-center py-6 opacity-40 text-slate-500 dark:text-zinc-500">
-                                                                        <BrainIcon size={32} className="mb-3" />
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest">Trống</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                        <button
+                                                            key={dKey}
+                                                            onClick={() => { setSelectedDate(day); setCurrentView('day'); }}
+                                                            className={`h-12 sm:h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all active:scale-90 ${cellClass}`}
+                                                        >
+                                                            <span className={`z-10 text-[10px] font-bold ${wStats.hasData ? 'absolute top-1 left-1.5 opacity-70' : 'text-slate-400 dark:text-zinc-500'}`}>
+                                                                {day.getDate()}
+                                                            </span>
+                                                            {wStats.hasData && (
+                                                                <span className={`absolute bottom-1.5 leading-none ${textClass}`}>
+                                                                    {wStats.pct}%
+                                                                </span>
+                                                            )}
                                                         </button>
                                                     );
                                                 })}
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
+
+                                        {/* KHUNG PHÂN TÍCH THÁNG - KÈM THANH TIẾN ĐỘ & NÚT LỌC NHANH PHÁT SÁNG */}
+                                        <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-5 shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
+                                            <div className="flex justify-between items-center mb-5">
+                                                <h3 className="text-base font-black text-slate-800 dark:text-zinc-100 flex items-center gap-2 tracking-tight">
+                                                    <ActivityIcon size={20} className="text-cyan-500" /> Phân tích tháng
+                                                </h3>
+                                                <button
+                                                    onClick={() => handleFilterClick('work_target')}
+                                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all active:scale-95 flex items-center gap-1.5 ${activeFilter === 'work_target' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'}`}
+                                                >
+                                                    <SparklesIcon size={12} /> {activeFilter === 'work_target' ? 'Đang lọc ngày ≥80%' : 'Lọc ngày đạt ≥80%'}
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <button
+                                                    onClick={() => handleFilterClick('work_target')}
+                                                    className={`w-full bg-emerald-50 dark:bg-emerald-500/10 p-5 rounded-3xl border text-center relative overflow-hidden transition-all active:scale-95 ${activeFilter === 'work_target' ? 'ring-2 ring-emerald-500 border-transparent shadow-lg shadow-emerald-500/20' : 'border-emerald-100 dark:border-emerald-500/20'}`}
+                                                >
+                                                    <div className="absolute right-0 top-0 bottom-0 w-2.5 bg-emerald-100 dark:bg-emerald-500/20">
+                                                        <div className="absolute bottom-0 w-full bg-emerald-500 transition-all duration-1000 rounded-t" style={{ height: `${pctMonthWorkTarget}%` }}></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3">Ngày đạt chuẩn ≥80%</p>
+                                                    <div className="flex items-baseline justify-center gap-1.5 mb-3">
+                                                        <span className="text-4xl font-black text-emerald-600 dark:text-emerald-400 leading-none">{monthTargetDays}</span>
+                                                        <span className="text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest">/ {monthActiveDays}</span>
+                                                    </div>
+                                                    <div className="bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-emerald-100 dark:border-emerald-500/20 inline-block">
+                                                        <span className="text-sm font-black text-emerald-500">{pctMonthWorkTarget}%</span>
+                                                    </div>
+                                                </button>
+
+                                                <div className="w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border border-red-100 dark:border-red-500/20 text-center flex flex-col justify-center">
+                                                    <p className="text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3">Tổng việc Must xong</p>
+                                                    <p className="text-4xl font-black text-red-600 dark:text-red-400 leading-none mb-3">{monthMustDoneTotal}</p>
+                                                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Việc bắt buộc trong tháng</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Thanh tiến độ trực quan toàn tháng */}
+                                            <div className="bg-slate-50 dark:bg-zinc-800/60 p-4 rounded-2xl border border-slate-100 dark:border-zinc-700/50">
+                                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-zinc-400 mb-2">
+                                                    <span>Tỷ lệ ngày hoàn thành mục tiêu</span>
+                                                    <span className="text-emerald-500">{pctMonthWorkTarget}% ({monthTargetDays}/{monthActiveDays} ngày)</span>
+                                                </div>
+                                                <div className="w-full h-2.5 bg-slate-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${pctMonthWorkTarget}%` }}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {appMode === 'macro' && currentView === 'day' && (
                                 <div className="animate-[fadeScale_0.3s_ease-out]">
@@ -3134,157 +3952,434 @@
                     )}
 
                     {/* Giao diện Full-screen Thêm Buổi Tập */}
-                    {isAddingWorkout && appMode === 'workout' && (
+                    {isAddingWorkout && appMode === 'workout' && (() => {
+                        const headerWCol = getWorkoutColor(workoutType);
+                        const themeHex = workoutType === 'Upper' ? '#f97316' : workoutType === 'Lower' ? '#eab308' : workoutType === 'Push' ? '#10b981' : workoutType === 'Pull' ? '#3b82f6' : workoutType === 'Leg' ? '#a855f7' : '#f97316';
+                        const hasNoteText = !!(workoutNote && workoutNote.trim());
+
+                        return (
                         <div className="fixed inset-0 z-[150] flex justify-center bg-slate-50 dark:bg-zinc-950 animate-[fadeScale_0.2s_ease-out]">
-                            <div className="w-full max-w-xl bg-slate-50 dark:bg-zinc-950 h-[100dvh] flex flex-col relative">
-                                <div className="flex justify-between items-center px-4 pt-6 pb-4 sm:p-6 shrink-0 border-b border-slate-200/50 dark:border-zinc-800/50 bg-white/30 dark:bg-zinc-900/30 backdrop-blur-md z-20">
-                                    <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight">
-                                        <div className="p-2.5 bg-white dark:bg-zinc-800 rounded-xl shadow-sm border border-slate-100 dark:border-zinc-700"><DumbbellIcon className="text-slate-800 dark:text-zinc-200" size={24}/></div>
-                                        {workoutAddStep === 1 ? 'Chọn Lịch Tập' : workoutType}
-                                    </h2>
-                                    <button onClick={handleCancelAddWorkout} className="text-slate-500 bg-white dark:bg-zinc-800 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-100 dark:border-zinc-700 transition-all active:scale-90 shadow-sm"><XIcon size={20} /></button>
+                            <div className="w-full max-w-xl bg-slate-50 dark:bg-zinc-950 h-[100dvh] flex flex-col relative overflow-hidden">
+                                {/* Quầng sáng màu nhận diện lịch tập trên đỉnh màn hình */}
+                                {workoutAddStep === 2 && (
+                                    <div
+                                        className="absolute -top-20 left-1/2 -translate-x-1/2 w-[120%] h-44 rounded-full blur-3xl pointer-events-none opacity-25 dark:opacity-20 transition-all duration-500"
+                                        style={{ background: `radial-gradient(circle, ${themeHex} 0%, transparent 70%)` }}
+                                    />
+                                )}
+
+                                {/* HEADER ĐA SẮC MÀU KÈM NÚT BÚT GHI CHÚ GỌN GÀNG */}
+                                <div
+                                    className="flex justify-between items-center px-4 pt-5 pb-3.5 sm:px-6 shrink-0 border-b backdrop-blur-xl z-20 transition-all"
+                                    style={{
+                                        borderColor: workoutAddStep === 2 ? `${themeHex}40` : undefined,
+                                        background: workoutAddStep === 2 ? `linear-gradient(135deg, ${themeHex}18 0%, rgba(24,24,27,0.4) 100%)` : undefined
+                                    }}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`p-2.5 rounded-2xl shadow-md flex items-center justify-center transition-colors ${workoutAddStep === 2 ? `${headerWCol.fill} ${headerWCol.textLight}` : 'bg-white dark:bg-zinc-800 text-orange-500 border border-slate-100 dark:border-zinc-700'}`}
+                                        >
+                                            <DumbbellIcon size={22} />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-zinc-100 tracking-tight leading-none">
+                                                {workoutAddStep === 1 ? 'Chọn Lịch Tập' : workoutType}
+                                            </h2>
+                                            {workoutAddStep === 2 && (
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-400 mt-1 block">
+                                                    {formatDate(selectedDate)} • {currentExercises.filter(e => e.name?.trim()).length} bài tập
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        {workoutAddStep === 2 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowWorkoutNoteInput(prev => !prev)}
+                                                className={`relative p-2.5 rounded-xl border transition-all active:scale-90 shadow-sm flex items-center gap-1.5 text-xs font-black ${showWorkoutNoteInput || hasNoteText ? `${headerWCol.fill} ${headerWCol.textLight} border-transparent shadow-md` : 'bg-white/90 dark:bg-zinc-800/90 text-slate-500 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'}`}
+                                                title="Ghi chú buổi tập"
+                                            >
+                                                <PencilIcon size={17} />
+                                                <span className="hidden sm:inline">Ghi chú</span>
+                                                {hasNoteText && !showWorkoutNoteInput && (
+                                                    <span className="w-2 h-2 rounded-full bg-white animate-ping absolute -top-0.5 -right-0.5" />
+                                                )}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={handleCancelAddWorkout}
+                                            className="text-slate-500 dark:text-zinc-300 bg-white/90 dark:bg-zinc-800/90 p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-700 border border-slate-200/70 dark:border-zinc-700 transition-all active:scale-90 shadow-sm"
+                                        >
+                                            <XIcon size={20} />
+                                        </button>
+                                    </div>
                                 </div>
-                                
+
+                                {/* BƯỚC 1: CHỌN LỊCH TẬP ĐA SẮC MÀU */}
                                 {workoutAddStep === 1 ? (
-                                    <div className="flex flex-col gap-4 p-4 sm:p-6 pb-safe-bottom overflow-y-auto no-scrollbar">
+                                    <div className="flex flex-col gap-3.5 p-4 sm:p-6 pb-safe-bottom overflow-y-auto no-scrollbar flex-1 justify-center">
                                         {['Upper', 'Lower', 'Push', 'Pull', 'Leg'].map(t => {
                                             const tCol = getWorkoutColor(t);
+                                            const cHex = t === 'Upper' ? '#f97316' : t === 'Lower' ? '#eab308' : t === 'Push' ? '#10b981' : t === 'Pull' ? '#3b82f6' : '#a855f7';
                                             return (
-                                                <button key={t} onClick={() => handleStartWorkout(t)} className={`w-full py-6 px-6 rounded-[2rem] font-black text-2xl text-left border-2 bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 hover:${tCol.border} hover:${tCol.lightBg} text-slate-800 dark:text-zinc-200 flex justify-between items-center group transition-all active:scale-[0.98] shadow-sm`}>
-                                                    {t} <ChevronRightIcon size={28} className={`text-slate-300 dark:text-zinc-600 group-hover:${tCol.text} transition-colors`} />
+                                                <button
+                                                    key={t}
+                                                    onClick={() => handleStartWorkout(t)}
+                                                    className="w-full py-5 px-6 rounded-[2rem] font-black text-2xl text-left border-2 bg-white dark:bg-zinc-900/90 text-slate-800 dark:text-zinc-100 flex justify-between items-center group transition-all active:scale-[0.98] shadow-md relative overflow-hidden"
+                                                    style={{ borderColor: `${cHex}55` }}
+                                                >
+                                                    <div className="flex items-center gap-4 relative z-10">
+                                                        <span className={`w-4 h-10 rounded-full ${tCol.fill}`} style={{ boxShadow: `0 0 12px ${cHex}` }}></span>
+                                                        <span>{t}</span>
+                                                    </div>
+                                                    <div className={`w-10 h-10 rounded-2xl ${tCol.lightBg} ${tCol.text} flex items-center justify-center relative z-10 transition-transform group-hover:translate-x-1`}>
+                                                        <ChevronRightIcon size={24} />
+                                                    </div>
                                                 </button>
-                                            )
+                                            );
                                         })}
                                     </div>
                                 ) : (
                                     <>
+                                        {}
                                         {(() => {
                                             let totalWorkoutSets = 0; let completedWorkoutSets = 0;
                                             currentExercises.forEach(ex => {
-                                                if (!ex.name || ex.name.trim() === '') return; // Bỏ qua mấy bài trống chưa gõ tên
-                                                
+                                                if (!ex.name || ex.name.trim() === '') return;
                                                 if (ex.rawText && ex.rawText.toUpperCase() !== 'X') {
                                                     totalWorkoutSets += 1; completedWorkoutSets += 1; return;
                                                 }
-                                                
-                                                // Chỉ đếm số lượng set ĐANG CÓ THỰC TẾ trên màn hình
                                                 totalWorkoutSets += ex.sets.length;
-                                                ex.sets.forEach(s => { 
-                                                    if (s.weight.trim() !== '' && s.reps.trim() !== '') completedWorkoutSets++; 
+                                                ex.sets.forEach(s => {
+                                                    if (s.weight.trim() !== '' && s.reps.trim() !== '') completedWorkoutSets++;
                                                 });
                                             });
                                             const progressPct = totalWorkoutSets > 0 ? Math.round((completedWorkoutSets / totalWorkoutSets) * 100) : 0;
                                             const modalMainColor = getWorkoutColor(workoutType);
+                                            const currentActiveId = activeExerciseId || currentExercises[0]?.id;
 
                                             return (
-                                                <div className="flex flex-col flex-1 min-h-0 w-full relative pt-1.5">
-                                                    {/* GLOBAL PROGRESS BAR */}
-                                                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-200 dark:bg-zinc-800 z-50 overflow-hidden">
-                                                        <div className={`h-full ${modalMainColor.fill} transition-all duration-700 ease-out`} style={{ width: `${progressPct}%`, boxShadow: `0 0 10px ${modalMainColor.fill.includes('orange')?'#f97316':modalMainColor.fill.includes('yellow')?'#eab308':modalMainColor.fill.includes('emerald')?'#10b981':modalMainColor.fill.includes('blue')?'#3b82f6':'#a855f7'}` }}>
-                                                        </div>
+                                                <div className="flex flex-col flex-1 min-h-0 w-full relative pt-2">
+                                                    {/* THANH TIẾN ĐỘ DÀY & RỰC SÁNG TRÊN ĐỈNH */}
+                                                    <div className="absolute top-0 left-0 right-0 h-2 bg-slate-200 dark:bg-zinc-800 z-50 overflow-hidden">
+                                                        <div
+                                                            className={`h-full ${modalMainColor.fill} transition-all duration-500 ease-out`}
+                                                            style={{ width: `${progressPct}%`, boxShadow: `0 0 14px ${themeHex}` }}
+                                                        />
                                                     </div>
-                                                    <div className="absolute -top-1.5 right-4 sm:right-6 z-50 text-[10px] font-black text-slate-500 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-950 px-2 rounded-b-md shadow-sm border border-t-0 border-slate-200/50 dark:border-zinc-800/50 pb-0.5">{progressPct}%</div>
-                                                    
-                                                    {/* Timer Block */}
-                                                    <div className={`mx-4 sm:mx-6 bg-white dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-700/50 p-2.5 rounded-2xl flex items-center justify-between gap-2 mt-4 mb-4 shrink-0 transition-colors shadow-sm z-10 relative ${isRinging ? 'timer-done' : ''}`}>
-                                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
+                                                    <div
+                                                        className="absolute top-2 right-4 sm:right-6 z-50 text-[10px] font-black px-2.5 py-0.5 rounded-b-lg shadow-md border border-t-0"
+                                                        style={{ backgroundColor: themeHex, color: workoutType === 'Lower' ? '#0f172a' : '#ffffff', borderColor: themeHex }}
+                                                    >
+                                                        {completedWorkoutSets}/{totalWorkoutSets} hiệp ({progressPct}%)
+                                                    </div>
+
+                                                    {/* KHUNG GHI CHÚ TRƯỢT NHẸ KHI BẤM NÚT CÂY BÚT */}
+                                                    {showWorkoutNoteInput && (
+                                                        <div className="mx-4 sm:mx-6 mt-3 animate-[fadeScale_0.2s_ease-out] shrink-0 z-20">
+                                                            <div className="bg-white dark:bg-zinc-900 p-3 rounded-2xl border-2 shadow-lg" style={{ borderColor: `${themeHex}80` }}>
+                                                                <div className="flex justify-between items-center mb-1.5">
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5" style={{ color: themeHex }}>
+                                                                        <PencilIcon size={12} /> Ghi chú buổi tập {workoutType}
+                                                                    </span>
+                                                                    <button type="button" onClick={() => setShowWorkoutNoteInput(false)} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-zinc-800">
+                                                                        Thu gọn
+                                                                    </button>
+                                                                </div>
+                                                                <textarea
+                                                                    autoFocus
+                                                                    value={workoutNote}
+                                                                    onChange={e => setWorkoutNote(e.target.value)}
+                                                                    placeholder="Ghi chú cảm giác cơ, mức tạ, thể trạng hôm nay..."
+                                                                    className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 outline-none font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[68px] resize-none transition-all"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* KHỐI ĐỒNG HỒ ĐẾM GIỜ NGHỈ REAL-TIME */}
+                                                    <div className={`mx-4 sm:mx-6 bg-white dark:bg-zinc-900 border border-slate-200/70 dark:border-zinc-800 p-2 rounded-2xl flex items-center justify-between gap-2 mt-3 mb-2.5 shrink-0 transition-colors shadow-sm z-10 relative ${isRinging ? 'timer-done' : ''}`}>
+                                                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1">
                                                             {[45, 60, 90, 120, 150, 180].map(sec => (
-                                                                <button key={sec} onClick={(e) => { e.preventDefault(); startRestTimer(sec); }} className="px-3.5 py-2 bg-slate-50 dark:bg-zinc-800 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-100 dark:border-zinc-700/50">
+                                                                <button
+                                                                    key={sec}
+                                                                    onClick={(e) => { e.preventDefault(); startRestTimer(sec); }}
+                                                                    className="px-3 py-2 bg-slate-50 dark:bg-zinc-800 rounded-xl shadow-sm text-[11px] font-black text-slate-700 dark:text-zinc-300 active:scale-90 transition-transform shrink-0 border border-slate-200/60 dark:border-zinc-700/60"
+                                                                >
                                                                     {sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m${sec%60>0 ? sec%60+'s' : ''}`}
                                                                 </button>
                                                             ))}
-                                                            <button onClick={(e) => { e.preventDefault(); startRestTimer(5); }} className="px-3.5 py-2 bg-purple-50 dark:bg-purple-500/10 rounded-xl shadow-sm text-[11px] font-black text-purple-600 dark:text-purple-400 active:scale-90 transition-transform shrink-0 border border-purple-200/50 dark:border-purple-500/30">Test 5s</button>
+                                                            <button
+                                                                onClick={(e) => { e.preventDefault(); startRestTimer(5); }}
+                                                                className="px-3 py-2 bg-purple-50 dark:bg-purple-500/10 rounded-xl shadow-sm text-[11px] font-black text-purple-600 dark:text-purple-400 active:scale-90 transition-transform shrink-0 border border-purple-200/50 dark:border-purple-500/30"
+                                                            >
+                                                                Test 5s
+                                                            </button>
                                                         </div>
-                                                        <div className="flex items-center gap-3 pr-2 shrink-0 border-l border-slate-200 dark:border-zinc-700 pl-3">
-                                                            <button onClick={() => setVibrateEnabled(!vibrateEnabled)} className={`p-1.5 rounded-lg active:scale-90 transition-all ${vibrateEnabled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-400 bg-slate-100 dark:bg-zinc-800'}`}>
+                                                        <div className="flex items-center gap-2 pr-1.5 shrink-0 border-l border-slate-200 dark:border-zinc-800 pl-2.5">
+                                                            <button
+                                                                onClick={() => setVibrateEnabled(!vibrateEnabled)}
+                                                                className={`p-1.5 rounded-lg active:scale-90 transition-all ${vibrateEnabled ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10' : 'text-slate-400 bg-slate-100 dark:bg-zinc-800'}`}
+                                                                title="Bật/Tắt rung"
+                                                            >
                                                                 <SmartphoneIcon size={14} />
                                                             </button>
-                                                            <span className={`font-black text-2xl tracking-tighter ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-200')}`}>
+                                                            <span className={`font-black text-xl sm:text-2xl tracking-tighter tabular-nums min-w-[52px] text-center ${timerSeconds > 0 && timerSeconds <= 10 ? 'text-red-500 animate-pulse' : (timerSeconds === 0 ? 'text-red-500' : 'text-slate-800 dark:text-zinc-100')}`}>
                                                                 {timerSeconds !== null ? `${Math.floor(timerSeconds/60)}:${(timerSeconds%60).toString().padStart(2,'0')}` : '--:--'}
                                                             </span>
                                                             {timerSeconds !== null && (
-                                                                <button onClick={(e) => { e.preventDefault(); stopRestTimer(); }} className="p-2 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all border border-red-200/50 dark:border-red-500/30"><XIcon size={16}/></button>
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); stopRestTimer(); }}
+                                                                    className="p-1.5 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-xl hover:bg-red-200 active:scale-90 transition-all border border-red-200/50 dark:border-red-500/30"
+                                                                >
+                                                                    <XIcon size={15} />
+                                                                </button>
                                                             )}
                                                         </div>
                                                     </div>
 
-                                                    <div className="overflow-y-auto flex-1 pb-4 no-scrollbar pt-1">
-                                                        <div className="mb-6 shrink-0 px-4 sm:px-6">
-                                                            <textarea value={workoutNote} onChange={e=>setWorkoutNote(e.target.value)} placeholder="Ghi chú buổi tập..." className={`w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700/50 rounded-2xl px-4 py-3 outline-none focus:${modalMainColor.border} focus:ring-4 focus:ring-slate-500/10 font-medium text-sm text-slate-800 dark:text-zinc-200 min-h-[50px] resize-none transition-all shadow-sm`} />
+                                                    {}
+                                                    {/* THANH ĐỊNH VỊ NHANH TIẾN ĐỘ BÀI TẬP NẰM NGANG */}
+                                                    <div className="px-4 sm:px-6 mb-2.5 shrink-0">
+                                                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                                                            {currentExercises.map((ex, idx) => {
+                                                                const tSets = ex.sets.length;
+                                                                const vSets = ex.sets.filter(s => s.weight.trim() !== '' && s.reps.trim() !== '').length;
+                                                                const isDone = (ex.rawText && ex.rawText.toUpperCase() !== 'X') || (vSets >= tSets && tSets > 0 && ex.name?.trim());
+                                                                const isCurr = currentActiveId === ex.id;
+
+                                                                return (
+                                                                    <button
+                                                                        key={ex.id}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setActiveExerciseId(ex.id);
+                                                                            const cardEl = document.getElementById(`workout-ex-card-${ex.id}`);
+                                                                            if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                                                                        }}
+                                                                        className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shrink-0 border transition-all active:scale-95 ${
+                                                                            isDone
+                                                                                ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/25'
+                                                                                : isCurr
+                                                                                    ? `${modalMainColor.fill} ${modalMainColor.textLight} border-transparent shadow-md scale-105`
+                                                                                    : 'bg-white dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 border-slate-200 dark:border-zinc-800'
+                                                                        }`}
+                                                                    >
+                                                                        <span>Bài {idx + 1}</span>
+                                                                        <span className={`w-2 h-2 rounded-full ${isDone ? 'bg-white' : isCurr ? 'bg-white animate-pulse' : (vSets > 0 ? 'bg-amber-400' : 'bg-slate-300 dark:bg-zinc-700')}`} />
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    const newId = Date.now().toString();
+                                                                    setCurrentExercises(prev => [...prev, { id: newId, name: '', sets: [{ reps: '', weight: '', unit: 'KG' }] }]);
+                                                                    setActiveExerciseId(newId);
+                                                                    setTimeout(() => {
+                                                                        const cardEl = document.getElementById(`workout-ex-card-${newId}`);
+                                                                        if (cardEl) cardEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                                                                    }, 80);
+                                                                }}
+                                                                className="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-200/70 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border border-dashed border-slate-300 dark:border-zinc-700 shrink-0 flex items-center gap-1 active:scale-95"
+                                                            >
+                                                                <PlusIcon size={13} /> Thêm bài
+                                                            </button>
                                                         </div>
-                                                        
-                                                        <div className="flex overflow-x-auto snap-x gap-4 pb-6 pt-2 px-4 sm:px-6 no-scrollbar items-stretch">
-                                                        {currentExercises.map((ex) => {
+                                                    </div>
+
+                                                    {}
+                                                    {/* KHUNG TRƯỢT NGANG CÁC THẺ BÀI TẬP (SNAP-MANDATORY MƯỢT ĐẦM TAY) */}
+                                                    <div
+                                                        className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 pt-1 px-4 sm:px-6 no-scrollbar items-stretch flex-1 min-h-0"
+                                                        style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain' }}
+                                                        onScroll={(e) => {
+                                                            const container = e.currentTarget;
+                                                            const center = container.scrollLeft + container.clientWidth / 2;
+                                                            let closestId = null;
+                                                            let minDistance = Infinity;
+                                                            Array.from(container.children).forEach(child => {
+                                                                const exId = child.getAttribute('data-ex-id');
+                                                                if (!exId) return;
+                                                                const childCenter = child.offsetLeft + child.offsetWidth / 2;
+                                                                const dist = Math.abs(center - childCenter);
+                                                                if (dist < minDistance) {
+                                                                    minDistance = dist;
+                                                                    closestId = exId;
+                                                                }
+                                                            });
+                                                            if (closestId && closestId !== activeExerciseId) {
+                                                                setActiveExerciseId(closestId);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {currentExercises.map((ex, exIdx) => {
                                                             const prevHist = findPreviousExerciseHistory(ex.name, dateKey);
                                                             const wCol = getWorkoutColor(workoutType);
-                                                            const isActiveEx = activeExerciseId === ex.id;
-                                                            
+                                                            const isActiveEx = currentActiveId === ex.id;
+
                                                             let targetSets = ex.sets.length;
                                                             const validSetsCount = ex.sets.filter(s => s.weight.trim() !== '' && s.reps.trim() !== '').length;
                                                             const isExDone = validSetsCount >= targetSets && targetSets > 0;
 
                                                             return (
-                                                                <div key={ex.id} onClick={() => setActiveExerciseId(ex.id)} className={`w-[85vw] max-w-[360px] shrink-0 snap-center bg-white dark:bg-zinc-900 p-0 rounded-[2rem] relative transition-all duration-300 border-2 overflow-hidden flex flex-col ${isActiveEx ? wCol.border + ' shadow-[0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]' : (isExDone ? 'border-emerald-500/30' : 'border-slate-200 dark:border-zinc-800')}`}>
-                                                                    
-                                                                    <div className="p-5 sm:p-6 relative z-10 flex-1 flex flex-col">
-                                                                        <div className="flex justify-between items-center mb-4 gap-2">
-                                                                            <input type="text" value={ex.name} onChange={e=>handleUpdateExerciseName(ex.id, e.target.value)} placeholder="Tên bài (VD: Bench Press 3x10)" className={`flex-1 min-w-[120px] w-0 bg-transparent border-b border-transparent focus:border-slate-300 dark:focus:border-zinc-600 py-1 outline-none font-black text-xl transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`} />
+                                                                <div
+                                                                    key={ex.id}
+                                                                    id={`workout-ex-card-${ex.id}`}
+                                                                    data-ex-id={ex.id}
+                                                                    onClick={() => setActiveExerciseId(ex.id)}
+                                                                    className={`w-[88vw] max-w-[380px] shrink-0 snap-center snap-always bg-white dark:bg-zinc-900 rounded-[2rem] relative transition-all duration-300 border-2 overflow-y-auto no-scrollbar flex flex-col ${
+                                                                        isExDone
+                                                                            ? 'border-emerald-500 shadow-lg shadow-emerald-500/10'
+                                                                            : isActiveEx
+                                                                                ? `${wCol.border} shadow-xl`
+                                                                                : 'border-slate-200 dark:border-zinc-800 opacity-90'
+                                                                    }`}
+                                                                    style={isActiveEx && !isExDone ? { boxShadow: `0 8px 28px -6px ${themeHex}35` } : undefined}
+                                                                >
+                                                                    <div className="p-4 sm:p-5 relative z-10 flex-1 flex flex-col">
+                                                                        {/* HÀNG PHỤ TRÊN CÙNG: SỐ THỨ TỰ BÀI + TIẾN ĐỘ HIỆP + NÚT BIỂU ĐỒ */}
+                                                                        <div className="flex justify-between items-center mb-2 gap-2">
+                                                                            <span
+                                                                                className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg border"
+                                                                                style={{
+                                                                                    backgroundColor: isExDone ? 'rgba(16,185,129,0.15)' : `${themeHex}18`,
+                                                                                    color: isExDone ? '#10b981' : themeHex,
+                                                                                    borderColor: isExDone ? 'rgba(16,185,129,0.35)' : `${themeHex}40`
+                                                                                }}
+                                                                            >
+                                                                                Bài {exIdx + 1} / {currentExercises.length}
+                                                                            </span>
+
                                                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                                                <button onClick={(e) => { e.preventDefault(); handleOpenChart(ex.name); }} className="p-1.5 text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-100 dark:border-blue-500/30 transition-all active:scale-90 shadow-sm" title="Phân tích biểu đồ">
-                                                                                    <ActivityIcon size={18} />
+                                                                                <button
+                                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenChart(ex.name); }}
+                                                                                    className="px-2.5 py-1 text-blue-500 bg-blue-50 dark:bg-blue-500/10 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-100 dark:border-blue-500/30 transition-all active:scale-90 shadow-sm flex items-center gap-1 text-[10px] font-black uppercase"
+                                                                                    title="Phân tích biểu đồ"
+                                                                                >
+                                                                                    <ActivityIcon size={13} /> Biểu đồ
                                                                                 </button>
-                                                                                <div className={`px-2.5 py-1 rounded-xl text-sm font-black tracking-widest border transition-colors ${isExDone ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 border-slate-200 dark:border-zinc-700 shadow-sm'}`}>
-                                                                                    {validSetsCount}/{targetSets}
+                                                                                <div className={`px-2.5 py-1 rounded-xl text-xs font-black tracking-wider border transition-colors ${isExDone ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/30' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'}`}>
+                                                                                    {validSetsCount}/{targetSets} hiệp
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                    
-                                                                        <div className="space-y-3 flex-1 mt-2">
+
+                                                                        {/* Ô TÊN BÀI TẬP RỘNG TRỌN CHIỀU NGANG - KHÔNG BỊ CẮT CỤT CHỮ */}
+                                                                        <input
+                                                                            type="text"
+                                                                            value={ex.name}
+                                                                            onChange={e => handleUpdateExerciseName(ex.id, e.target.value)}
+                                                                            placeholder="Tên bài tập (VD: Bench Press (3x10))"
+                                                                            className={`w-full bg-slate-50/80 dark:bg-zinc-950/60 border border-slate-200/80 dark:border-zinc-800 focus:border-slate-400 dark:focus:border-zinc-600 rounded-xl px-3.5 py-2.5 mb-3.5 outline-none font-black text-base sm:text-lg transition-all ${isExDone ? 'text-emerald-500 dark:text-emerald-400' : 'text-slate-800 dark:text-zinc-100'}`}
+                                                                        />
+
+                                                                        {}
+                                                                        {/* DANH SÁCH HIỆP TẬP THẲNG HÀNG DỌC TUYỆT ĐỐI */}
+                                                                        <div className="space-y-2.5 flex-1">
                                                                             {ex.sets.map((set, sIdx) => {
                                                                                 const isSetDone = set.weight.trim() !== '' && set.reps.trim() !== '';
                                                                                 return (
-                                                                                <div key={sIdx} className={`flex items-center gap-2 py-0.5 relative`}>
-                                                                                    
-                                                                                    {sIdx > 0 && !isSetDone && (
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleCopyPrevWeight(ex.id, sIdx); }} className="w-10 h-[50px] flex items-center justify-center text-slate-500 hover:text-blue-500 transition-colors shrink-0 bg-slate-100 dark:bg-zinc-800 rounded-xl active:scale-95 border border-transparent" title="Copy tạ từ Set trên">
-                                                                                            <CopyIcon size={16}/>
-                                                                                        </button>
-                                                                                    )}
+                                                                                    <div key={sIdx} className="flex items-center gap-2">
+                                                                                        {/* CỘT TRÁI CỐ ĐỊNH: NHÃN S1, S2, S3 & NÚT COPY TẠ */}
+                                                                                        <div className="w-16 shrink-0 flex items-center gap-1">
+                                                                                            <span className={`w-8 h-[48px] rounded-xl flex items-center justify-center text-[11px] font-black uppercase tracking-wider border ${isSetDone ? 'bg-emerald-500/15 text-emerald-500 border-emerald-500/40' : 'bg-slate-100 dark:bg-zinc-800/80 text-slate-400 dark:text-zinc-500 border-slate-200/60 dark:border-zinc-700/60'}`}>
+                                                                                                S{sIdx + 1}
+                                                                                            </span>
+                                                                                            {sIdx > 0 ? (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => { e.preventDefault(); handleCopyPrevWeight(ex.id, sIdx); }}
+                                                                                                    className="w-7 h-[48px] flex items-center justify-center text-slate-400 hover:text-blue-500 bg-slate-100 dark:bg-zinc-800/80 rounded-xl active:scale-90 transition-all border border-slate-200/60 dark:border-zinc-700/60"
+                                                                                                    title="Copy mức tạ hiệp trên"
+                                                                                                >
+                                                                                                    <CopyIcon size={13} />
+                                                                                                </button>
+                                                                                            ) : (
+                                                                                                <div className="w-7 h-[48px] shrink-0" />
+                                                                                            )}
+                                                                                        </div>
 
-                                                                                    {/* Ô nhập tạ */}
-                                                                                    <div className={`relative flex-[1.2] flex items-center bg-slate-50 dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[50px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
-                                                                                        <input type="text" value={set.weight} onChange={e=>handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)} className={`w-full h-full bg-transparent pl-4 pr-10 outline-none text-center uppercase transition-colors text-base ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }} className={`absolute right-1.5 text-[10px] font-black uppercase rounded-[10px] px-2 py-1.5 transition-colors ${isSetDone ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-white dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 shadow-sm border border-slate-200 dark:border-zinc-700'}`}>{set.unit.toUpperCase()}</button>
-                                                                                    </div>
-                                                                                    
-                                                                                    <span className="text-slate-400 dark:text-zinc-600 font-black text-base">×</span>
-                                                                                    
-                                                                                    {/* Ô nhập rep */}
-                                                                                    <div className={`flex-[0.8] relative bg-slate-50 dark:bg-zinc-950 border rounded-2xl focus-within:${wCol.border} transition-colors overflow-hidden h-[50px] ${isSetDone ? 'border-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
-                                                                                        <input type="text" value={set.reps} onChange={e=>handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)} className={`w-full h-full bg-transparent outline-none text-center transition-colors text-base ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`} />
-                                                                                    </div>
+                                                                                        {/* Ô NHẬP TẠ (BÀN PHÍM SỐ DECIMAL + PLACEHOLDER ĐƠN VỊ) */}
+                                                                                        <div className={`relative flex-[1.2] flex items-center bg-slate-50 dark:bg-zinc-950 border rounded-2xl transition-colors overflow-hidden h-[48px] ${isSetDone ? 'border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                inputMode="decimal"
+                                                                                                placeholder={set.unit.toUpperCase()}
+                                                                                                value={set.weight}
+                                                                                                onChange={e => handleUpdateSet(ex.id, sIdx, 'weight', e.target.value)}
+                                                                                                className={`w-full h-full bg-transparent pl-3 pr-11 outline-none text-center uppercase transition-colors text-base placeholder-slate-300 dark:placeholder-zinc-700 ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`}
+                                                                                            />
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => { e.preventDefault(); handleToggleUnit(ex.id, sIdx); }}
+                                                                                                className={`absolute right-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-1 transition-colors ${isSetDone ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-white dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 shadow-sm border border-slate-200 dark:border-zinc-700'}`}
+                                                                                            >
+                                                                                                {set.unit.toUpperCase()}
+                                                                                            </button>
+                                                                                        </div>
 
-                                                                                    {ex.sets.length > 1 && (
-                                                                                        <button onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }} className="w-10 h-[50px] flex justify-center items-center text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors active:scale-95">
-                                                                                            <Trash2Icon size={18} />
-                                                                                        </button>
-                                                                                    )}
-                                                                                </div>
-                                                                            )})}
-                                                                            <button onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }} className={`w-full py-3.5 bg-slate-50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400 rounded-xl font-bold text-sm flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] border border-slate-200/50 dark:border-zinc-700 hover:bg-slate-100 dark:hover:bg-zinc-700`}><PlusIcon size={18} /> Thêm hiệp</button>
+                                                                                        <span className="text-slate-300 dark:text-zinc-600 font-black text-sm w-3 text-center shrink-0">×</span>
+
+                                                                                        {/* Ô NHẬP REPS (BÀN PHÍM SỐ DECIMAL + PLACEHOLDER REPS) */}
+                                                                                        <div className={`flex-[0.85] relative bg-slate-50 dark:bg-zinc-950 border rounded-2xl transition-colors overflow-hidden h-[48px] ${isSetDone ? 'border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.15)]' : 'border-slate-200 dark:border-zinc-800 shadow-inner'}`}>
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                inputMode="decimal"
+                                                                                                placeholder="REPS"
+                                                                                                value={set.reps}
+                                                                                                onChange={e => handleUpdateSet(ex.id, sIdx, 'reps', e.target.value)}
+                                                                                                className={`w-full h-full bg-transparent outline-none text-center transition-colors text-base placeholder-slate-300 dark:placeholder-zinc-700 ${isSetDone ? 'text-emerald-500 font-black' : 'text-slate-800 dark:text-zinc-100 font-bold'}`}
+                                                                                            />
+                                                                                        </div>
+
+                                                                                        {/* CỘT PHẢI CỐ ĐỊNH: NÚT XÓA HIỆP HOẶC KHOẢNG TRỐNG ĐỒNG NHẤT */}
+                                                                                        <div className="w-8 shrink-0 flex justify-center items-center">
+                                                                                            {ex.sets.length > 1 ? (
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={(e) => { e.preventDefault(); handleRemoveSet(ex.id, sIdx); }}
+                                                                                                    className="w-8 h-[48px] flex justify-center items-center text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors active:scale-90"
+                                                                                                >
+                                                                                                    <Trash2Icon size={16} />
+                                                                                                </button>
+                                                                                            ) : (
+                                                                                                <div className="w-8 h-[48px] shrink-0" />
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => { e.preventDefault(); handleAddSet(ex.id); }}
+                                                                                className="w-full py-3 bg-slate-50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 mt-3 transition-all active:scale-[0.98] border border-slate-200/60 dark:border-zinc-700/60 hover:bg-slate-100 dark:hover:bg-zinc-800"
+                                                                            >
+                                                                                <PlusIcon size={16} /> Thêm hiệp
+                                                                            </button>
                                                                         </div>
 
+                                                                        {/* LỊCH SỬ BÀI TẬP GỌN GÀNG DƯỚI ĐÁY THẺ */}
                                                                         {prevHist && prevHist.length > 0 && (
-                                                                            <div className="mt-6 pt-5 border-t border-dashed border-slate-200 dark:border-zinc-700/50 flex flex-col gap-3 shrink-0">
-                                                                                <span className="text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest flex items-center gap-1.5"><ActivityIcon size={14}/> Lịch sử bài tập:</span>
-                                                                                <div className="flex flex-col gap-2.5">
+                                                                            <div className="mt-4 pt-3.5 border-t border-dashed border-slate-200 dark:border-zinc-800 flex flex-col gap-2 shrink-0">
+                                                                                <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                                                                                    <ActivityIcon size={12} /> Lịch sử gần nhất:
+                                                                                </span>
+                                                                                <div className="flex flex-col gap-1.5">
                                                                                     {prevHist.map((h, j) => {
                                                                                         let textToShow = '';
                                                                                         if (h.rawText && h.rawText.toUpperCase() !== 'X') {
                                                                                             textToShow = h.rawText;
                                                                                         } else if (h.sets && h.sets.length > 0) {
                                                                                             let allSame = true; const fW = h.sets[0].weight.trim(), fU = (h.sets[0].unit || 'KG').toLowerCase();
-                                                                                            for(let s=1; s<h.sets.length; s++) { if(h.sets[s].weight.trim() !== fW || (h.sets[s].unit || 'KG').toLowerCase() !== fU) { allSame = false; break; } }
+                                                                                            for (let s = 1; s < h.sets.length; s++) {
+                                                                                                if (h.sets[s].weight.trim() !== fW || (h.sets[s].unit || 'KG').toLowerCase() !== fU) { allSame = false; break; }
+                                                                                            }
                                                                                             if (allSame) {
                                                                                                 textToShow = (fW ? `${fW}${fU} ` : '') + h.sets.map(s => s.reps).join('+');
                                                                                             } else {
@@ -3293,9 +4388,9 @@
                                                                                         }
                                                                                         if (!textToShow) return null;
                                                                                         return (
-                                                                                            <div key={j} className="font-bold text-slate-500 dark:text-zinc-400 text-sm flex items-start gap-3 bg-slate-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-800/50">
-                                                                                                <span className="text-[10px] font-black text-slate-500 dark:text-zinc-500 bg-white dark:bg-zinc-800 px-2 py-1 rounded-lg shrink-0 mt-[1px] shadow-sm border border-slate-200 dark:border-zinc-700">{h.dateStr.substring(0,5)}</span>
-                                                                                                <span className="leading-snug text-slate-700 dark:text-zinc-300 pt-[1px]">{textToShow}</span>
+                                                                                            <div key={j} className="font-bold text-slate-500 dark:text-zinc-400 text-xs flex items-center gap-2.5 bg-slate-50 dark:bg-zinc-950/60 px-2.5 py-2 rounded-xl border border-slate-100 dark:border-zinc-800/60">
+                                                                                                <span className="text-[9px] font-black text-slate-500 dark:text-zinc-400 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-md shrink-0 border border-slate-200 dark:border-zinc-700">{h.dateStr.substring(0, 5)}</span>
+                                                                                                <span className="leading-snug text-slate-700 dark:text-zinc-300 truncate">{textToShow}</span>
                                                                                             </div>
                                                                                         );
                                                                                     })}
@@ -3306,13 +4401,41 @@
                                                                 </div>
                                                             );
                                                         })}
-                                                        <button onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }} className={`w-[85vw] max-w-[360px] shrink-0 snap-center min-h-[300px] border-2 border-dashed border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 hover:${modalMainColor.border} hover:${modalMainColor.text} font-black rounded-[2rem] flex flex-col items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.98]`}><PlusIcon size={36} /> Thêm bài tập mới</button>
-                                                        </div>
+
+                                                        {/* THẺ THÊM BÀI TẬP MỚI Ở CUỐI DÃY */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); handleAddExerciseRow(); }}
+                                                            className="w-[88vw] max-w-[380px] shrink-0 snap-center min-h-[260px] border-2 border-dashed border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 font-black rounded-[2rem] flex flex-col items-center justify-center gap-3 transition-all shadow-sm active:scale-[0.98]"
+                                                        >
+                                                            <PlusIcon size={36} /> Thêm bài tập mới
+                                                        </button>
                                                     </div>
-                                                    <div className="pt-4 border-t border-slate-200/50 dark:border-zinc-800/50 shrink-0 flex gap-3 transition-colors px-4 sm:px-6 pb-[env(safe-area-inset-bottom,1.5rem)] bg-slate-50/80 dark:bg-zinc-950/80 backdrop-blur-xl relative z-50">
-                                                        <button onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }} className="py-4 px-6 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 rounded-[1.25rem] font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"><ChevronLeftIcon size={24} /></button>
-                                                        <button onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }} className="flex-1 py-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-[1.25rem] font-black text-base flex justify-center items-center gap-2 transition-all active:scale-[0.98] shadow-sm">Lưu Tạm</button>
-                                                        <button onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }} className={`flex-1 py-4 ${modalMainColor.fill} text-white rounded-[1.25rem] font-black text-base shadow-xl shadow-${modalMainColor.fill.split('-')[1]}-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}><CheckCircleIcon size={20} /> Đóng Form</button>
+
+                                                    {/* THANH CÔNG CỤ ĐÁY MÀN HÌNH */}
+                                                    <div className="pt-3 border-t border-slate-200/50 dark:border-zinc-800/50 shrink-0 flex gap-2.5 transition-colors px-4 sm:px-6 pb-[env(safe-area-inset-bottom,1.25rem)] bg-slate-50/90 dark:bg-zinc-950/90 backdrop-blur-xl relative z-50">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); setWorkoutAddStep(1); }}
+                                                            className="py-3.5 px-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 rounded-2xl font-bold flex items-center justify-center transition-colors active:scale-95 shadow-sm"
+                                                        >
+                                                            <ChevronLeftIcon size={22} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); handleQuickSaveWorkout(); }}
+                                                            className="flex-1 py-3.5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 text-slate-800 dark:text-zinc-100 rounded-2xl font-black text-sm sm:text-base flex justify-center items-center gap-2 transition-all active:scale-[0.98] shadow-sm"
+                                                        >
+                                                            Lưu Tạm
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.preventDefault(); handleSaveWorkout(); }}
+                                                            className={`flex-1 py-3.5 ${modalMainColor.fill} ${modalMainColor.textLight} rounded-2xl font-black text-sm sm:text-base shadow-xl flex justify-center items-center gap-2 transition-all active:scale-[0.98]`}
+                                                            style={{ boxShadow: `0 10px 25px -5px ${themeHex}66` }}
+                                                        >
+                                                            <CheckCircleIcon size={19} /> Đóng Form
+                                                        </button>
                                                     </div>
                                                 </div>
                                             );
@@ -3321,7 +4444,8 @@
                                 )}
                             </div>
                         </div>
-                    )}
+                        );
+                    })()}
                     {/* MODAL BỘ LỌC ĐA TẦNG */}
                     {showFilterModal && (
                         <div className="fixed inset-0 z-[100] flex justify-center items-end sm:items-center">
