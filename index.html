@@ -75,23 +75,27 @@
         .glass-header { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
         .dark .glass-header { background: rgba(9, 9, 11, 0.85); }
         
-        / === TỌA ĐỘ 1 (CODE MỚI): MỞ KHÓA QUÁN TÍNH CAO TRÊN CHROME === /
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-main, .overflow-y-auto, .overflow-x-auto, .snap-x {
--webkit-overflow-scrolling: touch;
-overscroll-behavior: contain;
-will-change: scroll-position;
-transform: translateZ(0);
-}
-/ Gỡ bỏ phanh gấp của Chrome để vẩy tay có quán tính mượt như app */
-.snap-always { scroll-snap-stop: normal !important; }
-.snap-mandatory { scroll-snap-type: x proximity !important; }
-#journal-week-scroll > button {
-transform: translateZ(0);
-backface-visibility: hidden;
--webkit-backface-visibility: hidden;
-}
+        /* === MỞ KHÓA QUÁN TÍNH CAO TRÊN CHROME & MOBILE === */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        main, .overflow-y-auto, .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: contain;
+        }
+        #journal-week-scroll {
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: none !important;
+            overscroll-behavior-x: contain;
+            touch-action: pan-x pan-y;
+        }
+        #journal-week-scroll > button {
+            touch-action: pan-x pan-y;
+            -webkit-user-select: none;
+            user-select: none;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
         
         input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0; width: 100%; height: 100%; position: absolute; top: 0; left: 0; cursor: pointer; }
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -250,22 +254,57 @@ backface-visibility: hidden;
             const App = () => {
                 const isDarkMode = true;
 
-                // Tự động nhận diện thiết bị lúc mới vào (>=1024px là PC)
+                // Tự động co giãn theo tỉ lệ màn hình (Ngang/Rộng là Tablet & PC, Dọc là Điện thoại)
                 const [isDesktopMode, setIsDesktopMode] = useState(() => {
-                    const saved = localStorage.getItem('desktop_mode');
-                    if (saved !== null) return JSON.parse(saved);
-                    return window.innerWidth >= 1024;
+                    return window.innerWidth >= 768 || window.innerWidth > window.innerHeight * 1.15;
                 });
-                useEffect(() => { localStorage.setItem('desktop_mode', JSON.stringify(isDesktopMode)); }, [isDesktopMode]);
+                useEffect(() => {
+                    const handleResize = () => {
+                        const isWideScreen = window.innerWidth >= 768 || window.innerWidth > window.innerHeight * 1.15;
+                        setIsDesktopMode(isWideScreen);
+                    };
+                    window.addEventListener('resize', handleResize);
+                    window.addEventListener('orientationchange', handleResize);
+                    return () => {
+                        window.removeEventListener('resize', handleResize);
+                        window.removeEventListener('orientationchange', handleResize);
+                    };
+                }, []);
 
                 const [appMode, setAppMode] = useState('journal'); 
                 const [currentView, setCurrentView] = useState('week'); 
                 const [selectedDate, setSelectedDate] = useState(new Date());
                 const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
                 const [currentMonthStart, setCurrentMonthStart] = useState(getStartOfMonth(new Date()));
-                const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
+                const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(true);
+                const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+                const [isFullscreen, setIsFullscreen] = useState(false);
                 const lastScrollYRef = useRef(0);
-                const mainSwipeRef = useRef({ startX: 0, startY: 0, ignore: false });
+                const mainSwipeRef = useRef({ startX: 0, startY: 0, startTime: 0, ignore: false, lockedAxis: null });
+                const mainContentWrapRef = useRef(null);
+
+                useEffect(() => {
+                    const onFsChange = () => setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
+                    document.addEventListener('fullscreenchange', onFsChange);
+                    document.addEventListener('webkitfullscreenchange', onFsChange);
+                    return () => {
+                        document.removeEventListener('fullscreenchange', onFsChange);
+                        document.removeEventListener('webkitfullscreenchange', onFsChange);
+                    };
+                }, []);
+
+                const toggleFullScreen = () => {
+                    try {
+                        const docEl = document.documentElement;
+                        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                            if (docEl.requestFullscreen) docEl.requestFullscreen();
+                            else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+                        } else {
+                            if (document.exitFullscreen) document.exitFullscreen();
+                            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                        }
+                    } catch (e) {}
+                };
                 
                 const [activeFilter, setActiveFilter] = useState(null);
                 const [journalDetailLevel, setJournalDetailLevel] = useState('simple');
@@ -1618,21 +1657,29 @@ backface-visibility: hidden;
                 };
 
                 const changeWeek = (o) => {
+                    const el = document.getElementById('journal-week-scroll');
+                    if (el) {
+                        el.dataset.scrollEdge = o < 0 ? 'end' : 'start';
+                        delete el.dataset.scrolledToday;
+                    }
                     const n = new Date(currentWeekStart);
                     n.setDate(n.getDate() + (o * 7));
-                    setCurrentWeekStart(n);
-                    // Nếu lùi về tuần trước (o < 0) -> chọn CN tuần rồi; nếu tiến qua tuần sau (o > 0) -> chọn T2 tuần sau
                     const targetSel = new Date(n);
                     if (o < 0) targetSel.setDate(targetSel.getDate() + 6);
+                    setCurrentWeekStart(n);
                     setSelectedDate(targetSel);
                     setCurrentMonthStart(getStartOfMonth(targetSel));
-                    setTimeout(() => {
-                        const el = document.getElementById('journal-week-scroll');
-                        if (el) {
-                            el.dataset.scrollEdge = o < 0 ? 'end' : 'start';
-                            delete el.dataset.scrolledToday;
+                    const snapToEdge = () => {
+                        const scrollEl = document.getElementById('journal-week-scroll');
+                        if (scrollEl) {
+                            scrollEl.scrollTo({
+                                left: o < 0 ? scrollEl.scrollWidth : 0,
+                                behavior: 'auto'
+                            });
                         }
-                    }, 10);
+                    };
+                    requestAnimationFrame(snapToEdge);
+                    setTimeout(snapToEdge, 30);
                 };
 
                 const changeMonth = (o) => {
@@ -1699,14 +1746,95 @@ backface-visibility: hidden;
                     )}
 
                    {/* TOP HEADER GLASSMORPHISM */}
-                    <header className="shrink-0 z-40 glass-header border-b border-slate-200/60 dark:border-zinc-800/60 flex justify-center transition-colors">
-                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} w-full px-3.5 sm:px-5 pt-2.5 pb-2 flex flex-col transition-all duration-300`}>
-                            <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <header className="shrink-0 z-40 glass-header border-b border-slate-200/60 dark:border-zinc-800/60 flex justify-center transition-colors relative">
+                        <div className={`${isDesktopMode ? 'max-w-[96vw] 2xl:max-w-[1680px]' : 'max-w-full'} w-full px-3.5 sm:px-6 pt-2.5 pb-2 flex flex-col transition-all duration-300`}>
+                            <div className="flex justify-between items-center gap-1.5">
+                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                                    {/* NÚT BA GẠCH NGANG (MENU TIỆN ÍCH) BÊN TRÁI CALASU */}
+                                    <div className="relative shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowHeaderMenu(prev => !prev)}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all active:scale-90 ${showHeaderMenu ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-zinc-900/90 text-zinc-300 border-zinc-800/80 hover:text-white'}`}
+                                            title="Menu công cụ"
+                                        >
+                                            <MenuIcon size={16} />
+                                            {isFiltering && (
+                                                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-purple-500 ring-2 ring-zinc-950"></span>
+                                            )}
+                                        </button>
+
+                                        {showHeaderMenu && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)}></div>
+                                                <div className="absolute left-0 top-[calc(100%+8px)] z-50 w-64 bg-zinc-900/95 backdrop-blur-2xl border border-zinc-800 rounded-2xl p-2.5 shadow-2xl space-y-2 animate-[fadeScale_0.15s_ease-out]">
+                                                    {/* Mức chi tiết thẻ Tuần Journal */}
+                                                    <div className="p-2 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                                                        <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Chi tiết thẻ Tuần Journal</span>
+                                                        <div className="grid grid-cols-3 gap-1 bg-zinc-900 p-0.5 rounded-lg border border-zinc-800">
+                                                            {[
+                                                                { id: 'simple', label: '1x Gọn' },
+                                                                { id: 'detail', label: '2x Vừa' },
+                                                                { id: 'all', label: '3x Full' }
+                                                            ].map(lv => (
+                                                                <button
+                                                                    key={lv.id}
+                                                                    type="button"
+                                                                    onClick={() => { setJournalDetailLevel(lv.id); setShowHeaderMenu(false); }}
+                                                                    className={`py-1.5 rounded-md text-[11px] font-bold tabular-nums transition-all ${journalDetailLevel === lv.id ? 'bg-purple-500 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}
+                                                                >
+                                                                    {lv.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Bộ lọc Nhật ký */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setShowHeaderMenu(false); setShowFilterModal(true); }}
+                                                        className="w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-zinc-800/80 active:scale-[0.98] transition-all"
+                                                    >
+                                                        <span className="flex items-center gap-2.5">
+                                                            <FilterIcon size={15} className={isFiltering ? 'text-purple-400' : 'text-zinc-400'} />
+                                                            <span>Bộ lọc Nhật ký</span>
+                                                        </span>
+                                                        {isFiltering && <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-black">Đang bật</span>}
+                                                    </button>
+
+                                                    {/* Chế độ Điện thoại / Máy tính */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setIsDesktopMode(!isDesktopMode); setShowHeaderMenu(false); }}
+                                                        className="w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-xs font-bold text-zinc-200 hover:bg-zinc-800/80 active:scale-[0.98] transition-all"
+                                                    >
+                                                        <span className="flex items-center gap-2.5">
+                                                            {isDesktopMode ? <SmartphoneIcon size={15} className="text-cyan-400" /> : <MonitorIcon size={15} className="text-cyan-400" />}
+                                                            <span>{isDesktopMode ? 'Chế độ Điện thoại' : 'Chế độ Máy tính'}</span>
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-zinc-500">{isDesktopMode ? 'PC' : 'Mobile'}</span>
+                                                    </button>
+
+                                                    {/* Chế độ Toàn màn hình (Ẩn trình duyệt) */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { toggleFullScreen(); setShowHeaderMenu(false); }}
+                                                        className="w-full px-3 py-2.5 rounded-xl flex items-center justify-between text-xs font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 active:scale-[0.98] transition-all"
+                                                    >
+                                                        <span className="flex items-center gap-2.5">
+                                                            <SparklesIcon size={15} />
+                                                            <span>{isFullscreen ? 'Thoát Full màn hình' : 'Full màn hình (Ẩn trình duyệt)'}</span>
+                                                        </span>
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
                                     <h1 className="text-lg sm:text-2xl font-black tracking-tight bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-600 bg-clip-text text-transparent drop-shadow-sm shrink-0">Calasu</h1>
                                     <div className="h-4 w-px bg-zinc-800 shrink-0"></div>
                                     
-                                    {/* COMPACT DATE PILL TRÊN HEADER (TÁCH RỜI NÚT < > VÀ CHỮ NGÀY THÁNG) */}
+                                    {/* COMPACT DATE PILL TRÊN HEADER + NÚT ^ / v ẨN HIỆN THANH NGÀY TUẦN THÁNG */}
                                     <div className="flex items-center gap-2 min-w-0">
                                         <div className="bg-zinc-900/90 border border-zinc-800/80 rounded-full flex items-center p-0.5 gap-0.5 shrink-0">
                                             <button
@@ -1741,61 +1869,67 @@ backface-visibility: hidden;
                                                 }, 50);
                                             }}
                                             title="Bấm để về Hôm nay"
-                                            className="text-left tabular-nums tracking-tight truncate active:scale-95 transition-all"
+                                            className="text-left tracking-normal truncate active:scale-95 transition-all"
                                         >
                                             {(() => {
                                                 if (currentView === 'day') {
                                                     const isDiffYear = selectedDate.getFullYear() !== new Date().getFullYear();
-                                                    const dayNumStr = `${String(selectedDate.getDate()).padStart(2,'0')}.${String(selectedDate.getMonth()+1).padStart(2,'0')}${isDiffYear ? '.' + selectedDate.getFullYear() : ''}`;
+                                                    const dStr = String(selectedDate.getDate()).padStart(2,'0');
+                                                    const mStr = String(selectedDate.getMonth()+1).padStart(2,'0');
                                                     return (
                                                         <span className="inline-flex items-baseline gap-1.5 text-xs sm:text-sm">
-                                                            <span className="text-zinc-400 font-medium">{VN_DAYS[selectedDate.getDay()]}</span>
-                                                            <span className="text-zinc-100 font-bold">{dayNumStr}</span>
+                                                            <span className="text-zinc-400 font-semibold">{VN_DAYS[selectedDate.getDay()]}</span>
+                                                            <span className="text-zinc-100 font-bold">
+                                                                {dStr}<span className="text-zinc-500/60 font-normal mx-[1px]">/</span>{mStr}
+                                                                {isDiffYear && <><span className="text-zinc-500/60 font-normal mx-[1px]">/</span>{selectedDate.getFullYear()}</>}
+                                                            </span>
                                                         </span>
                                                     );
                                                 }
                                                 if (currentView === 'week') {
                                                     const wEnd = new Date(currentWeekStart);
                                                     wEnd.setDate(wEnd.getDate() + 6);
-                                                    const startStr = `${String(currentWeekStart.getDate()).padStart(2,'0')}.${String(currentWeekStart.getMonth()+1).padStart(2,'0')}`;
-                                                    const endStr = `${String(wEnd.getDate()).padStart(2,'0')}.${String(wEnd.getMonth()+1).padStart(2,'0')}`;
+                                                    const sD = String(currentWeekStart.getDate()).padStart(2,'0');
+                                                    const sM = String(currentWeekStart.getMonth()+1).padStart(2,'0');
+                                                    const eD = String(wEnd.getDate()).padStart(2,'0');
+                                                    const eM = String(wEnd.getMonth()+1).padStart(2,'0');
                                                     return (
                                                         <span className="inline-flex items-baseline gap-1.5">
-                                                            <span className="text-zinc-500 font-medium text-[11px]">Tuần</span>
-                                                            <span className="text-zinc-100 font-bold text-xs">{startStr} – {endStr}</span>
+                                                            <span className="text-zinc-400 font-medium text-xs">Tuần</span>
+                                                            <span className="text-zinc-100 font-semibold text-xs sm:text-[13px] tracking-normal">
+                                                                {sD}<span className="text-zinc-500/60 font-normal mx-[1px]">/</span>{sM}
+                                                                <span className="text-zinc-500 font-normal mx-1.5">–</span>
+                                                                {eD}<span className="text-zinc-500/60 font-normal mx-[1px]">/</span>{eM}
+                                                            </span>
                                                         </span>
                                                     );
                                                 }
+                                                const mStr = String(currentMonthStart.getMonth() + 1).padStart(2,'0');
                                                 return (
                                                     <span className="inline-flex items-baseline gap-1.5">
-                                                        <span className="text-zinc-500 font-medium text-[11px]">Tháng</span>
-                                                        <span className="text-zinc-100 font-bold text-xs">{String(currentMonthStart.getMonth() + 1).padStart(2,'0')}.{currentMonthStart.getFullYear()}</span>
+                                                        <span className="text-zinc-400 font-medium text-xs">Tháng</span>
+                                                        <span className="text-zinc-100 font-semibold text-xs sm:text-[13px] tracking-normal">
+                                                            {mStr}<span className="text-zinc-500/60 font-normal mx-[1px]">/</span>{currentMonthStart.getFullYear()}
+                                                        </span>
                                                     </span>
                                                 );
                                             })()}
                                         </button>
+
+                                        {/* NÚT MŨI TÊN ^ / v ĐỂ ẨN/HIỆN THANH NGÀY | TUẦN | THÁNG */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsHeaderCollapsed(prev => !prev)}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all active:scale-90 shrink-0 ${!isHeaderCollapsed ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-zinc-900/70 text-zinc-500 border-zinc-800/70 hover:text-zinc-300'}`}
+                                            title={isHeaderCollapsed ? 'Hiện thanh Ngày / Tuần / Tháng' : 'Ẩn thanh Ngày / Tuần / Tháng'}
+                                        >
+                                            <ChevronRightIcon size={13} className={`transition-transform duration-300 ${isHeaderCollapsed ? 'rotate-90' : '-rotate-90'}`} />
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1 sm:gap-1.5 justify-end shrink-0">
-                                    {((appMode === 'journal' || appMode === 'stat') && currentView === 'week') && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setJournalDetailLevel(prev => prev === 'simple' ? 'detail' : prev === 'detail' ? 'all' : 'simple')}
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center tabular-nums font-extrabold text-[10px] tracking-tighter transition-all active:scale-95 shadow-sm border ${journalDetailLevel === 'simple' ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-purple-500/15 text-purple-400 border-purple-500/30'}`}
-                                            title="Đổi mức chi tiết thẻ tuần"
-                                        >
-                                            {journalDetailLevel === 'simple' ? '1x' : journalDetailLevel === 'detail' ? '2x' : '3x'}
-                                        </button>
-                                    )}
-                                    <button onClick={() => setIsDesktopMode(!isDesktopMode)} className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-800 text-zinc-300 hover:scale-105 active:scale-95 transition-all shadow-sm">
-                                        {isDesktopMode ? <SmartphoneIcon size={15}/> : <MonitorIcon size={15}/>}
-                                    </button>
-                                    {(appMode === 'journal' || appMode === 'stat') && (
-                                        <button onClick={() => setShowFilterModal(true)} className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm ${isFiltering ? 'bg-purple-500 text-white shadow-purple-500/30' : 'bg-zinc-800 text-zinc-300'}`}>
-                                            <FilterIcon size={15}/>
-                                        </button>
-                                    )}
+                                {/* GÓC PHẢI CHỈ CÒN NÚT TẢI VÀ ĐÁM MÂY */}
+                                <div className="flex items-center gap-1.5 justify-end shrink-0">
                                     <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); }} className={`w-8 h-8 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
                                         <DownloadIcon size={15} />
                                     </button>
@@ -1824,7 +1958,7 @@ backface-visibility: hidden;
                                 </div>
                             </div>
                             
-                            {/* VIEW MODE TOGGLE (TỰ ĐỘNG THU GỌN KHI CUỘN XUỐNG) */}
+                            {/* VIEW MODE TOGGLE (MẶC ĐỊNH ẨN, BẤM NÚT ^/v ĐỂ ĐÓNG/MỞ) */}
                             <div className={`w-full transition-all duration-300 ${isHeaderCollapsed ? 'max-h-0 opacity-0 overflow-hidden py-0 my-0 pointer-events-none' : 'max-h-12 opacity-100 mt-2'}`}>
                                 <div className="flex max-w-[260px] sm:max-w-[300px] w-full mx-auto p-0.5 rounded-full bg-zinc-900/90 border border-zinc-800/80 relative backdrop-blur-md shadow-inner">
                                     {['day', 'week', 'month'].map(view => {
@@ -1838,7 +1972,7 @@ backface-visibility: hidden;
                                             else if (appMode === 'work') activeCls = 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20';
                                         }
                                         return (
-                                            <button key={view} onClick={() => setCurrentView(view)} className={`flex-1 py-1 rounded-full text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
+                                            <button key={view} onClick={() => { setCurrentView(view); setIsHeaderCollapsed(true); }} className={`flex-1 py-1 rounded-full text-xs font-bold transition-all duration-300 capitalize ${activeCls}`}>
                                                 {view === 'day' ? 'Ngày' : view === 'week' ? 'Tuần' : 'Tháng'}
                                             </button>
                                         );
@@ -1850,7 +1984,7 @@ backface-visibility: hidden;
 
                     {hasUnsavedChanges && !isAutoSyncEnabled && (
                         <div className="shrink-0 z-30 bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/20 backdrop-blur-md px-4 py-2 flex justify-center animate-[fadeScale_0.2s_ease-out]">
-                            <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} w-full flex items-center justify-between gap-2`}>
+                            <div className={`${isDesktopMode ? 'max-w-[96vw] 2xl:max-w-[1680px]' : 'max-w-full'} w-full px-2 flex items-center justify-between gap-2`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                     <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0"></span>
                                     <span className="text-xs font-bold text-amber-700 dark:text-amber-300 truncate">Chưa bật sao lưu tự động</span>
@@ -1881,42 +2015,89 @@ backface-visibility: hidden;
                     )}
 
                     <main
-                        className="flex-1 overflow-y-auto no-scrollbar"
+                        className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col"
                         style={{ WebkitOverflowScrolling: 'touch' }}
                         onScroll={(e) => {
                             const scrollTop = e.currentTarget.scrollTop;
                             const lastScrollY = lastScrollYRef.current;
                             if (scrollTop > lastScrollY + 12 && scrollTop > 40) {
                                 if (!isHeaderCollapsed) setIsHeaderCollapsed(true);
-                            } else if (scrollTop < lastScrollY - 8 || scrollTop < 20) {
-                                if (isHeaderCollapsed) setIsHeaderCollapsed(false);
                             }
                             lastScrollYRef.current = scrollTop;
                         }}
                         onTouchStart={(e) => {
                             if (!e.touches || e.touches.length !== 1) return;
                             const target = e.target;
-                            const shouldIgnore = !!(target && target.closest && target.closest('.overflow-x-auto, .snap-x, input, textarea, .recharts-wrapper'));
+                            const shouldIgnore = !!(target && target.closest && target.closest('#journal-week-scroll, .overflow-x-auto, input, textarea, select, .recharts-wrapper'));
                             mainSwipeRef.current = {
                                 startX: e.touches[0].clientX,
                                 startY: e.touches[0].clientY,
-                                ignore: shouldIgnore
+                                startTime: performance.now(),
+                                ignore: shouldIgnore,
+                                lockedAxis: null
                             };
+                            if (mainContentWrapRef.current && !shouldIgnore) {
+                                mainContentWrapRef.current.style.transition = 'none';
+                            }
+                        }}
+                        onTouchMove={(e) => {
+                            const st = mainSwipeRef.current;
+                            if (st.ignore || !e.touches || e.touches.length !== 1) return;
+                            const dx = e.touches[0].clientX - st.startX;
+                            const dy = e.touches[0].clientY - st.startY;
+                            if (!st.lockedAxis && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+                                st.lockedAxis = Math.abs(dx) > Math.abs(dy) * 1.25 ? 'x' : 'y';
+                            }
+                            if (st.lockedAxis === 'x' && mainContentWrapRef.current) {
+                                const damped = dx * 0.42;
+                                mainContentWrapRef.current.style.transform = `translate3d(${damped}px, 0, 0)`;
+                            }
                         }}
                         onTouchEnd={(e) => {
-                            if (mainSwipeRef.current.ignore || !e.changedTouches || e.changedTouches.length === 0) return;
-                            const diffX = mainSwipeRef.current.startX - e.changedTouches[0].clientX;
-                            const diffY = mainSwipeRef.current.startY - e.changedTouches[0].clientY;
-                            if (Math.abs(diffX) > 65 && Math.abs(diffX) > Math.abs(diffY) * 1.8) {
-                                if (diffX > 65) {
-                                    currentView === 'day' ? changeDate(1) : currentView === 'week' ? changeWeek(1) : changeMonth(1);
-                                } else if (diffX < -65) {
-                                    currentView === 'day' ? changeDate(-1) : currentView === 'week' ? changeWeek(-1) : changeMonth(-1);
+                            const st = mainSwipeRef.current;
+                            if (st.ignore || !e.changedTouches || e.changedTouches.length === 0) return;
+                            const dx = e.changedTouches[0].clientX - st.startX;
+                            const dy = e.changedTouches[0].clientY - st.startY;
+                            const dt = Math.max(1, performance.now() - (st.startTime || performance.now()));
+                            const velocity = Math.abs(dx) / dt; // px/ms
+                            const wrap = mainContentWrapRef.current;
+
+                            const isHorizontalSwipe = st.lockedAxis === 'x' || (Math.abs(dx) > Math.abs(dy) * 1.35);
+                            const isTriggered = isHorizontalSwipe && (Math.abs(dx) > 48 || (Math.abs(dx) > 22 && velocity > 0.3));
+
+                            if (isTriggered) {
+                                const dir = dx < 0 ? 1 : -1;
+                                if (wrap) {
+                                    wrap.style.transition = 'transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease-out';
+                                    wrap.style.transform = `translate3d(${dir * -48}px, 0, 0)`;
+                                    wrap.style.opacity = '0.65';
                                 }
+                                setTimeout(() => {
+                                    if (currentView === 'day') changeDate(dir);
+                                    else if (currentView === 'week') changeWeek(dir);
+                                    else changeMonth(dir);
+                                    if (wrap) {
+                                        wrap.style.transition = 'none';
+                                        wrap.style.transform = `translate3d(${dir * 36}px, 0, 0)`;
+                                        requestAnimationFrame(() => {
+                                            requestAnimationFrame(() => {
+                                                if (wrap) {
+                                                    wrap.style.transition = 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease-out';
+                                                    wrap.style.transform = 'translate3d(0, 0, 0)';
+                                                    wrap.style.opacity = '1';
+                                                }
+                                            });
+                                        });
+                                    }
+                                }, 90);
+                            } else if (wrap) {
+                                wrap.style.transition = 'transform 200ms cubic-bezier(0.16, 1, 0.3, 1)';
+                                wrap.style.transform = 'translate3d(0, 0, 0)';
+                                wrap.style.opacity = '1';
                             }
                         }}
                     >
-                        <div className={`${isDesktopMode ? 'max-w-5xl' : 'max-w-md'} mx-auto p-4 space-y-5 pb-24 transition-all duration-500`}>
+                        <div ref={mainContentWrapRef} className={`${isDesktopMode ? 'max-w-[96vw] 2xl:max-w-[1680px]' : 'max-w-full'} w-full flex-1 flex flex-col mx-auto px-3.5 sm:px-6 pt-3 pb-6 space-y-4 will-change-transform`}>
                             
                             {appMode === 'work' && currentView === 'day' && (() => {
                                 const dayWorkStats = calculateWorkStats(todoData);
@@ -3774,16 +3955,15 @@ backface-visibility: hidden;
                             )}
 
                             {(appMode === 'journal' || appMode === 'stat') && currentView === 'week' && (
-                                <div className="animate-[fadeScale_0.25s_ease-out]">
+                                <div className="animate-[fadeScale_0.25s_ease-out] flex-1 flex flex-col justify-center">
                                     {/* THANH THÔNG BÁO ĐANG LỌC */}
                                     {isFiltering && (
-                                        <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-4 flex justify-between items-center shadow-sm">
+                                        <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-3 flex justify-between items-center shadow-sm shrink-0">
                                             <span className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-2"><FilterIcon size={14}/> Đang áp dụng bộ lọc</span>
                                             <button onClick={() => setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' })} className="text-[10px] bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm font-bold text-slate-600 dark:text-zinc-300 active:scale-95">Xóa Lọc</button>
                                         </div>
                                     )}
 
-                              
                                     <div 
                                         id="journal-week-scroll"
                                         ref={(el) => {
@@ -3812,6 +3992,7 @@ backface-visibility: hidden;
                                             el.dataset.startX = e.touches[0].clientX;
                                             el.dataset.startY = e.touches[0].clientY;
                                             el.dataset.startScroll = el.scrollLeft;
+                                            el.dataset.startTime = performance.now();
                                         }}
                                         onTouchEnd={(e) => {
                                             if (isFiltering) return;
@@ -3819,29 +4000,28 @@ backface-visibility: hidden;
                                             const startX = parseFloat(el.dataset.startX || 0);
                                             const startY = parseFloat(el.dataset.startY || 0);
                                             const startScroll = parseFloat(el.dataset.startScroll || 0);
+                                            const startTime = parseFloat(el.dataset.startTime || performance.now());
                                             const endX = e.changedTouches[0].clientX;
                                             const endY = e.changedTouches[0].clientY;
                                             const diffX = startX - endX;
                                             const diffY = Math.abs(startY - endY);
+                                            const dt = Math.max(1, performance.now() - startTime);
+                                            const velocity = Math.abs(diffX) / dt;
                                             const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
 
-                                            // Chỉ kích hoạt chuyển tuần khi vuốt ngang rõ rệt
-                                            if (Math.abs(diffX) > 45 && Math.abs(diffX) > diffY) {
-                                                // Đang ở cuối tuần (CN) và vuốt tiếp qua phải -> Sang Thứ 2 tuần sau
-                                                if ((el.scrollLeft >= maxScroll - 25 || startScroll >= maxScroll - 25) && diffX > 45) {
+                                            if ((Math.abs(diffX) > 38 || (Math.abs(diffX) > 18 && velocity > 0.28)) && Math.abs(diffX) > diffY * 1.2) {
+                                                if ((el.scrollLeft >= maxScroll - 30 || startScroll >= maxScroll - 30) && diffX > 0) {
                                                     changeWeek(1);
                                                 }
-                                                // Đang ở đầu tuần (T2) và vuốt lùi qua trái -> Về Chủ Nhật tuần rồi
-                                                else if ((el.scrollLeft <= 25 || startScroll <= 25) && diffX < -45) {
+                                                else if ((el.scrollLeft <= 30 || startScroll <= 30) && diffX < 0) {
                                                     changeWeek(-1);
                                                 }
                                             }
                                         }}
                                         style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', touchAction: 'pan-x pan-y' }}
-                                        className="flex overflow-x-auto snap-x snap-proximity gap-4 pb-6 pt-1.5 px-1 no-scrollbar items-stretch"
+                                        className="flex-1 flex overflow-x-auto gap-4 sm:gap-5 pb-2 pt-1 px-1 no-scrollbar items-stretch min-h-[calc(100dvh-145px)]"
                                     >
                                         {(() => {
-                                            // LOGIC RENDER: Nếu có lọc thì lôi hết lịch sử ra, nếu không thì hiện tuần hiện tại
                                             let renderDays = [];
                                             if (isFiltering) {
                                                 const allDatesSet = new Set([...Object.keys(statsByDate), ...Object.keys(foodsByDate), ...Object.keys(workoutsByDate)]);
@@ -3858,7 +4038,7 @@ backface-visibility: hidden;
 
                                             if (renderDays.length === 0) {
                                                 return (
-                                                    <div className="w-full py-16 text-center text-slate-400 dark:text-zinc-600 font-black tracking-widest uppercase text-sm border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-[2.5rem]">
+                                                    <div className="w-full py-16 text-center text-slate-400 dark:text-zinc-600 font-black tracking-widest uppercase text-sm border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-[2.5rem] flex items-center justify-center">
                                                         Không tìm thấy dữ liệu nào phù hợp!
                                                     </div>
                                                 );
@@ -3875,68 +4055,81 @@ backface-visibility: hidden;
                                                 let moodColor = MOODS[3]; let outIcon = OUTINGS[0]; let moodIcon = MOODS[3].icon;
                                                 if (sDay) { moodColor = MOODS.find(m => m.val === sDay.mood) || MOODS[3]; outIcon = OUTINGS.find(o => o.val === sDay.outing) || OUTINGS[0]; moodIcon = moodColor.icon; }
 
+                                                const hasExtraMetrics = (journalDetailLevel === 'detail' || journalDetailLevel === 'all') && (Math.round(foodTotals.kcal) > 0 || sleepDay.length > 0 || workDay);
+
                                                 return (
-                                                    <button key={dKey} data-today={isToday && !isFiltering ? "true" : "false"} data-selected={isSelectedDay && !isFiltering ? "true" : "false"} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.5rem] p-6 shadow-lg dark:shadow-none text-left border border-slate-100 dark:border-zinc-800 ${isHighlightedCard ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-950' : ''} w-[85vw] max-w-[340px] shrink-0 snap-center min-h-[200px] flex flex-col overflow-hidden`}>
-                                                        <div className="flex justify-between items-start mb-5 relative z-10 w-full">
-                                                            <div className="flex flex-col gap-2.5 items-start">
-                                                                <span className="text-slate-800 dark:text-zinc-100 text-sm font-black tracking-wide ml-1">
-                                                                    {VN_DAYS[day.getDay()]} <span className="opacity-50 text-[10px] font-bold">({String(day.getDate()).padStart(2,'0')}/{String(day.getMonth()+1).padStart(2,'0')})</span>
+                                                    <button key={dKey} data-today={isToday && !isFiltering ? "true" : "false"} data-selected={isSelectedDay && !isFiltering ? "true" : "false"} onClick={() => { setSelectedDate(day); setCurrentView('day'); setJournalFilters({ query: '', moods: [], outings: [], workouts: [], foodQuery: '', foodType: 'all', proType: 'all', sleepStart: 'all', sleepEnd: 'all' }); }} className={`relative bg-white dark:bg-zinc-900 rounded-[2.25rem] p-5 sm:p-6 shadow-lg dark:shadow-none text-left border border-slate-100 dark:border-zinc-800/90 ${isHighlightedCard ? 'ring-2 ring-purple-500/90 border-purple-500/40' : ''} w-[86vw] sm:w-[45vw] lg:w-[30.5vw] xl:w-[23vw] max-w-[430px] shrink-0 h-full min-h-[calc(100dvh-155px)] flex flex-col overflow-hidden`}>
+                                                        {/* HÀNG 1: THỨ NGÀY DẤU / MỜ BÊN TRÁI + PILL MOOD & OUTING ĐỒNG BỘ BÊN PHẢI */}
+                                                        <div className="flex items-center justify-between gap-2 pb-3.5 mb-3.5 border-b border-slate-100 dark:border-zinc-800/80 relative z-10 w-full shrink-0">
+                                                            <div className="flex items-baseline gap-1.5 shrink-0">
+                                                                <span className="text-xl font-black tracking-tight text-slate-900 dark:text-zinc-100">
+                                                                    {VN_DAYS[day.getDay()]}
                                                                 </span>
-                                                                <span onClick={(e) => { e.stopPropagation(); setSecretBubble({ dateKey: dKey, isEditing: !(sDay?.detail && sDay.detail.trim()), text: sDay?.detail || '' }); }} className={`${sDay ? moodColor.twBg + ' ' + moodColor.twText + ' border ' + moodColor.twBorder : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-500 border border-slate-200 dark:border-zinc-700'} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 transition-all cursor-pointer`} title="Bấm để mở Bong bóng hồi tưởng">
-                                                                    {React.createElement(moodIcon, {size: 14, strokeWidth: 2.5})} {sDay ? moodColor.label : 'Chưa có'}
+                                                                <span className="text-xs font-semibold text-slate-400 dark:text-zinc-400">
+                                                                    {String(day.getDate()).padStart(2,'0')}<span className="opacity-40 font-normal mx-[1px]">/</span>{String(day.getMonth()+1).padStart(2,'0')}
+                                                                </span>
+                                                                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 self-center ml-0.5"></span>}
+                                                            </div>
+
+                                                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                                                <span
+                                                                    onClick={(e) => { e.stopPropagation(); setSecretBubble({ dateKey: dKey, isEditing: !(sDay?.detail && sDay.detail.trim()), text: sDay?.detail || '' }); }}
+                                                                    className={`${sDay ? moodColor.twBg + ' ' + moodColor.twText + ' border ' + moodColor.twBorder : 'bg-zinc-800/80 text-zinc-500 border border-zinc-700/80'} h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer`}
+                                                                    title="Bấm để mở Bong bóng hồi tưởng"
+                                                                >
+                                                                    {React.createElement(moodIcon, {size: 12, strokeWidth: 2.5})}
+                                                                    <span>{sDay ? moodColor.label : 'Trống'}</span>
                                                                     {sDay?.detail && sDay.detail.trim() !== '' && <span className="text-[10px] animate-pulse">✦</span>}
                                                                 </span>
-                                                            </div>
-                                                            
-                                                            <div className="flex flex-col items-end gap-2.5">
+
                                                                 {sDay && outIcon && (
-                                                                    <span className="bg-slate-50 dark:bg-zinc-800 px-3 py-2 rounded-xl text-slate-600 dark:text-zinc-300 border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
-                                                                        <outIcon.Icon size={14} className={outIcon.color}/>
-                                                                        {outIcon.label}
+                                                                    <span className="h-7 px-2.5 rounded-full bg-slate-50 dark:bg-zinc-800/90 text-slate-600 dark:text-zinc-300 border border-slate-200/70 dark:border-zinc-700/80 flex items-center gap-1 text-[10px] font-bold shadow-sm">
+                                                                        <outIcon.Icon size={12} className={outIcon.color}/>
+                                                                        <span>{outIcon.label}</span>
                                                                     </span>
-                                                                )}
-                                                                {((journalDetailLevel === 'detail' || journalDetailLevel === 'all') && Math.round(foodTotals.kcal) > 0) && (
-                                                                    <div className="bg-orange-50 dark:bg-orange-500/10 px-3 py-2 rounded-xl flex items-center gap-2 text-[10px] font-black text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-500/20 shadow-sm whitespace-nowrap">
-                                                                        <span className="flex items-center gap-1"><FlameIcon size={12}/> {Math.round(foodTotals.kcal)}</span>
-                                                                        <div className="w-px h-3 bg-orange-200 dark:bg-orange-500/30"></div>
-                                                                        <span className="flex items-center gap-1"><BeefIcon size={12}/> {cleanNum(foodTotals.protein)}g</span>
-                                                                    </div>
                                                                 )}
                                                             </div>
                                                         </div>
 
+                                                        {/* HÀNG 2: DẢI THÔNG SỐ GỌN (KHI BẬT 2X / 3X) */}
+                                                        {hasExtraMetrics && (
+                                                            <div className="flex flex-wrap items-center gap-1.5 mb-3.5 relative z-10 shrink-0">
+                                                                {Math.round(foodTotals.kcal) > 0 && (
+                                                                    <div className="bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[10px] font-bold">
+                                                                        <span className="flex items-center gap-0.5"><FlameIcon size={11}/> {Math.round(foodTotals.kcal)}</span>
+                                                                        <span className="opacity-40">•</span>
+                                                                        <span className="flex items-center gap-0.5"><BeefIcon size={11}/> {cleanNum(foodTotals.protein)}g</span>
+                                                                    </div>
+                                                                )}
+                                                                {sleepDay.length > 0 && (
+                                                                    <div className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-flex items-center gap-1 text-[10px] font-bold">
+                                                                        <MoonIcon size={11}/> {sleepDay[sleepDay.length-1].sleepTime}–{sleepDay[sleepDay.length-1].wakeTime}
+                                                                    </div>
+                                                                )}
+                                                                {workDay && (() => {
+                                                                    const wCol = getWorkoutColor(workDay.type);
+                                                                    return (
+                                                                        <div className={`${wCol.lightBg} ${wCol.text} px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 border ${wCol.border} border-opacity-30`}>
+                                                                            <DumbbellIcon size={11}/> {workDay.type}
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                        )}
+
                                                         {sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && (
-                                                            <div className="w-full relative z-20 mb-3 rounded-xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-700/50">
+                                                            <div className="w-full relative z-20 mb-3.5 rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-800 shrink-0">
                                                                 <iframe src={getSpotifyEmbedUrl(sDay.musicUrl)} width="100%" height="80" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                                                             </div>
                                                         )}
 
-                                                        <div className="w-full flex-1 mt-1 flex flex-col gap-4">
-                                                            
-                                                            <div className="flex flex-col gap-3 relative z-10">
-                                                                <p className={`text-slate-600 dark:text-zinc-300 text-[13px] font-medium line-clamp-4 italic whitespace-normal break-words leading-relaxed border-l-4 pl-3 py-0.5 ${sDay ? moodColor.twBorder : 'border-slate-200 dark:border-zinc-700'}`}>"{sDay?.summary || 'Không có ghi chú'}"</p>
-
-                                                                {(journalDetailLevel === 'detail' || journalDetailLevel === 'all') && (
-                                                                    <div className="flex flex-wrap gap-2 items-center">
-                                                                        {sleepDay.length > 0 && (
-                                                                            <div className="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 border border-indigo-100 dark:border-indigo-500/20 shadow-sm">
-                                                                                <MoonIcon size={14}/> {sleepDay[sleepDay.length-1].sleepTime}-{sleepDay[sleepDay.length-1].wakeTime}
-                                                                            </div>
-                                                                        )}
-                                                                      {workDay && (() => {
-                                                                              const wCol = getWorkoutColor(workDay.type);
-                                                                              return (
-                                                                                  <div className={`${wCol.lightBg} ${wCol.text} font-black px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest inline-flex items-center gap-1.5 w-max shadow-sm border ${wCol.border} border-opacity-30`}>
-                                                                                      <DumbbellIcon size={14}/> {workDay.type}
-                                                                                  </div>
-                                                                              );
-                                                                          })()}
-                                                                    </div>
-                                                                )}
+                                                        <div className="w-full flex-1 flex flex-col justify-between gap-4">
+                                                            <div className="flex flex-col relative z-10">
+                                                                <p className={`text-slate-600 dark:text-zinc-300 text-sm font-medium line-clamp-5 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${sDay ? moodColor.twBorder : 'border-slate-200 dark:border-zinc-700'}`}>"{sDay?.summary || 'Không có ghi chú'}"</p>
                                                             </div>
 
                                                             {sDay?.images && sDay.images.length > 0 && (
-                                                                <div className="relative w-full h-36 my-2 z-20 pointer-events-none">
+                                                                <div className="relative w-full flex-1 min-h-[175px] sm:min-h-[210px] my-auto z-20 pointer-events-none flex items-center justify-center">
                                                                     {(() => {
                                                                         const numFrames = Math.min(sDay.images.length, 3);
                                                                         const frames = Array.from({length: numFrames}, () => []);
@@ -3947,19 +4140,19 @@ backface-visibility: hidden;
                                                                         
                                                                         if (numFrames === 1) {
                                                                             const r1 = [['rotate-[-3deg]'], ['rotate-[2deg]'], ['rotate-[-1deg]']][vIdx];
-                                                                            const p1 = [['left-7 top-1.5 z-10'], ['left-9 top-0.5 z-10'], ['left-8 top-2 z-10']][vIdx];
+                                                                            const p1 = [['left-1/2 -translate-x-1/2 top-2 z-10'], ['left-1/2 -translate-x-1/2 top-1 z-10'], ['left-1/2 -translate-x-1/2 top-2 z-10']][vIdx];
                                                                             rotations = r1; positions = p1;
                                                                         } 
                                                                         else if (numFrames === 2) {
                                                                             const r2 = [
-                                                                                ['rotate-[-6deg]', 'rotate-[4deg]'],
-                                                                                ['rotate-[3deg]', 'rotate-[-5deg]'],
-                                                                                ['rotate-[-3deg]', 'rotate-[6deg]']
+                                                                                ['rotate-[-6deg]', 'rotate-[5deg]'],
+                                                                                ['rotate-[4deg]', 'rotate-[-5deg]'],
+                                                                                ['rotate-[-4deg]', 'rotate-[6deg]']
                                                                             ][vIdx];
                                                                             const p2 = [
-                                                                                ['left-2 top-3 z-10', 'right-4 top-0.5 z-20'],
-                                                                                ['left-3 top-0.5 z-20', 'right-3 top-3.5 z-10'],
-                                                                                ['left-1.5 top-2 z-10', 'right-5 top-1 z-20']
+                                                                                ['left-4 top-4 z-10', 'right-4 top-2 z-20'],
+                                                                                ['left-5 top-2 z-20', 'right-4 top-5 z-10'],
+                                                                                ['left-3 top-3 z-10', 'right-5 top-2 z-20']
                                                                             ][vIdx];
                                                                             rotations = r2; positions = p2;
                                                                         } 
@@ -3967,19 +4160,19 @@ backface-visibility: hidden;
                                                                             const r3 = [
                                                                                 ['rotate-[-7deg]', 'rotate-[1deg]', 'rotate-[8deg]'],
                                                                                 ['rotate-[5deg]', 'rotate-[-3deg]', 'rotate-[-7deg]'],
-                                                                                ['rotate-[-4deg]', 'rotate-[6deg]', 'rotate-[-2deg]']
+                                                                                ['rotate-[-5deg]', 'rotate-[6deg]', 'rotate-[-2deg]']
                                                                             ][vIdx];
                                                                             const p3 = [
-                                                                                ['-left-2 top-4 z-10', 'left-1/2 -translate-x-1/2 -top-1 z-20', '-right-2 top-3 z-30'],
-                                                                                ['-left-1 top-1 z-20', 'left-1/2 -translate-x-1/2 top-4 z-30', '-right-2 top-0 z-10'],
-                                                                                ['-left-2 top-2.5 z-30', 'left-1/2 -translate-x-1/2 top-0 z-10', '-right-1 top-4 z-20']
+                                                                                ['left-0 top-5 z-10', 'left-1/2 -translate-x-1/2 top-1 z-20', 'right-0 top-4 z-30'],
+                                                                                ['left-1 top-2 z-20', 'left-1/2 -translate-x-1/2 top-5 z-30', 'right-0 top-1 z-10'],
+                                                                                ['left-0 top-3.5 z-30', 'left-1/2 -translate-x-1/2 top-1 z-10', 'right-1 top-5 z-20']
                                                                             ][vIdx];
                                                                             rotations = r3; positions = p3;
                                                                         }
                                                                         
                                                                         return frames.map((frame, i) => (
                                                                             <div key={i} onClick={(e) => { e.stopPropagation(); setLightboxImages(sDay.images); setLightboxIndex(0); }}
-                                                                                className={`absolute ${positions[i]} w-[115px] h-[120px] bg-[#fafafa] dark:bg-[#e4e4e7] p-1.5 pb-7 shadow-lg dark:shadow-[0_8px_20px_rgba(0,0,0,0.8)] rounded-sm transform ${rotations[i]} origin-center border border-slate-200/60 dark:border-zinc-400 cursor-pointer hover:scale-110 transition-transform pointer-events-auto opacity-95`}
+                                                                                className={`absolute ${positions[i]} w-[132px] h-[142px] sm:w-[146px] sm:h-[156px] bg-[#fafafa] dark:bg-[#e4e4e7] p-1.5 pb-7 shadow-xl dark:shadow-[0_10px_24px_rgba(0,0,0,0.85)] rounded-sm transform ${rotations[i]} origin-center border border-slate-200/60 dark:border-zinc-400 cursor-pointer hover:scale-110 transition-transform pointer-events-auto opacity-95`}
                                                                             >
                                                                                 <div className="relative w-full h-full bg-slate-200 dark:bg-zinc-400 rounded-[1px] overflow-hidden shadow-inner">
                                                                                     {frame.map((img, idx) => {
