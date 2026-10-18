@@ -113,14 +113,13 @@
 
         /* === HỆ THỐNG BỀ MẶT 3 TẦNG TƯƠNG PHẢN (APP DEPTH UI) === */
         body, .dark .bg-zinc-950 {
-            background-color: #07080d !important;
-            background-image: radial-gradient(ellipse 90% 40% at 50% -10%, rgba(99, 102, 241, 0.08), transparent 70%);
+            background-color: #050609 !important;
         }
         .dark .bg-zinc-900 {
-            background: linear-gradient(165deg, #1d202b 0%, #151720 100%) !important;
-            border-color: rgba(255, 255, 255, 0.085) !important;
-            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.09), 0 14px 32px -10px rgba(0, 0, 0, 0.65) !important;
-        }
+            background: linear-gradient(165deg, #252937 0%, #1a1d28 100%) !important;
+            border-color: rgba(255, 255, 255, 0.16) !important;
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 18px 36px -10px rgba(0, 0, 0, 0.8) !important;
+        } 	
         .dark .bg-zinc-800\/50, .dark .bg-zinc-800\/60, .dark .bg-zinc-800\/80 {
             background-color: rgba(15, 17, 24, 0.78) !important;
             border-color: rgba(255, 255, 255, 0.065) !important;
@@ -238,13 +237,11 @@
             };
 
             const RunnerSvg = ({ size = 18, className = "" }) => (
-                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className={`inline-block shrink-0 ${className}`}>
-                    <circle cx="15" cy="4" r="2" />
-                    <path d="M10.5 9.5 7 11l-2 4" />
-                    <path d="m10.5 9.5 4.5 2 3.5-2" />
-                    <path d="m13 14.5-2.5-3" />
-                    <path d="m13 14.5 4 2.5 1.5 4" />
-                    <path d="M9.5 16.5 6 21" />
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`inline-block shrink-0 ${className}`}>
+                    <circle cx="16.5" cy="4.5" r="2" />
+                    <path d="M6 12l3.5-3.5L13 10l4.5-2" />
+                    <path d="M10.5 14l2.5-4" />
+                    <path d="M4.5 18.5L9 16l3.5 1.5L15 21" />
                 </svg>
             );
 
@@ -568,7 +565,11 @@
                 useEffect(() => { const t = setTimeout(() => { try { localStorage.setItem('macro_stats', JSON.stringify(statsByDate)); } catch(e){} }, 400); return () => clearTimeout(t); }, [statsByDate]);
 
                 const [toast, setToast] = useState(null);
-                const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+                const showToast = (msg, type = 'success') => {
+                    const cleanMsg = String(msg || '').replace(/^([✅❌⚠️✨☁️🏃🗑️📓🎵🎯🎉⏭️💭]+\s*)+/u, '').trim();
+                    setToast({ msg: cleanMsg, type });
+                    setTimeout(() => setToast(null), 3000);
+                };
 
                 // State quản lý Bong bóng hồi tưởng (Cột H) & Bong bóng Ghi chú bài hát (Cột L)
                 const [secretBubble, setSecretBubble] = useState(null);
@@ -582,7 +583,10 @@
                 const [gasUrl, setGasUrl] = useState(() => localStorage.getItem('gas_url') || defaultScriptUrl);
                 const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || defaultGeminiKey);
                 const [isSyncing, setIsSyncing] = useState(false);
-                const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false); // Biến quản lý trạng thái bật/tắt đồng bộ
+                const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
+                const [showPullReminder, setShowPullReminder] = useState(true);
+                const isPullingRef = useRef(false);
+                const skipNextAutoPushRef = useRef(false);
 
                 // Bộ điều khiển Vòng xoay tiến độ kiểu CH Play (push: xanh dương, pull: xanh lá)
                 const [syncRing, setSyncRing] = useState({ active: false, mode: 'push', progress: 0 });
@@ -1103,10 +1107,11 @@
                         isInitialDataLoadRef.current = false;
                         return;
                     }
+                    if (isPullingRef.current) return;
                     if (!isAutoSyncEnabled) {
                         setHasUnsavedChanges(true);
                     }
-                }, [foodsByDate, sleepByDate, workoutsByDate, statsByDate, todoCache]);
+                }, [foodsByDate, mealNotesByDate, sleepByDate, workoutsByDate, cardioByDate, statsByDate, todoCache]);
 
                 useEffect(() => {
                     if (isAutoSyncEnabled) setHasUnsavedChanges(false);
@@ -1534,7 +1539,11 @@
 
                 const handleSyncPull = async (autoUrl = null) => {
                     const targetUrl = typeof autoUrl === 'string' ? autoUrl : gasUrl;
-                    if(!targetUrl) return; setIsSyncing(true); startSyncRing('pull');
+                    if(!targetUrl) return;
+                    isPullingRef.current = true;
+                    if (physicalSyncTimerRef.current) clearTimeout(physicalSyncTimerRef.current);
+                    setIsSyncing(true);
+                    startSyncRing('pull');
                     const parseRawDate = (raw) => {
                         if (!raw) return null; let s = String(raw).trim(); let p = s.split('/');
                         if (p.length === 3) return `${p[0].padStart(2,'0')}/${p[1].padStart(2,'0')}/${p[2]}`;
@@ -1548,66 +1557,64 @@
                             if (data.data.workouts) {
                                 let newTemplates = {};
                                 const allWorkoutNotes = data.data.workoutNotes || {};
-                                setWorkoutsByDate(prev => {
-                                    let nW = { ...prev };
-                                    Object.keys(data.data.workouts).forEach(wType => {
-                                        const sheetData = data.data.workouts[wType];
-                                        const sheetNotes = allWorkoutNotes[wType] || [];
-                                        let cHead = [];
-                                        for (let i = 0; i < sheetData.length; i++) {
-                                            const row = sheetData[i]; if (!row[0]) continue;
-                                            const noteRow = sheetNotes[i] || [];
-                                            if (String(row[0]).toLowerCase().trim() === 'date') { 
-                                                cHead = row; 
-                                                newTemplates[wType] = row;
-                                                continue; 
-                                            }
-                                            if (cHead.length > 1) {
-                                                const dClean = parseRawDate(row[0]); if(!dClean) continue;
-                                                let exes = []; let note = '';
-                                                for (let c = 1; c < cHead.length; c++) {
-                                                    const hName = cHead[c].trim();
-                                                    if (!hName || hName.toLowerCase() === 'note' || hName.toLowerCase() === 'ghi chú') { if (hName) note = row[c] || ''; continue; }
-                                                    const cell = String(row[c] || '').trim();
-                                                    const cellNote = String(noteRow[c] || '').trim();
-                                                    
-                                                    if (!cell || cell.toUpperCase() === 'X') {
-                                                        exes.push({ id: Date.now()+c, name: hName, note: cellNote, sets: [{ reps:'', weight:'', unit:'KG' }] });
-                                                        continue;
-                                                    }
-                                                    
-                                                    let parsedSets = []; let isRaw = false;
-                                                    const parts = cell.split(' + ');
-                                                    for (let p of parts) {
-                                                        const pt = p.trim();
-                                                        const sIdx = pt.lastIndexOf(' '); 
-                                                        if (sIdx !== -1) {
-                                                            const wP = pt.substring(0, sIdx).trim();
-                                                            const rP = pt.substring(sIdx + 1).trim();
-                                                            
-                                                            let unit = 'KG'; let wVal = wP;
-                                                            if (wP.toUpperCase().endsWith('KG')) { unit = 'KG'; wVal = wP.substring(0, wP.length-2).trim(); }
-                                                            else if (wP.toUpperCase().endsWith('LBS')) { unit = 'LBS'; wVal = wP.substring(0, wP.length-3).trim(); }
-                                                            
-                                                            rP.split('+').forEach(r => parsedSets.push({ weight: wVal, unit: unit, reps: r.trim() }));
+                                let nW = {};
+                                Object.keys(data.data.workouts).forEach(wType => {
+                                    const sheetData = data.data.workouts[wType];
+                                    const sheetNotes = allWorkoutNotes[wType] || [];
+                                    let cHead = [];
+                                    for (let i = 0; i < sheetData.length; i++) {
+                                        const row = sheetData[i]; if (!row[0]) continue;
+                                        const noteRow = sheetNotes[i] || [];
+                                        if (String(row[0]).toLowerCase().trim() === 'date') { 
+                                            cHead = row; 
+                                            newTemplates[wType] = row;
+                                            continue; 
+                                        }
+                                        if (cHead.length > 1) {
+                                            const dClean = parseRawDate(row[0]); if(!dClean) continue;
+                                            let exes = []; let note = '';
+                                            for (let c = 1; c < cHead.length; c++) {
+                                                const hName = cHead[c].trim();
+                                                if (!hName || hName.toLowerCase() === 'note' || hName.toLowerCase() === 'ghi chú') { if (hName) note = row[c] || ''; continue; }
+                                                const cell = String(row[c] || '').trim();
+                                                const cellNote = String(noteRow[c] || '').trim();
+                                                
+                                                if (!cell || cell.toUpperCase() === 'X') {
+                                                    exes.push({ id: Date.now()+c, name: hName, note: cellNote, sets: [{ reps:'', weight:'', unit:'KG' }] });
+                                                    continue;
+                                                }
+                                                
+                                                let parsedSets = []; let isRaw = false;
+                                                const parts = cell.split(' + ');
+                                                for (let p of parts) {
+                                                    const pt = p.trim();
+                                                    const sIdx = pt.lastIndexOf(' '); 
+                                                    if (sIdx !== -1) {
+                                                        const wP = pt.substring(0, sIdx).trim();
+                                                        const rP = pt.substring(sIdx + 1).trim();
+                                                        
+                                                        let unit = 'KG'; let wVal = wP;
+                                                        if (wP.toUpperCase().endsWith('KG')) { unit = 'KG'; wVal = wP.substring(0, wP.length-2).trim(); }
+                                                        else if (wP.toUpperCase().endsWith('LBS')) { unit = 'LBS'; wVal = wP.substring(0, wP.length-3).trim(); }
+                                                        
+                                                        rP.split('+').forEach(r => parsedSets.push({ weight: wVal, unit: unit, reps: r.trim() }));
+                                                    } else {
+                                                        if (/^[\d+()a-zA-Z~.\-ữươ]+$/.test(pt)) {
+                                                            pt.split('+').forEach(r => parsedSets.push({ weight: '', unit: 'KG', reps: r.trim() }));
                                                         } else {
-                                                            if (/^[\d+()a-zA-Z~.\-ữươ]+$/.test(pt)) {
-                                                                pt.split('+').forEach(r => parsedSets.push({ weight: '', unit: 'KG', reps: r.trim() }));
-                                                            } else {
-                                                                isRaw = true; break;
-                                                            }
+                                                            isRaw = true; break;
                                                         }
                                                     }
-                                                    
-                                                    if (isRaw) exes.push({ id: Date.now()+c, name: hName, note: cellNote, rawText: cell, sets: [{ reps:'', weight:'', unit:'KG' }] });
-                                                    else exes.push({ id: Date.now()+c, name: hName, note: cellNote, sets: parsedSets });
                                                 }
-                                                nW[dClean] = { type: wType, note: note, exercises: exes };
+                                                
+                                                if (isRaw) exes.push({ id: Date.now()+c, name: hName, note: cellNote, rawText: cell, sets: [{ reps:'', weight:'', unit:'KG' }] });
+                                                else exes.push({ id: Date.now()+c, name: hName, note: cellNote, sets: parsedSets });
                                             }
+                                            nW[dClean] = { type: wType, note: note, exercises: exes };
                                         }
-                                    });
-                                    return nW;
+                                    }
                                 });
+                                setWorkoutsByDate(nW);
                                 setWorkoutTemplates(newTemplates);
                             }
                             if (data.data.cardio) {
@@ -1670,56 +1677,70 @@
                                 setMealNotesByDate({ ...oldData.mN, ...newData.mN });
                             }
                             if (data.data.stat) {
-                                setStatsByDate(prev => {
-                                   let nS = { ...prev };
-                                   for (let i = 0; i < data.data.stat.length; i++) {
-                                       const r = data.data.stat[i]; if (!r[0] || String(r[0]).toLowerCase() === 'date') continue;
-                                       const dClean = parseRawDate(r[0]); if(!dClean) continue;
-                                       const rawMood = String(r[1] ?? '').trim();
-                                       const parsedMood = (rawMood !== '' && !isNaN(Number(rawMood))) ? Number(rawMood) : 3;
-                                       // Parse thêm cột H (index 7: detail), cột K (index 10: musicUrl) và cột L (index 11: musicNote)
-                                       nS[dClean] = { mood: parsedMood, outing: Number(r[2])||1, detail: String(r[7]||''), summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||''), musicNote: String(r[11]||'') };
-                                   }
-                                   return nS;
-                                });
-                            }
-                            try {
-                                const curDKey = formatDate(selectedDate);
-                                const wRes = await fetch(`${targetUrl}?type=WORK&date=${curDKey}`);
-                                const wJson = await wRes.json();
-                                if (wJson.status === 'success' && wJson.data) {
-                                    if (wJson.data.todo) {
-                                        setTodoCache(prev => ({
-                                            ...prev,
-                                            [curDKey]: {
-                                                must: wJson.data.todo.must || [],
-                                                should: wJson.data.todo.should || [],
-                                                can: wJson.data.todo.can || []
-                                            }
-                                        }));
-                                    }
-                                    if (wJson.data.urgent) setUrgentList(wJson.data.urgent || []);
-                                    if (wJson.data.scratchpad !== undefined) {
-                                        setScratchpad(wJson.data.scratchpad);
-                                        localStorage.setItem('work_scratchpad', wJson.data.scratchpad);
-                                    }
+                                let nS = {};
+                                for (let i = 0; i < data.data.stat.length; i++) {
+                                    const r = data.data.stat[i]; if (!r[0] || String(r[0]).toLowerCase() === 'date') continue;
+                                    const dClean = parseRawDate(r[0]); if(!dClean) continue;
+                                    const rawMood = String(r[1] ?? '').trim();
+                                    const parsedMood = (rawMood !== '' && !isNaN(Number(rawMood))) ? Number(rawMood) : 3;
+                                    nS[dClean] = { mood: parsedMood, outing: Number(r[2])||1, detail: String(r[7]||''), summary: String(r[8]||''), images: r[9] ? String(r[9]).split(',').filter(url => url.trim() !== '') : [], musicUrl: String(r[10]||''), musicNote: String(r[11]||'') };
                                 }
-                            } catch (errWork) {}
-                            if (typeof autoUrl !== 'string') showToast('☁️ Kéo dữ liệu Máy chủ thành công!', 'success');
+                                setStatsByDate(nS);
+                            }
+                            if (data.data.tdl && Array.isArray(data.data.tdl)) {
+                                const parseTdlStr = (rawText) => {
+                                    if (!rawText || typeof rawText !== 'string') return [];
+                                    return rawText.split('\n').filter(l => l.trim() !== '').map(l => ({
+                                        id: Math.random().toString(36).slice(2, 9),
+                                        text: l.replace(/^[☐☑]\s*/, ''),
+                                        done: l.startsWith('☑')
+                                    }));
+                                };
+                                let nTodo = {};
+                                for (let i = 1; i < data.data.tdl.length; i++) {
+                                    const r = data.data.tdl[i];
+                                    const dClean = parseRawDate(r[0]);
+                                    if (!dClean) continue;
+                                    nTodo[dClean] = {
+                                        must: parseTdlStr(r[1]),
+                                        should: parseTdlStr(r[2]),
+                                        can: parseTdlStr(r[3])
+                                    };
+                                }
+                                setTodoCache(nTodo);
+                            }
+                            if (data.data.note && Array.isArray(data.data.note)) {
+                                let nUrg = [];
+                                let nScratch = '';
+                                for (let k = 0; k < data.data.note.length; k++) {
+                                    const nr = data.data.note[k];
+                                    if (nr[0] === 'SCRATCHPAD') nScratch = nr[1] || '';
+                                    else if (nr[0] === 'URGENT') nUrg.push({ id: nr[1], content: nr[2] });
+                                }
+                                setUrgentList(nUrg);
+                                setScratchpad(nScratch);
+                                localStorage.setItem('work_scratchpad', nScratch);
+                            }
+                            setShowPullReminder(false);
+                            setHasUnsavedChanges(false);
+                            if (typeof autoUrl !== 'string') showToast('Kéo dữ liệu từ Sheet thành công!', 'success');
                         }
-                    } catch (e) { if (typeof autoUrl !== 'string') showToast('❌ Lỗi kết nối', 'error'); }
+                    } catch (e) { if (typeof autoUrl !== 'string') showToast('Lỗi kết nối máy chủ', 'error'); }
                     finishSyncRing();
                     setIsSyncing(false);
+                    setTimeout(() => { isPullingRef.current = false; }, 600);
                 };
-
-                
 
                 const physicalSyncTimerRef = useRef(null);
                 useEffect(() => {
-                    if (!isAutoSyncEnabled) return; // Nếu nút Đồng bộ trên Header chưa bật thì cấm tuyệt đối Push data
+                    if (!isAutoSyncEnabled || isPullingRef.current) return;
+                    if (skipNextAutoPushRef.current) {
+                        skipNextAutoPushRef.current = false;
+                        return;
+                    }
                     if (physicalSyncTimerRef.current) clearTimeout(physicalSyncTimerRef.current);
                     physicalSyncTimerRef.current = setTimeout(() => { handleSyncPush(true); }, 3000);
-                }, [foodsByDate, mealNotesByDate, sleepByDate, workoutsByDate, cardioByDate, statsByDate, isAutoSyncEnabled]);
+                }, [foodsByDate, mealNotesByDate, sleepByDate, workoutsByDate, cardioByDate, statsByDate]);
 
                 const handleAddFood = (e) => {
                     e.preventDefault(); if (!formData.name) return;
@@ -2229,9 +2250,19 @@
                                     </div>
                                 </div>
 
-                                {/* GÓC PHẢI CHỈ CÒN NÚT TẢI VÀ ĐÁM MÂY */}
+                                {/* GÓC PHẢI: NÚT BẬT/TẮT SAO LƯU TỰ ĐỘNG & ĐÁM MÂY */}
                                 <div className="flex items-center gap-1.5 justify-end shrink-0">
-                                    <button onClick={() => { handleSyncPull(); setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); }} className={`w-8 h-8 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400 hover:scale-105'}`} title="Tải dữ liệu từ Sheet & Bật Đồng Bộ">
+                                    <button
+                                        onClick={() => {
+                                            const nextState = !isAutoSyncEnabled;
+                                            if (nextState) skipNextAutoPushRef.current = true;
+                                            setIsAutoSyncEnabled(nextState);
+                                            if (nextState) setHasUnsavedChanges(false);
+                                            showToast(nextState ? 'Đã bật sao lưu tự động!' : 'Đã tắt sao lưu tự động!', 'success');
+                                        }}
+                                        className={`w-8 h-8 rounded-full transition-all active:scale-95 shadow-sm flex items-center justify-center ${isAutoSyncEnabled ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/25' : 'bg-zinc-800 text-zinc-400 hover:scale-105'}`}
+                                        title={isAutoSyncEnabled ? 'Đang bật Sao lưu tự động (Bấm để tắt)' : 'Bấm để bật Sao lưu tự động'}
+                                    >
                                         <DownloadIcon size={15} />
                                     </button>
                                     <button onClick={() => setShowSettings(true)} className={`relative w-8 h-8 rounded-full transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center ${syncRing.active ? (syncRing.mode === 'pull' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-blue-500/15 text-blue-500') : 'bg-blue-500/10 text-blue-400'}`}>
@@ -2283,6 +2314,36 @@
                         </div>
                     </header>
 
+                    {/* THANH NHẮC LẤY DỮ LIỆU VỀ KHI MỚI MỞ WEB */}
+                    {showPullReminder && (
+                        <div className="shrink-0 z-30 bg-sky-500/15 border-b border-sky-500/25 backdrop-blur-md px-4 py-2 flex justify-center animate-[fadeScale_0.2s_ease-out]">
+                            <div className={`${isDesktopMode ? 'max-w-[96vw] 2xl:max-w-[1680px]' : 'max-w-full'} w-full px-2 flex items-center justify-between gap-2`}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping shrink-0"></span>
+                                    <span className="text-xs font-bold text-sky-200 truncate">Nhớ lấy dữ liệu về nha!</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                        type="button"
+                                        disabled={isSyncing}
+                                        onClick={() => handleSyncPull()}
+                                        className="px-3 py-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-zinc-950 text-[11px] font-black shadow-sm shadow-sky-500/20 active:scale-95 transition-all flex items-center gap-1 disabled:opacity-50"
+                                    >
+                                        <DownloadIcon size={12} /> Kéo về
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPullReminder(false)}
+                                        className="p-1 rounded-lg text-sky-300/70 hover:bg-sky-500/20 active:scale-90 transition-all"
+                                        title="Đóng"
+                                    >
+                                        <XIcon size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {hasUnsavedChanges && !isAutoSyncEnabled && (
                         <div className="shrink-0 z-30 bg-amber-500/10 dark:bg-amber-500/15 border-b border-amber-500/20 backdrop-blur-md px-4 py-2 flex justify-center animate-[fadeScale_0.2s_ease-out]">
                             <div className={`${isDesktopMode ? 'max-w-[96vw] 2xl:max-w-[1680px]' : 'max-w-full'} w-full px-2 flex items-center justify-between gap-2`}>
@@ -2294,6 +2355,7 @@
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            skipNextAutoPushRef.current = true;
                                             setIsAutoSyncEnabled(true);
                                             setHasUnsavedChanges(false);
                                             handleSyncPush(false);
@@ -2608,10 +2670,7 @@
                                                         <div className="w-9 h-9 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-inner">
                                                             <CheckCircleIcon size={19} />
                                                         </div>
-                                                        <div>
-                                                            <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-zinc-100 leading-tight">Trạm Nhập Việc</h3>
-                                                            <p className="text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Phân loại ưu tiên trong ngày</p>
-                                                        </div>
+                                                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-zinc-100 leading-tight">Nhập công việc</h3>
                                                     </div>
                                                     <button
                                                         onClick={handleCarryOverYesterday}
@@ -2675,15 +2734,12 @@
                                                     ))}
                                                 </div>
 
-                                                {/* Tiêu đề trang sổ tay */}
-                                                <div className="flex items-center justify-between pb-3.5 mb-5 border-b border-white/10">
+                                                {/* Tiêu đề sổ tay To-do list */}
+                                                <div className="flex items-center pb-3.5 mb-5 border-b border-white/10">
                                                     <div className="flex items-center gap-2">
                                                         <BookIcon size={16} className="text-amber-400" />
-                                                        <span className="text-xs font-black uppercase tracking-[0.18em] text-zinc-200">Sổ Tay Công Việc</span>
+                                                        <span className="text-sm font-black uppercase tracking-[0.15em] text-zinc-100">To-do list</span>
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-zinc-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
-                                                        Trang {String(selectedDate.getDate()).padStart(2, '0')}/{String(selectedDate.getMonth() + 1).padStart(2, '0')}
-                                                    </span>
                                                 </div>
 
                                                 {/* 3 Phân mục trong Sổ Tay */}
@@ -4633,20 +4689,9 @@
                                                         )}
 
                                                         <div className="w-full flex-1 flex flex-col justify-between gap-3 min-h-0 overflow-hidden">
-                                                            <div className="flex flex-col relative z-10 shrink-0 bg-white/[0.035] border border-white/[0.07] rounded-2xl p-3 shadow-inner">
-                                                                <p className={`text-slate-700 dark:text-zinc-200 text-xs sm:text-sm font-semibold line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 ${sDay ? moodColor.twBorder : 'border-zinc-600'}`}>
-                                                                    "{sDay?.summary || 'Chưa có dòng đúc kết cho ngày này...'}"
-                                                                </p>
+                                                            <div className="flex flex-col relative z-10 shrink-0">
+                                                                <p className={`text-slate-600 dark:text-zinc-200 text-sm font-medium line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${sDay ? moodColor.twBorder : 'border-slate-200 dark:border-zinc-700'}`}>"{sDay?.summary || 'Không có ghi chú'}"</p>
                                                             </div>
-
-                                                            {(!resolvedImgs || resolvedImgs.length === 0) && (
-                                                                <div className="flex-1 min-h-0 rounded-2xl border border-dashed border-white/[0.08] bg-black/25 flex flex-col items-center justify-center gap-2 p-4 text-center select-none">
-                                                                    <div className="w-10 h-10 rounded-2xl bg-white/[0.04] border border-white/[0.07] flex items-center justify-center text-zinc-500">
-                                                                        <CameraIcon size={18} />
-                                                                    </div>
-                                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Chưa có khoảnh khắc lưu ảnh</span>
-                                                                </div>
-                                                            )}
 
                                                             {/* HỆ THỐNG KHUNG ẢNH BENTO ĐA DẠNG THEO SỐ LƯỢNG ẢNH & NGÀY TRONG TUẦN + NHẤP NHÁY */}
                                                             {resolvedImgs && resolvedImgs.length > 0 && (
@@ -5143,7 +5188,7 @@
                                         <div className="absolute inset-0 bg-black/65 backdrop-blur-md"></div>
                                         <div onClick={(e) => e.stopPropagation()} className="relative z-10 w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-[2rem] p-5 shadow-2xl space-y-3.5">
                                             <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-                                                <span className="text-sm font-black text-zinc-100 flex items-center gap-2"><span>🏃</span> Thêm Cardio ({dateKey})</span>
+                                                <span className="text-sm font-black text-zinc-100 flex items-center gap-2"><RunnerSvg size={16} className="text-red-400" /> Thêm Cardio ({dateKey})</span>
                                                 <button type="button" onClick={() => setShowCardioModal(false)} className="p-1.5 rounded-full bg-zinc-800 text-zinc-400"><XIcon size={15} /></button>
                                             </div>
                                             <input autoFocus type="text" value={cardioDraft.duration} onChange={(e) => setCardioDraft(p => ({ ...p, duration: e.target.value }))} placeholder="Thời lượng (VD: 20 phút)..." className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-zinc-100 outline-none" />
@@ -5198,7 +5243,7 @@
                                         <div className="min-w-0">
                                             <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-zinc-100 tracking-tight leading-none flex items-center gap-1.5">
                                                 <span>{workoutAddStep === 1 ? 'Chọn Lịch Tập' : workoutType}</span>
-                                                {workoutAddStep === 2 && (cardioByDate[dateKey]?.duration || cardioByDate[dateKey]?.note) && <span className="text-base">+ 🏃</span>}
+                                                {workoutAddStep === 2 && (cardioByDate[dateKey]?.duration || cardioByDate[dateKey]?.note) && <span className="text-base inline-flex items-center gap-0.5 text-red-400">+ <RunnerSvg size={16} /></span>}
                                             </h2>
                                             {workoutAddStep === 2 && (
                                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-400 mt-1 block">
@@ -5243,7 +5288,7 @@
                                                     className={`p-2.5 rounded-xl border transition-all active:scale-90 shadow-sm flex items-center gap-1 text-xs font-black ${(cardioByDate[dateKey]?.duration || cardioByDate[dateKey]?.note) ? 'bg-emerald-500 text-white border-transparent' : 'bg-white/90 dark:bg-zinc-800/90 text-zinc-300 border-zinc-700'}`}
                                                     title="Thêm Cardio"
                                                 >
-                                                    <span>🏃</span>
+                                                    <RunnerSvg size={15} className="text-red-400" />
                                                     <span className="hidden sm:inline">Thêm Cardio</span>
                                                 </button>
                                                 <button
