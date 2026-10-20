@@ -1124,19 +1124,325 @@
                     else localStorage.removeItem('work_focus_task');
                 }, [focusTaskId]);
 
-                // Hàm tính điểm hiệu suất trọng số: Must = 3đ, Should = 2đ, Can = 1đ
+                // Đồng hồ thực thời quét hạn chót (!HH:mm) mỗi 15 giây
+                const [workNow, setWorkNow] = useState(() => new Date());
+                useEffect(() => {
+                    const timer = setInterval(() => setWorkNow(new Date()), 15000);
+                    return () => clearInterval(timer);
+                }, []);
+
+                // State quản lý Modal nhập công việc, Modal phần thưởng & Menu 3 gạch trên thẻ
+                const [showWorkTaskModal, setShowWorkTaskModal] = useState(false);
+                const [workTaskForm, setWorkTaskForm] = useState({
+                    editId: null,
+                    originPriority: 'must',
+                    name: '',
+                    priority: 'must',
+                    category: 'Study',
+                    timeSlots: [],
+                    duration: '',
+                    deadline: '',
+                    isLate: false
+                });
+                const [showRewardModal, setShowRewardModal] = useState(false);
+                const [rewardForm, setRewardForm] = useState({
+                    editId: null,
+                    originCat: 'can',
+                    name: '',
+                    reqTasks: []
+                });
+                const [openTaskMenuId, setOpenTaskMenuId] = useState(null);
+
+                // Hàm bóc tách cú pháp ngầm: #Category @Morning @Afternoon @Evening ~45m !HH:mm !Late [REQ:...]
+                const parseTaskText = (rawText) => {
+                    const str = String(rawText || '');
+                    let category = null;
+                    let isReward = false;
+                    let timeSlots = [];
+                    let duration = null;
+                    let deadline = null;
+                    let isLate = false;
+                    let reqTasks = [];
+
+                    const catMatches = str.match(/#(Study|Growth|Life|Reward)(?=\s|$)/gi);
+                    if (catMatches) {
+                        catMatches.forEach(m => {
+                            const val = m.slice(1).toLowerCase();
+                            if (val === 'reward') {
+                                isReward = true;
+                                if (!category) category = 'Reward';
+                            } else if (val === 'study') category = 'Study';
+                            else if (val === 'growth') category = 'Growth';
+                            else if (val === 'life') category = 'Life';
+                        });
+                    }
+
+                    const timeMatches = str.match(/@(Morning|Afternoon|Evening)(?=\s|$)/gi);
+                    if (timeMatches) {
+                        const order = ['Morning', 'Afternoon', 'Evening'];
+                        const found = new Set(timeMatches.map(m => {
+                            const v = m.slice(1).toLowerCase();
+                            return v.charAt(0).toUpperCase() + v.slice(1);
+                        }));
+                        timeSlots = order.filter(o => found.has(o));
+                    }
+
+                    const durMatch = str.match(/~(\d+)m(?=\s|$)/i);
+                    if (durMatch) {
+                        duration = parseInt(durMatch[1], 10);
+                    }
+
+                    const dlMatch = str.match(/!([01]?\d|2[0-3]):([0-5]\d)(?=\s|$)/);
+                    if (dlMatch) {
+                        deadline = `${String(dlMatch[1]).padStart(2, '0')}:${dlMatch[2]}`;
+                    }
+
+                    if (/!Late(?=\s|$)/i.test(str)) {
+                        isLate = true;
+                    }
+
+                    const reqMatch = str.match(/\[REQ:(.*?)\]/i);
+                    if (reqMatch && reqMatch[1]) {
+                        reqTasks = reqMatch[1].split('||').map(s => s.trim()).filter(Boolean);
+                    }
+
+                    const cleanText = str
+                        .replace(/#(Study|Growth|Life|Reward)(?=\s|$)/gi, '')
+                        .replace(/@(Morning|Afternoon|Evening)(?=\s|$)/gi, '')
+                        .replace(/~\d+m(?=\s|$)/gi, '')
+                        .replace(/!([01]?\d|2[0-3]):([0-5]\d)(?=\s|$)/g, '')
+                        .replace(/!Late(?=\s|$)/gi, '')
+                        .replace(/\[REQ:.*?\]/gi, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    return {
+                        cleanText: cleanText || str.trim(),
+                        category,
+                        isReward,
+                        timeSlots,
+                        timeSlot: timeSlots[0] || null,
+                        duration,
+                        deadline,
+                        isLate,
+                        reqTasks
+                    };
+                };
+
+                // Đổi định dạng giờ 24h sang AM / PM gọn đẹp
+                const formatDeadlineAmPm = (dl) => {
+                    if (!dl) return '';
+                    const [h, m] = dl.split(':').map(Number);
+                    const period = h >= 12 ? 'PM' : 'AM';
+                    const h12 = h % 12 || 12;
+                    return m === 0 ? `${h12} ${period}` : `${h12}:${String(m).padStart(2, '0')} ${period}`;
+                };
+
+                // Sắp xếp tự động: Morning=>Afternoon=>Evening -> Study=>Growth=>Life -> Deadline -> Duration (cao xuống thấp) -> Thời gian thêm
+                const sortWorkTasks = (taskList) => {
+                    const timeRankMap = { Morning: 1, Afternoon: 2, Evening: 3 };
+                    const catRankMap = { Study: 1, Growth: 2, Life: 3 };
+                    return (taskList || [])
+                        .map((item, idx) => ({ item, idx, meta: parseTaskText(item.text) }))
+                        .sort((a, b) => {
+                            const tA = a.meta.timeSlot ? (timeRankMap[a.meta.timeSlot] || 4) : 4;
+                            const tB = b.meta.timeSlot ? (timeRankMap[b.meta.timeSlot] || 4) : 4;
+                            if (tA !== tB) return tA - tB;
+
+                            const cA = a.meta.category ? (catRankMap[a.meta.category] || 4) : 4;
+                            const cB = b.meta.category ? (catRankMap[b.meta.category] || 4) : 4;
+                            if (cA !== cB) return cA - cB;
+
+                            const dlA = a.meta.deadline ? (parseInt(a.meta.deadline.split(':')[0], 10) * 60 + parseInt(a.meta.deadline.split(':')[1], 10)) : 999999;
+                            const dlB = b.meta.deadline ? (parseInt(b.meta.deadline.split(':')[0], 10) * 60 + parseInt(b.meta.deadline.split(':')[1], 10)) : 999999;
+                            if (dlA !== dlB) return dlA - dlB;
+
+                            const durA = a.meta.duration || 0;
+                            const durB = b.meta.duration || 0;
+                            if (durA !== durB) return durB - durA;
+
+                            return a.idx - b.idx;
+                        })
+                        .map(entry => entry.item);
+                };
+
+                const openAddWorkTaskModal = (defaultPriority = 'must') => {
+                    setWorkTaskForm({
+                        editId: null,
+                        originPriority: defaultPriority,
+                        name: '',
+                        priority: defaultPriority,
+                        category: 'Study',
+                        timeSlots: [],
+                        duration: '',
+                        deadline: '',
+                        isLate: false
+                    });
+                    setShowWorkTaskModal(true);
+                };
+
+                const openEditWorkTaskModal = (cat, task) => {
+                    const meta = parseTaskText(task.text);
+                    setWorkTaskForm({
+                        editId: task.id,
+                        originPriority: cat,
+                        name: meta.cleanText,
+                        priority: cat,
+                        category: (meta.category && meta.category !== 'Reward') ? meta.category : 'Study',
+                        timeSlots: meta.timeSlots || [],
+                        duration: meta.duration ? String(meta.duration) : '',
+                        deadline: meta.deadline || '',
+                        isLate: meta.isLate
+                    });
+                    setOpenTaskMenuId(null);
+                    setShowWorkTaskModal(true);
+                };
+
+                const handleSaveWorkTaskModal = (e) => {
+                    if (e) e.preventDefault();
+                    const cleanName = String(workTaskForm.name || '').trim();
+                    if (!cleanName) {
+                        showToast('Nhập tên công việc nha!', 'error');
+                        return;
+                    }
+                    const parts = [cleanName];
+                    if (workTaskForm.category) parts.push(`#${workTaskForm.category}`);
+                    const order = ['Morning', 'Afternoon', 'Evening'];
+                    order.filter(t => (workTaskForm.timeSlots || []).includes(t)).forEach(t => parts.push(`@${t}`));
+                    if (workTaskForm.duration && parseInt(workTaskForm.duration, 10) > 0) {
+                        parts.push(`~${parseInt(workTaskForm.duration, 10)}m`);
+                    }
+                    if (workTaskForm.deadline) {
+                        parts.push(`!${workTaskForm.deadline}`);
+                    }
+                    if (workTaskForm.isLate) {
+                        parts.push('!Late');
+                    }
+                    const fullText = parts.join(' ');
+                    const dKey = formatDate(selectedDate);
+
+                    if (!workTaskForm.editId) {
+                        handleAddTodo(workTaskForm.priority, fullText);
+                    } else {
+                        setTodoCache(prev => {
+                            const curr = prev[dKey] || { must: [], should: [], can: [] };
+                            const origCat = workTaskForm.originPriority;
+                            const targetCat = workTaskForm.priority;
+                            const existingTask = (curr[origCat] || []).find(t => t.id === workTaskForm.editId);
+                            const updatedTask = existingTask
+                                ? { ...existingTask, text: fullText }
+                                : { id: workTaskForm.editId, text: fullText, done: false };
+
+                            let nData;
+                            if (origCat === targetCat) {
+                                nData = {
+                                    ...curr,
+                                    [origCat]: (curr[origCat] || []).map(t => t.id === workTaskForm.editId ? updatedTask : t)
+                                };
+                            } else {
+                                nData = {
+                                    ...curr,
+                                    [origCat]: (curr[origCat] || []).filter(t => t.id !== workTaskForm.editId),
+                                    [targetCat]: [...(curr[targetCat] || []), updatedTask]
+                                };
+                            }
+                            scheduleTodoSync(nData, dKey);
+                            return { ...prev, [dKey]: nData };
+                        });
+                    }
+                    setShowWorkTaskModal(false);
+                };
+
+                const openAddRewardModal = () => {
+                    setRewardForm({
+                        editId: null,
+                        originCat: 'can',
+                        name: '',
+                        reqTasks: []
+                    });
+                    setShowRewardModal(true);
+                };
+
+                const openEditRewardModal = (originCat, task) => {
+                    const meta = parseTaskText(task.text);
+                    setRewardForm({
+                        editId: task.id,
+                        originCat,
+                        name: meta.cleanText,
+                        reqTasks: meta.reqTasks || []
+                    });
+                    setOpenTaskMenuId(null);
+                    setShowRewardModal(true);
+                };
+
+                const handleSaveRewardModal = (e) => {
+                    if (e) e.preventDefault();
+                    const cleanName = String(rewardForm.name || '').trim();
+                    if (!cleanName) {
+                        showToast('Nhập tên phần thưởng nha!', 'error');
+                        return;
+                    }
+                    const parts = [cleanName, '#Reward'];
+                    if (rewardForm.reqTasks && rewardForm.reqTasks.length > 0) {
+                        parts.push(`[REQ:${rewardForm.reqTasks.join('||')}]`);
+                    }
+                    const fullText = parts.join(' ');
+                    const dKey = formatDate(selectedDate);
+
+                    if (!rewardForm.editId) {
+                        handleAddTodo('can', fullText);
+                    } else {
+                        setTodoCache(prev => {
+                            const curr = prev[dKey] || { must: [], should: [], can: [] };
+                            const cat = rewardForm.originCat || 'can';
+                            const nData = {
+                                ...curr,
+                                [cat]: (curr[cat] || []).map(t => t.id === rewardForm.editId ? { ...t, text: fullText } : t)
+                            };
+                            scheduleTodoSync(nData, dKey);
+                            return { ...prev, [dKey]: nData };
+                        });
+                    }
+                    setShowRewardModal(false);
+                };
+
+                // Kiểm tra công việc đã lố giờ hạn chót (!HH:mm) hay chưa
+                const checkTaskOverdue = (deadline, isDone, targetDate = selectedDate) => {
+                    if (!deadline || isDone) return false;
+                    const targetNum = parseDateToNumber(formatDate(targetDate));
+                    const todayNum = parseDateToNumber(formatDate(workNow));
+                    if (targetNum < todayNum) return true;
+                    if (targetNum > todayNum) return false;
+                    const [dH, dM] = deadline.split(':').map(Number);
+                    const dlMins = dH * 60 + dM;
+                    const nowMins = workNow.getHours() * 60 + workNow.getMinutes();
+                    return nowMins > dlMins || (nowMins === dlMins && workNow.getSeconds() > 0);
+                };
+
+                // Hàm tính điểm hiệu suất trọng số: Must = 3đ, Should = 2đ, Can = 1đ (Lọc bỏ #Reward & tính 1/2 điểm cho task Late)
                 const calculateWorkStats = (dayTodo) => {
-                    const must = dayTodo?.must || [];
-                    const should = dayTodo?.should || [];
-                    const can = dayTodo?.can || [];
+                    const filterNormal = (list) => (list || []).filter(t => !parseTaskText(t.text).isReward);
+                    const must = filterNormal(dayTodo?.must);
+                    const should = filterNormal(dayTodo?.should);
+                    const can = filterNormal(dayTodo?.can);
+
+                    const calcEarned = (list, weight) => list.reduce((sum, t) => {
+                        if (!t.done) return sum;
+                        const meta = parseTaskText(t.text);
+                        return sum + (meta.isLate ? weight * 0.5 : weight);
+                    }, 0);
+
                     const mustDone = must.filter(t => t.done).length;
                     const shouldDone = should.filter(t => t.done).length;
                     const canDone = can.filter(t => t.done).length;
+
                     const totalPoints = (must.length * 3) + (should.length * 2) + (can.length * 1);
-                    const earnedPoints = (mustDone * 3) + (shouldDone * 2) + (canDone * 1);
+                    const rawEarned = calcEarned(must, 3) + calcEarned(should, 2) + calcEarned(can, 1);
+                    const earnedPoints = Number(cleanNum(rawEarned));
                     const totalTasks = must.length + should.length + can.length;
                     const totalDone = mustDone + shouldDone + canDone;
-                    const pct = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+                    const pct = totalPoints > 0 ? Math.round((rawEarned / totalPoints) * 100) : 0;
+
                     return {
                         pct,
                         earnedPoints,
@@ -1148,6 +1454,7 @@
                         hasData: totalTasks > 0
                     };
                 };
+
 
                 // Hàm lấy màu trạng thái chuẩn hóa cho lịch Tuần & Tháng (80% Xanh ngọc, 50% Vàng, <50% Đỏ)
                 const getWorkStatus = (pct, hasData) => {
@@ -1263,17 +1570,31 @@
                     });
                 };
 
-                const handleToggleTodo = (category, taskId) => {
+                const handleToggleTodo = (category, taskId, forceLateMakeup = false) => {
                     const dKey = formatDate(selectedDate);
                     setTodoCache(prev => {
                         const curr = prev[dKey] || { must: [], should: [], can: [] };
                         let becameDone = false;
+                        let markedLate = false;
                         const nData = {
                             ...curr,
                             [category]: (curr[category] || []).map(t => {
                                 if (t.id === taskId) {
-                                    becameDone = !t.done;
-                                    return { ...t, done: !t.done };
+                                    const nextDone = !t.done;
+                                    becameDone = nextDone;
+                                    let nextText = String(t.text || '').trim();
+                                    const meta = parseTaskText(nextText);
+                                    const isOverdueNow = forceLateMakeup || checkTaskOverdue(meta.deadline, false, selectedDate);
+
+                                    if (nextDone) {
+                                        if (isOverdueNow && !meta.isLate) {
+                                            nextText = `${nextText} !Late`.trim();
+                                            markedLate = true;
+                                        }
+                                    } else {
+                                        nextText = nextText.replace(/\s*!Late(?=\s|$)/gi, '').trim();
+                                    }
+                                    return { ...t, done: nextDone, text: nextText };
                                 }
                                 return t;
                             })
@@ -1281,6 +1602,8 @@
                         if (becameDone && focusTaskId === taskId) {
                             setFocusTaskId(null);
                             showToast('🎯 Đã giải quyết gọn mục tiêu tâm điểm!', 'success');
+                        } else if (becameDone && markedLate) {
+                            showToast('⚠️ Đã ghi nhận làm bù (+1/2 điểm)!', 'error');
                         }
                         scheduleTodoSync(nData, dKey);
                         return { ...prev, [dKey]: nData };
@@ -1980,7 +2303,7 @@
                         </div>
                     )}
 
-                    {/* BONG BÓNG GHI CHÚ BÀI HÁT (CỘT L TRONG SHEET STAT) */}
+                    {/* BONG BÓNG GHI CHÚ BÀI HÁT (CỘT L TRONG SHEET STAT - MẶC ĐỊNH CHẾ ĐỘ XEM KỶ NIỆM) */}
                     {musicNoteBubble && (
                         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4" onClick={() => setMusicNoteBubble(null)}>
                             <div className="absolute inset-0 bg-black/65 backdrop-blur-md modal-overlay"></div>
@@ -1994,7 +2317,7 @@
                                             <MusicIcon size={18} />
                                         </div>
                                         <div>
-                                            <h3 className="text-sm font-black text-zinc-100 tracking-tight">Ghi chú Bài hát</h3>
+                                            <h3 className="text-sm font-black text-zinc-100 tracking-tight">Kỷ niệm Bài hát</h3>
                                             <p className="text-[11px] font-semibold text-zinc-400">Ngày {musicNoteBubble.dateKey}</p>
                                         </div>
                                     </div>
@@ -2007,62 +2330,107 @@
                                     </button>
                                 </div>
 
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1.5 ml-1">Link nhạc Spotify</label>
-                                        <input
-                                            type="text"
-                                            value={musicNoteBubble.musicUrl || ''}
-                                            onChange={(e) => setMusicNoteBubble(prev => ({ ...prev, musicUrl: e.target.value }))}
-                                            placeholder="Dán link bài hát Spotify..."
-                                            className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-zinc-200 outline-none transition-colors"
-                                        />
-                                    </div>
+                                {musicNoteBubble.isEditing ? (
+                                    <>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1.5 ml-1">Link nhạc Spotify</label>
+                                                <input
+                                                    type="text"
+                                                    value={musicNoteBubble.musicUrl || ''}
+                                                    onChange={(e) => setMusicNoteBubble(prev => ({ ...prev, musicUrl: e.target.value }))}
+                                                    placeholder="Dán link bài hát Spotify..."
+                                                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-zinc-200 outline-none transition-colors"
+                                                />
+                                            </div>
 
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1.5 ml-1">Cảm nhận / Ghi chú về bài hát</label>
-                                        <textarea
-                                            autoFocus
-                                            rows={4}
-                                            value={musicNoteBubble.note || ''}
-                                            onChange={(e) => setMusicNoteBubble(prev => ({ ...prev, note: e.target.value }))}
-                                            placeholder="Ghi lại lý do chọn bài này, câu hát tâm đắc hoặc kỷ niệm gắn với bài nhạc..."
-                                            className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-2xl p-3.5 text-sm font-medium text-zinc-100 outline-none resize-none leading-relaxed transition-colors"
-                                        />
-                                    </div>
-                                </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1.5 ml-1">Cảm nhận / Ghi chú về bài hát</label>
+                                                <textarea
+                                                    rows={4}
+                                                    value={musicNoteBubble.note || ''}
+                                                    onChange={(e) => setMusicNoteBubble(prev => ({ ...prev, note: e.target.value }))}
+                                                    placeholder="Ghi lại lý do chọn bài này, câu hát tâm đắc hoặc kỷ niệm gắn với bài nhạc..."
+                                                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-emerald-500 rounded-2xl p-3.5 text-sm font-medium text-zinc-100 outline-none resize-none leading-relaxed transition-colors"
+                                                />
+                                            </div>
+                                        </div>
 
-                                <div className="flex gap-2 pt-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => setMusicNoteBubble(null)}
-                                        className="flex-1 py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-xs hover:bg-zinc-700 active:scale-95 transition-all"
-                                    >
-                                        Đóng
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const dKey = musicNoteBubble.dateKey;
-                                            setStatsByDate(prev => {
-                                                const existing = prev[dKey] || { mood: 3, outing: 1, detail: '', summary: '', images: [], musicUrl: '', musicNote: '' };
-                                                return {
-                                                    ...prev,
-                                                    [dKey]: {
-                                                        ...existing,
-                                                        musicUrl: (musicNoteBubble.musicUrl || '').trim(),
-                                                        musicNote: (musicNoteBubble.note || '').trim()
-                                                    }
-                                                };
-                                            });
-                                            setMusicNoteBubble(null);
-                                            showToast('🎵 Đã lưu ghi chú bài hát!', 'success');
-                                        }}
-                                        className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                                    >
-                                        <CheckIcon size={15} /> Lưu ghi chú
-                                    </button>
-                                </div>
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setMusicNoteBubble(prev => ({ ...prev, isEditing: false }))}
+                                                className="flex-1 py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-xs hover:bg-zinc-700 active:scale-95 transition-all"
+                                            >
+                                                Hủy
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const dKey = musicNoteBubble.dateKey;
+                                                    setStatsByDate(prev => {
+                                                        const existing = prev[dKey] || { mood: 3, outing: 1, detail: '', summary: '', images: [], musicUrl: '', musicNote: '' };
+                                                        return {
+                                                            ...prev,
+                                                            [dKey]: {
+                                                                ...existing,
+                                                                musicUrl: (musicNoteBubble.musicUrl || '').trim(),
+                                                                musicNote: (musicNoteBubble.note || '').trim()
+                                                            }
+                                                        };
+                                                    });
+                                                    setMusicNoteBubble(null);
+                                                    showToast('🎵 Đã lưu ghi chú bài hát!', 'success');
+                                                }}
+                                                className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                <CheckIcon size={15} /> Lưu ghi chú
+                                            </button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="space-y-3.5">
+                                        {musicNoteBubble.musicUrl && getSpotifyEmbedUrl(musicNoteBubble.musicUrl) && (
+                                            <div className="rounded-2xl overflow-hidden border border-zinc-800 shadow-md">
+                                                <iframe src={getSpotifyEmbedUrl(musicNoteBubble.musicUrl)} width="100%" height="80" frameBorder="0" allowFullScreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                                            </div>
+                                        )}
+
+                                        {musicNoteBubble.note && musicNoteBubble.note.trim() !== '' ? (
+                                            <div
+                                                onClick={() => setMusicNoteBubble(prev => ({ ...prev, isEditing: true }))}
+                                                className="bg-zinc-950/90 border border-zinc-800/90 hover:border-emerald-500/40 p-4 rounded-2xl text-sm font-medium text-zinc-200 whitespace-pre-wrap break-words leading-relaxed max-h-[42vh] overflow-y-auto no-scrollbar cursor-pointer transition-colors"
+                                            >
+                                                {musicNoteBubble.note}
+                                            </div>
+                                        ) : (
+                                            <div
+                                                onClick={() => setMusicNoteBubble(prev => ({ ...prev, isEditing: true }))}
+                                                className="py-7 px-4 text-center border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:border-emerald-500/40 transition-colors"
+                                            >
+                                                <p className="text-xs font-bold text-zinc-500">Chưa có dòng kỷ niệm nào cho bài hát ngày này.</p>
+                                                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mt-1.5">+ Bấm để viết cảm nhận</p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setMusicNoteBubble(null)}
+                                                className="flex-1 py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-xs hover:bg-zinc-700 active:scale-95 transition-all"
+                                            >
+                                                Đóng
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setMusicNoteBubble(prev => ({ ...prev, isEditing: true }))}
+                                                className="flex-1 py-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-black text-xs active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                <PencilIcon size={14} /> {musicNoteBubble.note ? 'Chỉnh sửa' : 'Thêm ghi chú'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -2664,65 +3032,32 @@
                                             </div>
 
                                             {/* HÌNH 3 ĐỘC LẬP: TRẠM ĐIỀU KHIỂN & THÊM VIỆC NHANH (COMMAND DOCK) */}
-                                            <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 p-4 sm:p-5 rounded-[2rem] shadow-lg transition-all">
-                                                <div className="flex flex-wrap justify-between items-center gap-2 mb-3.5">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="w-9 h-9 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-inner">
-                                                            <CheckCircleIcon size={19} />
-                                                        </div>
-                                                        <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-zinc-100 leading-tight">Nhập công việc</h3>
+                                            <div className="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 px-4 sm:px-5 py-3.5 rounded-[2rem] shadow-lg flex items-center justify-between gap-2 transition-all">
+                                                <div
+                                                    onClick={() => openAddWorkTaskModal('must')}
+                                                    className="flex items-center gap-3 cursor-pointer flex-1 min-w-0 group"
+                                                >
+                                                    <div className="w-10 h-10 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                                                        <CheckCircleIcon size={20} />
                                                     </div>
+                                                    <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-zinc-100 leading-tight truncate">Nhập công việc</h3>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
                                                     <button
+                                                        type="button"
                                                         onClick={handleCarryOverYesterday}
-                                                        className="px-3.5 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl transition-all active:scale-95 border border-cyan-500/25 font-black text-xs flex items-center gap-1.5 shadow-sm"
+                                                        className="px-3.5 py-2.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 rounded-xl transition-all active:scale-95 border border-cyan-500/25 font-black text-xs flex items-center gap-1.5 shadow-sm"
                                                     >
                                                         <CopyIcon size={13} /> Việc hôm qua
                                                     </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openAddWorkTaskModal('must')}
+                                                        className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25 flex items-center justify-center active:scale-90 transition-all shrink-0"
+                                                    >
+                                                        <PlusIcon size={20} />
+                                                    </button>
                                                 </div>
-
-                                                <form
-                                                    onSubmit={(e) => {
-                                                        e.preventDefault();
-                                                        if (!newTodoText.trim()) return;
-                                                        handleAddTodo(newTodoCategory, newTodoText);
-                                                        setNewTodoText('');
-                                                    }}
-                                                    className="space-y-2.5"
-                                                >
-                                                    <div className="grid grid-cols-3 gap-1.5 bg-zinc-950/90 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-                                                        {['must', 'should', 'can'].map(cat => {
-                                                            const meta = priorityMeta[cat];
-                                                            const isSel = newTodoCategory === cat;
-                                                            const CatIcon = meta.Icon;
-                                                            return (
-                                                                <button
-                                                                    key={cat}
-                                                                    type="button"
-                                                                    onClick={() => setNewTodoCategory(cat)}
-                                                                    className={`py-2 px-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-all active:scale-95 ${isSel ? meta.activeTab : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'}`}
-                                                                >
-                                                                    <CatIcon size={12} />
-                                                                    <span>{meta.shortLabel}</span>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 bg-zinc-950/90 rounded-2xl px-3.5 py-1.5 border border-white/10 focus-within:border-cyan-400/70 focus-within:ring-4 focus-within:ring-cyan-500/10 transition-all shadow-inner">
-                                                        <input
-                                                            type="text"
-                                                            value={newTodoText}
-                                                            onChange={(e) => setNewTodoText(e.target.value)}
-                                                            placeholder={`Ghi vào sổ mục ${priorityMeta[newTodoCategory].shortLabel.toLowerCase()}...`}
-                                                            className="flex-1 bg-transparent py-2 outline-none text-sm font-bold text-zinc-100 placeholder-zinc-500"
-                                                        />
-                                                        <button
-                                                            type="submit"
-                                                            className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white shadow-md shadow-cyan-500/25 flex items-center justify-center active:scale-90 transition-all shrink-0"
-                                                        >
-                                                            <PlusIcon size={17} />
-                                                        </button>
-                                                    </div>
-                                                </form>
                                             </div>
 
                                             {/* HÌNH 4 ĐỘC LẬP: CUỐN SỔ TAY CÔNG VIỆC (EXECUTIVE PLANNER NOTEBOOK) */}
@@ -2742,12 +3077,14 @@
                                                     </div>
                                                 </div>
 
-                                                {/* 3 Phân mục trong Sổ Tay */}
+                                                {/* 3 Phân mục trong Sổ Tay (Tự động sắp xếp & tách riêng #Reward) */}
                                                 <div className="space-y-6">
                                                     {['must', 'should', 'can'].map(cat => {
                                                         const meta = priorityMeta[cat];
                                                         const CatIcon = meta.Icon;
-                                                        const tasks = todoData?.[cat] || [];
+                                                        const rawTasks = todoData?.[cat] || [];
+                                                        const filteredTasks = rawTasks.filter(t => !parseTaskText(t.text).isReward);
+                                                        const tasks = sortWorkTasks(filteredTasks);
                                                         const doneCount = tasks.filter(t => t.done).length;
                                                         const tabBadgeStyle = cat === 'must'
                                                             ? 'bg-red-500/15 text-red-400 border-red-500/30'
@@ -2776,18 +3113,44 @@
                                                                             const isFocused = focusedTask && focusedTask.id === t.id;
                                                                             const isDimmed = focusedTask && focusedTask.id !== t.id;
                                                                             const isEditing = editingTodo && editingTodo.id === t.id && editingTodo.category === cat;
+                                                                            const tMeta = parseTaskText(t.text);
+                                                                            const isOverdue = checkTaskOverdue(tMeta.deadline, t.done, selectedDate);
+                                                                            const isMenuOpen = openTaskMenuId === t.id;
+
+                                                                            const catPillStyle = tMeta.category === 'Study'
+                                                                                ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                                                                                : tMeta.category === 'Growth'
+                                                                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                                                    : tMeta.category === 'Life'
+                                                                                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                                                                                        : 'bg-amber-500/15 text-amber-300 border-amber-500/30';
 
                                                                             return (
                                                                                 <div
                                                                                     key={t.id}
-                                                                                    className={`flex items-center gap-2.5 px-3.5 py-3 transition-all duration-300 group ${isFocused ? 'bg-cyan-500/15 ring-1 ring-inset ring-cyan-400/50' : 'hover:bg-white/[0.03]'} ${isDimmed ? 'opacity-40 hover:opacity-95' : 'opacity-100'}`}
+                                                                                    className={`flex items-center gap-2.5 px-3.5 py-3 transition-all duration-300 group ${
+                                                                                        isOverdue
+                                                                                            ? 'bg-red-950/40 border-l-2 border-l-red-500 hover:bg-red-950/55'
+                                                                                            : isFocused
+                                                                                                ? 'bg-cyan-500/15 ring-1 ring-inset ring-cyan-400/50'
+                                                                                                : 'hover:bg-white/[0.03]'
+                                                                                    } ${isDimmed ? 'opacity-40 hover:opacity-95' : 'opacity-100'}`}
                                                                                 >
-                                                                                    <button
-                                                                                        onClick={() => handleToggleTodo(cat, t.id)}
-                                                                                        className={`relative flex items-center justify-center w-5 h-5 rounded-md border-2 shrink-0 transition-all active:scale-90 ${t.done ? meta.checkDone : 'border-zinc-500 text-transparent hover:border-zinc-300'}`}
-                                                                                    >
-                                                                                        <CheckIcon size={12} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3} />
-                                                                                    </button>
+                                                                                    {isOverdue ? (
+                                                                                        <button
+                                                                                            onClick={() => handleToggleTodo(cat, t.id, true)}
+                                                                                            className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/60 text-[10px] font-black uppercase tracking-wider shrink-0 transition-all active:scale-90 shadow-sm shadow-red-500/20"
+                                                                                        >
+                                                                                            Làm bù
+                                                                                        </button>
+                                                                                    ) : (
+                                                                                        <button
+                                                                                            onClick={() => handleToggleTodo(cat, t.id)}
+                                                                                            className={`relative flex items-center justify-center w-5 h-5 rounded-md border-2 shrink-0 transition-all active:scale-90 ${t.done ? meta.checkDone : 'border-zinc-500 text-transparent hover:border-zinc-300'}`}
+                                                                                        >
+                                                                                            <CheckIcon size={12} className={`transition-transform duration-300 ${t.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3} />
+                                                                                        </button>
+                                                                                    )}
 
                                                                                     {isEditing ? (
                                                                                         <div className="flex-1 flex items-center gap-1.5">
@@ -2810,59 +3173,128 @@
                                                                                             </button>
                                                                                         </div>
                                                                                     ) : (
-                                                                                        <span
-                                                                                            onClick={() => handleToggleTodo(cat, t.id)}
+                                                                                        <div
+                                                                                            onClick={() => handleToggleTodo(cat, t.id, isOverdue)}
                                                                                             onDoubleClick={(e) => {
                                                                                                 e.stopPropagation();
-                                                                                                setEditingTodo({ category: cat, id: t.id, text: t.text });
+                                                                                                openEditWorkTaskModal(cat, t);
                                                                                             }}
-                                                                                            className={`flex-1 text-sm font-semibold transition-all duration-300 cursor-pointer select-none break-words ${t.done ? 'text-zinc-500 line-through decoration-zinc-500/80' : 'text-zinc-100'}`}
+                                                                                            className="flex-1 min-w-0 flex items-center justify-between gap-2 cursor-pointer select-none"
                                                                                         >
-                                                                                            {t.text}
-                                                                                        </span>
+                                                                                            <span className={`text-sm font-semibold transition-all duration-300 break-words min-w-0 flex-1 ${
+                                                                                                t.done
+                                                                                                    ? 'text-zinc-500 line-through decoration-zinc-500/80'
+                                                                                                    : isOverdue
+                                                                                                        ? 'text-red-300 font-bold'
+                                                                                                        : 'text-zinc-100'
+                                                                                            }`}>
+                                                                                                {tMeta.cleanText}
+                                                                                            </span>
+
+                                                                                            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                                                                                                {t.done && tMeta.isLate && (
+                                                                                                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 text-[10px] font-black uppercase tracking-wider shrink-0">
+                                                                                                        Late
+                                                                                                    </span>
+                                                                                                )}
+
+                                                                                                {tMeta.duration && (
+                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums inline-flex items-center gap-1 bg-teal-500/10 text-teal-300 border-teal-500/25 shrink-0 ${t.done ? 'opacity-50' : ''}`}>
+                                                                                                        <TimerIcon size={10} /> {tMeta.duration}p
+                                                                                                    </span>
+                                                                                                )}
+
+                                                                                                {tMeta.deadline && (
+                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                                                                                                        isOverdue
+                                                                                                            ? 'bg-red-500 text-white border-red-400 shadow-sm shadow-red-500/30 animate-pulse'
+                                                                                                            : 'bg-zinc-800/90 text-zinc-300 border-zinc-700'
+                                                                                                    } ${t.done ? 'opacity-50' : ''}`}>
+                                                                                                        <ClockIcon size={10} /> {formatDeadlineAmPm(tMeta.deadline)}
+                                                                                                    </span>
+                                                                                                )}
+
+                                                                                                {tMeta.category && tMeta.category !== 'Reward' && (
+                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tracking-wide shrink-0 ${catPillStyle} ${t.done ? 'opacity-50' : ''}`}>
+                                                                                                        {tMeta.category}
+                                                                                                    </span>
+                                                                                                )}
+
+                                                                                                {(tMeta.timeSlots || []).map(slot => {
+                                                                                                    const slotStyle = slot === 'Morning'
+                                                                                                        ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                                                                                                        : slot === 'Afternoon'
+                                                                                                            ? 'bg-orange-500/10 text-orange-300 border-orange-500/25'
+                                                                                                            : 'bg-purple-500/10 text-purple-300 border-purple-500/25';
+                                                                                                    const SlotIcon = slot === 'Morning' ? SunriseIcon : slot === 'Afternoon' ? SunIcon : MoonIcon;
+                                                                                                    return (
+                                                                                                        <span key={slot} className={`px-2 py-0.5 rounded-full border text-[10px] font-bold inline-flex items-center gap-1 shrink-0 ${slotStyle} ${t.done ? 'opacity-50' : ''}`}>
+                                                                                                            <SlotIcon size={10} /> {slot}
+                                                                                                        </span>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                        </div>
                                                                                     )}
 
                                                                                     {!isEditing && (
                                                                                         <div className="flex items-center gap-1 shrink-0">
-                                                                                            {!t.done && (
-                                                                                                <button
-                                                                                                    onClick={(e) => {
-                                                                                                        e.stopPropagation();
-                                                                                                        setFocusTaskId(prev => prev === t.id ? null : t.id);
-                                                                                                    }}
-                                                                                                    className={`p-1.5 rounded-lg transition-all active:scale-90 ${isFocused ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-zinc-400 hover:text-amber-400 bg-white/5'}`}
-                                                                                                >
-                                                                                                    <SparklesIcon size={13} />
-                                                                                                </button>
+                                                                                            {isMenuOpen && (
+                                                                                                <div className="flex items-center gap-1 bg-zinc-900/95 border border-white/10 px-1.5 py-1 rounded-xl shadow-lg animate-[fadeScale_0.15s_ease-out]">
+                                                                                                    {!t.done && (
+                                                                                                        <button
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation();
+                                                                                                                setFocusTaskId(prev => prev === t.id ? null : t.id);
+                                                                                                                setOpenTaskMenuId(null);
+                                                                                                            }}
+                                                                                                            className={`p-1.5 rounded-lg transition-all active:scale-90 ${isFocused ? 'bg-amber-400 text-slate-900 shadow-sm' : 'text-zinc-300 hover:text-amber-400 bg-white/5'}`}
+                                                                                                        >
+                                                                                                            <SparklesIcon size={13} />
+                                                                                                        </button>
+                                                                                                    )}
+                                                                                                    <button
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            openEditWorkTaskModal(cat, t);
+                                                                                                        }}
+                                                                                                        className="p-1.5 text-zinc-300 hover:text-blue-400 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                                    >
+                                                                                                        <PencilIcon size={13} />
+                                                                                                    </button>
+                                                                                                    {!t.done && (
+                                                                                                        <button
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation();
+                                                                                                                handleMoveTodoToTomorrow(cat, t.id);
+                                                                                                                setOpenTaskMenuId(null);
+                                                                                                            }}
+                                                                                                            className="p-1.5 text-zinc-300 hover:text-cyan-400 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                                        >
+                                                                                                            <ChevronRightIcon size={14} />
+                                                                                                        </button>
+                                                                                                    )}
+                                                                                                    <button
+                                                                                                        onClick={(e) => {
+                                                                                                            e.stopPropagation();
+                                                                                                            handleDeleteTodo(cat, t.id);
+                                                                                                            setOpenTaskMenuId(null);
+                                                                                                        }}
+                                                                                                        className="p-1.5 text-zinc-400 hover:text-red-400 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                                    >
+                                                                                                        <Trash2Icon size={13} />
+                                                                                                    </button>
+                                                                                                </div>
                                                                                             )}
                                                                                             <button
+                                                                                                type="button"
                                                                                                 onClick={(e) => {
                                                                                                     e.stopPropagation();
-                                                                                                    setEditingTodo({ category: cat, id: t.id, text: t.text });
+                                                                                                    setOpenTaskMenuId(prev => prev === t.id ? null : t.id);
                                                                                                 }}
-                                                                                                className="p-1.5 text-zinc-400 hover:text-blue-400 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                                className={`p-1.5 rounded-lg transition-all active:scale-90 ${isMenuOpen ? 'bg-cyan-500 text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-zinc-200 bg-white/5'}`}
                                                                                             >
-                                                                                                <PencilIcon size={13} />
-                                                                                            </button>
-                                                                                            {!t.done && (
-                                                                                                <button
-                                                                                                    onClick={(e) => {
-                                                                                                        e.stopPropagation();
-                                                                                                        handleMoveTodoToTomorrow(cat, t.id);
-                                                                                                    }}
-                                                                                                    className="p-1.5 text-zinc-400 hover:text-cyan-400 bg-white/5 rounded-lg transition-all active:scale-90"
-                                                                                                >
-                                                                                                    <ChevronRightIcon size={14} />
-                                                                                                </button>
-                                                                                            )}
-                                                                                            <button
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    handleDeleteTodo(cat, t.id);
-                                                                                                }}
-                                                                                                className="p-1.5 text-zinc-500 hover:text-red-400 bg-white/5 rounded-lg transition-all active:scale-90"
-                                                                                            >
-                                                                                                <Trash2Icon size={13} />
+                                                                                                <MenuIcon size={14} />
                                                                                             </button>
                                                                                         </div>
                                                                                     )}
@@ -2876,6 +3308,477 @@
                                                     })}
                                                 </div>
                                             </div>
+
+                                            {/* KHU VỰC PHẦN THƯỞNG (CHỌN ĐIỀU KIỆN CÔNG VIỆC PHẢI XONG & KHÓA/MỞ TỰ ĐỘNG) */}
+                                            {(() => {
+                                                const rewardTasks = [];
+                                                const allNormalTasks = [];
+                                                ['must', 'should', 'can'].forEach(cat => {
+                                                    (todoData?.[cat] || []).forEach(t => {
+                                                        const tMeta = parseTaskText(t.text);
+                                                        if (tMeta.isReward) {
+                                                            rewardTasks.push({ ...t, originCat: cat, tMeta });
+                                                        } else {
+                                                            allNormalTasks.push({ ...t, priority: cat, tMeta });
+                                                        }
+                                                    });
+                                                });
+
+                                                const defaultGlobalUnlock = dayWorkStats.pct >= 80 || (dayWorkStats.mustTotal > 0 && dayWorkStats.mustDone === dayWorkStats.mustTotal);
+
+                                                const checkSingleRewardUnlock = (r) => {
+                                                    const reqs = r.tMeta.reqTasks || [];
+                                                    if (reqs.length > 0) {
+                                                        return reqs.every(reqName => {
+                                                            const matched = allNormalTasks.filter(nt => nt.tMeta.cleanText.toLowerCase() === reqName.toLowerCase());
+                                                            return matched.length > 0 && matched.every(m => m.done);
+                                                        });
+                                                    }
+                                                    return defaultGlobalUnlock;
+                                                };
+
+                                                const anyUnlocked = rewardTasks.length > 0
+                                                    ? rewardTasks.some(r => checkSingleRewardUnlock(r) || r.done)
+                                                    : defaultGlobalUnlock;
+                                                const rewardDoneCount = rewardTasks.filter(r => r.done).length;
+
+                                                return (
+                                                    <>
+                                                        <div className={`rounded-[2rem] p-5 border transition-all duration-500 ${
+                                                            anyUnlocked
+                                                                ? 'bg-gradient-to-br from-amber-500/15 via-zinc-900 to-emerald-500/10 border-amber-500/40 shadow-xl shadow-amber-500/10'
+                                                                : 'bg-zinc-900 border-zinc-800 opacity-90'
+                                                        }`}>
+                                                            <div className="flex items-center justify-between gap-2 mb-3.5">
+                                                                <div className="flex items-center gap-2.5">
+                                                                    <div className={`w-9 h-9 rounded-2xl flex items-center justify-center border transition-colors ${
+                                                                        anyUnlocked
+                                                                            ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-md shadow-amber-500/25'
+                                                                            : 'bg-zinc-800 text-zinc-500 border-zinc-700'
+                                                                    }`}>
+                                                                        <SparklesIcon size={18} />
+                                                                    </div>
+                                                                    <h3 className="text-base font-black text-zinc-100 tracking-tight">Phần Thưởng</h3>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {rewardTasks.length > 0 && (
+                                                                        <span className="text-[11px] font-black text-amber-400 tabular-nums mr-1">
+                                                                            {rewardDoneCount}/{rewardTasks.length}
+                                                                        </span>
+                                                                    )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openAddRewardModal}
+                                                                        className="w-9 h-9 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 shadow-md shadow-amber-500/20 flex items-center justify-center active:scale-90 transition-all shrink-0"
+                                                                    >
+                                                                        <PlusIcon size={18} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            {rewardTasks.length === 0 ? (
+                                                                <div className="py-3.5 px-4 rounded-2xl border border-dashed border-white/10 text-left text-[11px] italic font-medium text-zinc-500">
+                                                                    — Chưa có phần thưởng —
+                                                                </div>
+                                                            ) : (
+                                                                <div className="divide-y divide-white/[0.06] bg-black/25 rounded-2xl border border-white/[0.06] overflow-hidden">
+                                                                    {rewardTasks.map(r => {
+                                                                        const isUnlocked = checkSingleRewardUnlock(r);
+                                                                        const canClickReward = isUnlocked || r.done;
+                                                                        const isMenuOpen = openTaskMenuId === r.id;
+                                                                        const reqs = r.tMeta.reqTasks || [];
+
+                                                                        return (
+                                                                            <div
+                                                                                key={r.id}
+                                                                                className={`flex items-center gap-2.5 px-3.5 py-3 transition-all ${
+                                                                                    !canClickReward ? 'opacity-55' : 'hover:bg-white/[0.03]'
+                                                                                }`}
+                                                                            >
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={!canClickReward}
+                                                                                    onClick={() => canClickReward && handleToggleTodo(r.originCat, r.id)}
+                                                                                    className={`relative flex items-center justify-center w-5 h-5 rounded-md border-2 shrink-0 transition-all ${
+                                                                                        r.done
+                                                                                            ? 'bg-amber-400 border-amber-400 text-zinc-950 shadow-sm shadow-amber-400/30 active:scale-90'
+                                                                                            : canClickReward
+                                                                                                ? 'border-amber-400/80 text-transparent hover:border-amber-300 active:scale-90 cursor-pointer'
+                                                                                                : 'border-zinc-700 bg-zinc-800/60 text-transparent cursor-not-allowed'
+                                                                                    }`}
+                                                                                >
+                                                                                    <CheckIcon size={12} className={`transition-transform duration-300 ${r.done ? 'scale-100' : 'scale-0'}`} strokeWidth={3} />
+                                                                                </button>
+
+                                                                                <div
+                                                                                    onClick={() => canClickReward && handleToggleTodo(r.originCat, r.id)}
+                                                                                    onDoubleClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        openEditRewardModal(r.originCat, r);
+                                                                                    }}
+                                                                                    className={`flex-1 min-w-0 flex flex-col gap-1 select-none ${canClickReward ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                                                >
+                                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                                        <span className={`text-sm font-bold break-words ${r.done ? 'text-zinc-500 line-through' : 'text-amber-100'}`}>
+                                                                                            {r.tMeta.cleanText}
+                                                                                        </span>
+                                                                                        <span className={`px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wider shrink-0 ${
+                                                                                            isUnlocked || r.done
+                                                                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                                                                : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                                                                                        }`}>
+                                                                                            {isUnlocked || r.done ? 'Đã mở' : 'Khóa'}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    {reqs.length > 0 && (
+                                                                                        <div className="flex flex-wrap items-center gap-1">
+                                                                                            {reqs.map((reqName, rIdx) => {
+                                                                                                const isReqDone = allNormalTasks.some(nt => nt.tMeta.cleanText.toLowerCase() === reqName.toLowerCase() && nt.done);
+                                                                                                return (
+                                                                                                    <span
+                                                                                                        key={rIdx}
+                                                                                                        className={`px-2 py-0.5 rounded-md border text-[10px] font-bold inline-flex items-center gap-1 ${
+                                                                                                            isReqDone
+                                                                                                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                                                                                : 'bg-zinc-800/80 text-zinc-400 border-zinc-700/80'
+                                                                                                        }`}
+                                                                                                    >
+                                                                                                        {isReqDone && <CheckIcon size={9} strokeWidth={3} />}
+                                                                                                        <span>{reqName}</span>
+                                                                                                    </span>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                                    {isMenuOpen && (
+                                                                                        <div className="flex items-center gap-1 bg-zinc-900/95 border border-white/10 px-1.5 py-1 rounded-xl shadow-lg animate-[fadeScale_0.15s_ease-out]">
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    openEditRewardModal(r.originCat, r);
+                                                                                                }}
+                                                                                                className="p-1.5 text-zinc-300 hover:text-amber-300 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                            >
+                                                                                                <PencilIcon size={13} />
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    handleDeleteTodo(r.originCat, r.id);
+                                                                                                    setOpenTaskMenuId(null);
+                                                                                                }}
+                                                                                                className="p-1.5 text-zinc-400 hover:text-red-400 bg-white/5 rounded-lg transition-all active:scale-90"
+                                                                                            >
+                                                                                                <Trash2Icon size={13} />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setOpenTaskMenuId(prev => prev === r.id ? null : r.id);
+                                                                                        }}
+                                                                                        className={`p-1.5 rounded-lg transition-all active:scale-90 ${isMenuOpen ? 'bg-amber-400 text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-zinc-200 bg-white/5'}`}
+                                                                                    >
+                                                                                        <MenuIcon size={14} />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* TAB MODAL NHẬP CÔNG VIỆC (PORTAL RA BODY ĐỂ KHÔNG BỊ CUỘN TRANG TRÊN PC) */}
+                                                        {showWorkTaskModal && ReactDOM.createPortal(
+                                                            <div className="dark">
+                                                                <div className="fixed inset-0 z-[210] flex justify-center items-end sm:items-center p-0 sm:p-4">
+                                                                    <div className="absolute inset-0 bg-black/65 backdrop-blur-sm modal-overlay" onClick={() => setShowWorkTaskModal(false)}></div>
+                                                                    <div className="w-full max-w-md bg-zinc-900 rounded-t-[2.25rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-zinc-800 z-10">
+                                                                        <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-5 sm:hidden shrink-0"></div>
+                                                                        <div className="flex justify-between items-center mb-5 shrink-0">
+                                                                            <h2 className="text-xl font-black text-zinc-100 tracking-tight">
+                                                                                {workTaskForm.editId ? 'Cập nhật công việc' : 'Thêm công việc'}
+                                                                            </h2>
+                                                                            <button type="button" onClick={() => setShowWorkTaskModal(false)} className="text-zinc-400 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 active:scale-90 transition-all">
+                                                                                <XIcon size={18} />
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <form onSubmit={handleSaveWorkTaskModal} className="overflow-y-auto no-scrollbar space-y-4 flex-1 pr-0.5">
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Tên công việc</label>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={workTaskForm.name}
+                                                                                    onChange={(e) => setWorkTaskForm(p => ({ ...p, name: e.target.value }))}
+                                                                                    placeholder="Nhập tên công việc..."
+                                                                                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-400 rounded-2xl px-4 py-3 outline-none font-bold text-sm text-zinc-100 transition-all"
+                                                                                    required
+                                                                                />
+                                                                            </div>
+
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Mức độ ưu tiên</label>
+                                                                                <div className="grid grid-cols-3 gap-2">
+                                                                                    {[
+                                                                                        { id: 'must', label: 'Must', active: 'bg-red-500 text-white border-transparent shadow-md shadow-red-500/25' },
+                                                                                        { id: 'should', label: 'Should', active: 'bg-blue-500 text-white border-transparent shadow-md shadow-blue-500/25' },
+                                                                                        { id: 'can', label: 'Can', active: 'bg-zinc-600 text-white border-transparent shadow-md' }
+                                                                                    ].map(p => (
+                                                                                        <button
+                                                                                            key={p.id}
+                                                                                            type="button"
+                                                                                            onClick={() => setWorkTaskForm(prev => ({ ...prev, priority: p.id }))}
+                                                                                            className={`py-2.5 rounded-xl text-xs font-black uppercase tracking-wider border transition-all active:scale-95 ${
+                                                                                                workTaskForm.priority === p.id
+                                                                                                    ? p.active
+                                                                                                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {p.label}
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Phân loại</label>
+                                                                                <div className="grid grid-cols-3 gap-2">
+                                                                                    {[
+                                                                                        { id: 'Study', active: 'bg-indigo-500 text-white border-transparent shadow-md shadow-indigo-500/25' },
+                                                                                        { id: 'Growth', active: 'bg-emerald-500 text-white border-transparent shadow-md shadow-emerald-500/25' },
+                                                                                        { id: 'Life', active: 'bg-sky-500 text-white border-transparent shadow-md shadow-sky-500/25' }
+                                                                                    ].map(c => (
+                                                                                        <button
+                                                                                            key={c.id}
+                                                                                            type="button"
+                                                                                            onClick={() => setWorkTaskForm(prev => ({ ...prev, category: c.id }))}
+                                                                                            className={`py-2.5 rounded-xl text-xs font-black tracking-wide border transition-all active:scale-95 ${
+                                                                                                workTaskForm.category === c.id
+                                                                                                    ? c.active
+                                                                                                    : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {c.id}
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Thời gian trong ngày</label>
+                                                                                <div className="grid grid-cols-3 gap-2">
+                                                                                    {[
+                                                                                        { id: 'Morning', label: 'Morning', Icon: SunriseIcon, active: 'bg-amber-500/20 text-amber-300 border-amber-400' },
+                                                                                        { id: 'Afternoon', label: 'Afternoon', Icon: SunIcon, active: 'bg-orange-500/20 text-orange-300 border-orange-400' },
+                                                                                        { id: 'Evening', label: 'Evening', Icon: MoonIcon, active: 'bg-purple-500/20 text-purple-300 border-purple-400' }
+                                                                                    ].map(t => {
+                                                                                        const isSel = (workTaskForm.timeSlots || []).includes(t.id);
+                                                                                        return (
+                                                                                            <button
+                                                                                                key={t.id}
+                                                                                                type="button"
+                                                                                                onClick={() => {
+                                                                                                    setWorkTaskForm(prev => {
+                                                                                                        const cur = prev.timeSlots || [];
+                                                                                                        const next = cur.includes(t.id) ? cur.filter(x => x !== t.id) : [...cur, t.id];
+                                                                                                        return { ...prev, timeSlots: next };
+                                                                                                    });
+                                                                                                }}
+                                                                                                className={`py-2.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all active:scale-95 ${
+                                                                                                    isSel
+                                                                                                        ? t.active
+                                                                                                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                                                                                                }`}
+                                                                                            >
+                                                                                                <t.Icon size={13} />
+                                                                                                <span>{t.label}</span>
+                                                                                            </button>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                <div>
+                                                                                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Duration (Phút)</label>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min="1"
+                                                                                        value={workTaskForm.duration}
+                                                                                        onChange={(e) => setWorkTaskForm(p => ({ ...p, duration: e.target.value }))}
+                                                                                        placeholder="VD: 45"
+                                                                                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-teal-400 rounded-xl px-3.5 py-2.5 outline-none font-bold text-sm text-zinc-100"
+                                                                                    />
+                                                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                                                        {[15, 30, 45, 60, 90, 120].map(m => (
+                                                                                            <button
+                                                                                                key={m}
+                                                                                                type="button"
+                                                                                                onClick={() => setWorkTaskForm(p => ({ ...p, duration: String(p.duration) === String(m) ? '' : String(m) }))}
+                                                                                                className={`px-2 py-0.5 rounded-lg text-[10px] font-black border transition-all ${
+                                                                                                    String(workTaskForm.duration) === String(m)
+                                                                                                        ? 'bg-teal-500 text-zinc-950 border-teal-400'
+                                                                                                        : 'bg-zinc-950 text-zinc-400 border-zinc-800'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {m}p
+                                                                                            </button>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div>
+                                                                                    <div className="flex items-center justify-between mb-1.5 ml-1">
+                                                                                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Deadline</label>
+                                                                                        {workTaskForm.deadline && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => setWorkTaskForm(p => ({ ...p, deadline: '' }))}
+                                                                                                className="text-[10px] font-bold text-red-400 hover:underline"
+                                                                                            >
+                                                                                                Xóa
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <input
+                                                                                        type="time"
+                                                                                        value={workTaskForm.deadline}
+                                                                                        onChange={(e) => setWorkTaskForm(p => ({ ...p, deadline: e.target.value }))}
+                                                                                        className="relative w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 outline-none font-bold text-sm text-zinc-100"
+                                                                                    />
+                                                                                    {workTaskForm.deadline && (
+                                                                                        <p className="text-[10px] font-black text-cyan-400 mt-1.5 ml-1">
+                                                                                            Hiển thị: {formatDeadlineAmPm(workTaskForm.deadline)}
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="pt-2">
+                                                                                <button
+                                                                                    type="submit"
+                                                                                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-2xl font-black text-sm shadow-xl shadow-cyan-500/25 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                                                                                >
+                                                                                    <CheckCircleIcon size={18} /> Lưu công việc
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>,
+                                                            document.body
+                                                        )}
+
+                                                        {/* TAB MODAL PHẦN THƯỞNG (PORTAL RA BODY ĐỂ KHÔNG BỊ CUỘN TRANG TRÊN PC) */}
+                                                        {showRewardModal && ReactDOM.createPortal(
+                                                            <div className="dark">
+                                                                <div className="fixed inset-0 z-[210] flex justify-center items-end sm:items-center p-0 sm:p-4">
+                                                                    <div className="absolute inset-0 bg-black/65 backdrop-blur-sm modal-overlay" onClick={() => setShowRewardModal(false)}></div>
+                                                                    <div className="w-full max-w-md bg-zinc-900 rounded-t-[2.25rem] sm:rounded-[2.5rem] shadow-2xl p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-zinc-800 z-10">
+                                                                        <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-5 sm:hidden shrink-0"></div>
+                                                                        <div className="flex justify-between items-center mb-5 shrink-0">
+                                                                            <h2 className="text-xl font-black text-amber-400 tracking-tight flex items-center gap-2">
+                                                                                <SparklesIcon size={20} />
+                                                                                <span>{rewardForm.editId ? 'Cập nhật Phần Thưởng' : 'Thêm Phần Thưởng'}</span>
+                                                                            </h2>
+                                                                            <button type="button" onClick={() => setShowRewardModal(false)} className="text-zinc-400 bg-zinc-800 p-2 rounded-full hover:bg-zinc-700 active:scale-90 transition-all">
+                                                                                <XIcon size={18} />
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <form onSubmit={handleSaveRewardModal} className="overflow-y-auto no-scrollbar space-y-4 flex-1 pr-0.5">
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Tên phần thưởng</label>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={rewardForm.name}
+                                                                                    onChange={(e) => setRewardForm(p => ({ ...p, name: e.target.value }))}
+                                                                                    placeholder="VD: Chơi game 1 tiếng, Uống trà sữa..."
+                                                                                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-amber-400 rounded-2xl px-4 py-3 outline-none font-bold text-sm text-zinc-100 transition-all"
+                                                                                    required
+                                                                                />
+                                                                            </div>
+
+                                                                            <div>
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">
+                                                                                    Điều kiện mở khóa (Chọn các việc phải xong)
+                                                                                </label>
+                                                                                {allNormalTasks.length === 0 ? (
+                                                                                    <div className="p-4 rounded-2xl bg-zinc-950 border border-dashed border-zinc-800 text-xs text-zinc-500 italic text-center">
+                                                                                        Hôm nay chưa có công việc nào. Nếu không chọn, phần thưởng sẽ mở khi đạt ≥80% hoặc xong hết việc Must.
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="space-y-1.5 max-h-56 overflow-y-auto no-scrollbar bg-zinc-950 p-2.5 rounded-2xl border border-zinc-800">
+                                                                                        {allNormalTasks.map(nt => {
+                                                                                            const cleanTaskName = nt.tMeta.cleanText;
+                                                                                            const isSelected = (rewardForm.reqTasks || []).includes(cleanTaskName);
+                                                                                            const pBadge = nt.priority === 'must'
+                                                                                                ? 'text-red-400 border-red-500/30 bg-red-500/10'
+                                                                                                : nt.priority === 'should'
+                                                                                                    ? 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                                                                                                    : 'text-zinc-400 border-zinc-700 bg-zinc-800';
+                                                                                            return (
+                                                                                                <button
+                                                                                                    key={nt.id}
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        setRewardForm(prev => {
+                                                                                                            const cur = prev.reqTasks || [];
+                                                                                                            const next = cur.includes(cleanTaskName)
+                                                                                                                ? cur.filter(x => x !== cleanTaskName)
+                                                                                                                : [...cur, cleanTaskName];
+                                                                                                            return { ...prev, reqTasks: next };
+                                                                                                        });
+                                                                                                    }}
+                                                                                                    className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition-all active:scale-[0.99] ${
+                                                                                                        isSelected
+                                                                                                            ? 'bg-amber-500/15 border-amber-400/60 text-amber-100'
+                                                                                                            : 'bg-zinc-900/70 border-zinc-800/80 text-zinc-300 hover:bg-zinc-900'
+                                                                                                    }`}
+                                                                                                >
+                                                                                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                                                                        <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
+                                                                                                            isSelected ? 'bg-amber-400 border-amber-400 text-zinc-950' : 'border-zinc-600'
+                                                                                                        }`}>
+                                                                                                            {isSelected && <CheckIcon size={11} strokeWidth={3} />}
+                                                                                                        </div>
+                                                                                                        <span className="text-xs font-bold truncate">{cleanTaskName}</span>
+                                                                                                    </div>
+                                                                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border shrink-0 ${pBadge}`}>
+                                                                                                        {nt.priority}
+                                                                                                    </span>
+                                                                                                </button>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+
+                                                                            <div className="pt-2">
+                                                                                <button
+                                                                                    type="submit"
+                                                                                    className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-zinc-950 rounded-2xl font-black text-sm shadow-xl shadow-amber-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                                                                                >
+                                                                                    <CheckCircleIcon size={18} /> Lưu phần thưởng
+                                                                                </button>
+                                                                            </div>
+                                                                        </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>,
+                                                            document.body
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* CỘT PHẢI: CHÚ Ý & SỔ NHÁP ĐÓNG GÁY FIELD NOTES */}
@@ -2922,20 +3825,32 @@
                                                             ))}
                                                         </div>
                                                     )}
-                                                    <div className="flex items-center w-full bg-zinc-950/90 border border-red-500/30 rounded-2xl focus-within:border-red-400 transition-all shadow-inner overflow-hidden">
+                                                    <form
+                                                        onSubmit={(e) => {
+                                                            e.preventDefault();
+                                                            const inp = e.currentTarget.querySelector('#input-urgent');
+                                                            if (inp && inp.value.trim()) {
+                                                                handleAddUrgent(inp.value);
+                                                                inp.value = '';
+                                                            }
+                                                        }}
+                                                        className="flex items-center w-full bg-zinc-950/90 border border-red-500/30 rounded-2xl focus-within:border-red-400 transition-all shadow-inner overflow-hidden pr-1.5"
+                                                    >
                                                         <input
                                                             id="input-urgent"
                                                             type="text"
-                                                            placeholder="Nhập chú ý rồi nhấn Enter..."
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter' && e.target.value.trim()) {
-                                                                    handleAddUrgent(e.target.value);
-                                                                    e.target.value = '';
-                                                                }
-                                                            }}
+                                                            enterKeyHint="send"
+                                                            placeholder="Nhập chú ý..."
                                                             className="flex-1 w-full bg-transparent px-4 py-3.5 outline-none text-sm font-bold text-zinc-100 placeholder-red-400/40"
                                                         />
-                                                    </div>
+                                                        <button
+                                                            type="submit"
+                                                            className="w-9 h-9 rounded-xl bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white flex items-center justify-center transition-all active:scale-90 shrink-0"
+                                                            title="Thêm chú ý"
+                                                        >
+                                                            <SendIcon size={15} />
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             )}
 
