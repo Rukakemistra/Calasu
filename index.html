@@ -981,6 +981,13 @@
 
                 const findPreviousExerciseHistory = (exerciseName, currentDateKey, limit = 2) => {
                     if (!exerciseName?.trim() || !workoutsByDate) return null;
+                    const normalizeExName = (str) => String(str || '')
+                        .replace(/\s*\([^)]*\)/g, '')
+                        .replace(/(?:^|\s)\d+\s*[xX*×]\s*[\d~.\-]+/g, '')
+                        .trim()
+                        .toLowerCase();
+                    const targetBaseName = normalizeExName(exerciseName);
+                    if (!targetBaseName) return null;
                     const cNum = limit && limit <= 2 ? parseDateToNumber(currentDateKey) : 99999999;
                     const pastDates = Object.keys(workoutsByDate)
                         .filter(key => (limit && limit <= 2 ? parseDateToNumber(key) < cNum : true))
@@ -989,13 +996,13 @@
                     for (const d of pastDates) {
                         const wOut = workoutsByDate[d];
                         if (!wOut || !wOut.exercises) continue;
-                        const ex = wOut.exercises.find(e => e?.name?.toLowerCase().trim() === exerciseName.toLowerCase().trim());
+                        const ex = wOut.exercises.find(e => normalizeExName(e?.name) === targetBaseName);
                         if (ex) {
                             const hasValidSets = (ex.sets || []).some(s => (s.weight && s.weight.trim() !== '') || (s.reps && s.reps.trim() !== ''));
                             const hasRaw = ex.rawText && ex.rawText.trim() !== '' && ex.rawText.trim().toUpperCase() !== 'X';
                             const hasNote = ex.note && ex.note.trim() !== '';
                             if (hasRaw || hasValidSets || hasNote) {
-                                histories.push({ dateStr: d, sets: ex.sets || [], rawText: ex.rawText || '', note: ex.note || '' });
+                                histories.push({ dateStr: d, workoutType: wOut.type || '', sets: ex.sets || [], rawText: ex.rawText || '', note: ex.note || '' });
                                 if (limit && histories.length >= limit) break;
                             }
                         }
@@ -1164,6 +1171,26 @@
                         timeSlots = order.filter(o => found.has(o));
                     }
 
+                    let blocks = null;
+                    let doneBlocks = 0;
+                    let weight = null;
+
+                    const blockMatch = str.match(/~(\d+)(?:\/(\d+))?b(?=\s|$)/i);
+                    if (blockMatch) {
+                        if (blockMatch[2] !== undefined) {
+                            doneBlocks = parseInt(blockMatch[1], 10);
+                            blocks = parseInt(blockMatch[2], 10);
+                        } else {
+                            blocks = parseInt(blockMatch[1], 10);
+                            doneBlocks = 0;
+                        }
+                    }
+
+                    const weightMatch = str.match(/\*([1-7])p(?=\s|$)/i);
+                    if (weightMatch) {
+                        weight = parseInt(weightMatch[1], 10);
+                    }
+
                     const durMatch = str.match(/~(\d+)m(?=\s|$)/i);
                     if (durMatch) {
                         duration = parseInt(durMatch[1], 10);
@@ -1186,6 +1213,8 @@
                     const cleanText = str
                         .replace(/#(Study|Growth|Life|Reward)(?=\s|$)/gi, '')
                         .replace(/@(Morning|Afternoon|Evening)(?=\s|$)/gi, '')
+                        .replace(/~\d+(?:\/\d+)?b(?=\s|$)/gi, '')
+                        .replace(/\*[1-7]p(?=\s|$)/gi, '')
                         .replace(/~\d+m(?=\s|$)/gi, '')
                         .replace(/!([01]?\d|2[0-3]):([0-5]\d)(?=\s|$)/g, '')
                         .replace(/!Late(?=\s|$)/gi, '')
@@ -1199,6 +1228,9 @@
                         isReward,
                         timeSlots,
                         timeSlot: timeSlots[0] || null,
+                        blocks,
+                        doneBlocks,
+                        weight,
                         duration,
                         deadline,
                         isLate,
@@ -1243,14 +1275,20 @@
                         .map(entry => entry.item);
                 };
 
+                const [blockSelectModal, setBlockSelectModal] = useState(null);
+
                 const openAddWorkTaskModal = (defaultPriority = 'must') => {
+                    const defWeight = defaultPriority === 'must' ? 3 : defaultPriority === 'should' ? 2 : 1;
                     setWorkTaskForm({
                         editId: null,
                         originPriority: defaultPriority,
                         name: '',
                         priority: defaultPriority,
+                        weight: defWeight,
                         category: 'Study',
                         timeSlots: [],
+                        blocks: '',
+                        doneBlocks: 0,
                         duration: '',
                         deadline: '',
                         isLate: false
@@ -1260,13 +1298,17 @@
 
                 const openEditWorkTaskModal = (cat, task) => {
                     const meta = parseTaskText(task.text);
+                    const defWeight = cat === 'must' ? 3 : cat === 'should' ? 2 : 1;
                     setWorkTaskForm({
                         editId: task.id,
                         originPriority: cat,
                         name: meta.cleanText,
                         priority: cat,
+                        weight: meta.weight || defWeight,
                         category: (meta.category && meta.category !== 'Reward') ? meta.category : 'Study',
                         timeSlots: meta.timeSlots || [],
+                        blocks: meta.blocks ? String(meta.blocks) : '',
+                        doneBlocks: meta.doneBlocks || 0,
                         duration: meta.duration ? String(meta.duration) : '',
                         deadline: meta.deadline || '',
                         isLate: meta.isLate
@@ -1283,11 +1325,14 @@
                         return;
                     }
                     const parts = [cleanName];
-                    if (workTaskForm.category) parts.push(`#${workTaskForm.category}`);
+                    const wVal = parseInt(workTaskForm.weight, 10) || (workTaskForm.priority === 'must' ? 3 : workTaskForm.priority === 'should' ? 2 : 1);
+                    parts.push(`*${Math.min(7, Math.max(1, wVal))}p`);
                     const order = ['Morning', 'Afternoon', 'Evening'];
                     order.filter(t => (workTaskForm.timeSlots || []).includes(t)).forEach(t => parts.push(`@${t}`));
-                    if (workTaskForm.duration && parseInt(workTaskForm.duration, 10) > 0) {
-                        parts.push(`~${parseInt(workTaskForm.duration, 10)}m`);
+                    if (workTaskForm.blocks && parseInt(workTaskForm.blocks, 10) > 0) {
+                        const totalB = parseInt(workTaskForm.blocks, 10);
+                        const doneB = Math.min(totalB, Math.max(0, parseInt(workTaskForm.doneBlocks, 10) || 0));
+                        parts.push(doneB > 0 ? `~${doneB}/${totalB}b` : `~${totalB}b`);
                     }
                     if (workTaskForm.deadline) {
                         parts.push(`!${workTaskForm.deadline}`);
@@ -1396,24 +1441,38 @@
                     return nowMins > dlMins || (nowMins === dlMins && workNow.getSeconds() > 0);
                 };
 
-                // Hàm tính điểm hiệu suất trọng số: Must = 3đ, Should = 2đ, Can = 1đ (Lọc bỏ #Reward & tính 1/2 điểm cho task Late)
+                // Hàm tính điểm hiệu suất theo Hệ số điểm (1-7) & tỷ lệ Block hoàn thành
                 const calculateWorkStats = (dayTodo) => {
                     const filterNormal = (list) => (list || []).filter(t => !parseTaskText(t.text).isReward);
                     const must = filterNormal(dayTodo?.must);
                     const should = filterNormal(dayTodo?.should);
                     const can = filterNormal(dayTodo?.can);
 
-                    const calcEarned = (list, weight) => list.reduce((sum, t) => {
-                        if (!t.done) return sum;
+                    const calcTotalPts = (list, defWeight) => list.reduce((sum, t) => {
                         const meta = parseTaskText(t.text);
-                        return sum + (meta.isLate ? weight * 0.5 : weight);
+                        return sum + (meta.weight || defWeight);
+                    }, 0);
+
+                    const calcEarned = (list, defWeight) => list.reduce((sum, t) => {
+                        const meta = parseTaskText(t.text);
+                        const w = meta.weight || defWeight;
+                        if (meta.blocks && meta.blocks > 0) {
+                            const doneB = t.done
+                                ? (meta.doneBlocks > 0 ? Math.min(meta.blocks, meta.doneBlocks) : meta.blocks)
+                                : Math.min(meta.blocks, meta.doneBlocks || 0);
+                            if (doneB <= 0) return sum;
+                            const pts = w * (doneB / meta.blocks);
+                            return sum + (meta.isLate ? pts * 0.5 : pts);
+                        }
+                        if (!t.done) return sum;
+                        return sum + (meta.isLate ? w * 0.5 : w);
                     }, 0);
 
                     const mustDone = must.filter(t => t.done).length;
                     const shouldDone = should.filter(t => t.done).length;
                     const canDone = can.filter(t => t.done).length;
 
-                    const totalPoints = (must.length * 3) + (should.length * 2) + (can.length * 1);
+                    const totalPoints = calcTotalPts(must, 3) + calcTotalPts(should, 2) + calcTotalPts(can, 1);
                     const rawEarned = calcEarned(must, 3) + calcEarned(should, 2) + calcEarned(can, 1);
                     const earnedPoints = Number(cleanNum(rawEarned));
                     const totalTasks = must.length + should.length + can.length;
@@ -1549,8 +1608,69 @@
                     });
                 };
 
+                const handleConfirmTaskBlocks = (category, taskId, completedBlocks, totalBlocks, forceLateMakeup = false) => {
+                    const dKey = formatDate(selectedDate);
+                    setTodoCache(prev => {
+                        const curr = prev[dKey] || { must: [], should: [], can: [] };
+                        let becameDone = false;
+                        let markedLate = false;
+                        const nData = {
+                            ...curr,
+                            [category]: (curr[category] || []).map(t => {
+                                if (t.id === taskId) {
+                                    const nextDone = completedBlocks > 0;
+                                    becameDone = nextDone;
+                                    let nextText = String(t.text || '').trim();
+                                    const meta = parseTaskText(nextText);
+                                    const isOverdueNow = forceLateMakeup || checkTaskOverdue(meta.deadline, false, selectedDate);
+
+                                    nextText = nextText.replace(/~\d+(?:\/\d+)?b(?=\s|$)/gi, '').replace(/\s+/g, ' ').trim();
+                                    nextText = `${nextText} ${completedBlocks > 0 ? `~${completedBlocks}/${totalBlocks}b` : `~${totalBlocks}b`}`.trim();
+
+                                    if (nextDone) {
+                                        if (isOverdueNow && !meta.isLate) {
+                                            nextText = `${nextText} !Late`.trim();
+                                            markedLate = true;
+                                        }
+                                    } else {
+                                        nextText = nextText.replace(/\s*!Late(?=\s|$)/gi, '').trim();
+                                    }
+                                    return { ...t, done: nextDone, text: nextText };
+                                }
+                                return t;
+                            })
+                        };
+                        if (becameDone && focusTaskId === taskId && completedBlocks >= totalBlocks) {
+                            setFocusTaskId(null);
+                            showToast('🎯 Đã giải quyết gọn mục tiêu tâm điểm!', 'success');
+                        } else if (becameDone && markedLate) {
+                            showToast('⚠️ Đã ghi nhận làm bù (+1/2 điểm)!', 'error');
+                        }
+                        scheduleTodoSync(nData, dKey);
+                        return { ...prev, [dKey]: nData };
+                    });
+                    setBlockSelectModal(null);
+                };
+
                 const handleToggleTodo = (category, taskId, forceLateMakeup = false) => {
                     const dKey = formatDate(selectedDate);
+                    const currDay = todoCache[dKey] || { must: [], should: [], can: [] };
+                    const targetTask = (currDay[category] || []).find(t => t.id === taskId);
+                    if (targetTask) {
+                        const tMeta = parseTaskText(targetTask.text);
+                        if (tMeta.blocks && tMeta.blocks > 0) {
+                            setBlockSelectModal({
+                                category,
+                                task: targetTask,
+                                cleanName: tMeta.cleanText,
+                                blocks: tMeta.blocks,
+                                doneBlocks: targetTask.done ? (tMeta.doneBlocks > 0 ? tMeta.doneBlocks : tMeta.blocks) : (tMeta.doneBlocks || 0),
+                                isOverdue: forceLateMakeup || checkTaskOverdue(tMeta.deadline, false, selectedDate)
+                            });
+                            return;
+                        }
+                    }
+
                     setTodoCache(prev => {
                         const curr = prev[dKey] || { must: [], should: [], can: [] };
                         let becameDone = false;
@@ -3291,9 +3411,9 @@
                                                                                                     </span>
                                                                                                 )}
 
-                                                                                                {tMeta.duration && (
-                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums inline-flex items-center gap-1 bg-teal-500/10 text-teal-300 border-teal-500/25 shrink-0 ${t.done ? 'opacity-50' : ''}`}>
-                                                                                                        <TimerIcon size={10} /> {tMeta.duration}p
+                                                                                                {tMeta.blocks > 0 && (
+                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tabular-nums inline-flex items-center gap-1 bg-teal-500/10 text-teal-300 border-teal-500/25 shrink-0 ${t.done && tMeta.doneBlocks >= tMeta.blocks ? 'opacity-55' : ''}`}>
+                                                                                                        <TimerIcon size={10} /> {(t.done || tMeta.doneBlocks > 0) ? `${tMeta.doneBlocks || tMeta.blocks}/${tMeta.blocks} block` : `${tMeta.blocks} block`}
                                                                                                     </span>
                                                                                                 )}
 
@@ -3304,12 +3424,6 @@
                                                                                                             : 'bg-zinc-800/90 text-zinc-300 border-zinc-700'
                                                                                                     } ${t.done ? 'opacity-50' : ''}`}>
                                                                                                         <ClockIcon size={10} /> {formatDeadlineAmPm(tMeta.deadline)}
-                                                                                                    </span>
-                                                                                                )}
-
-                                                                                                {tMeta.category && tMeta.category !== 'Reward' && (
-                                                                                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-black tracking-wide shrink-0 ${catPillStyle} ${t.done ? 'opacity-50' : ''}`}>
-                                                                                                        {tMeta.category}
                                                                                                     </span>
                                                                                                 )}
 
@@ -3642,24 +3756,20 @@
                                                                             </div>
 
                                                                             <div>
-                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Phân loại</label>
-                                                                                <div className="grid grid-cols-3 gap-2">
-                                                                                    {[
-                                                                                        { id: 'Study', active: 'bg-indigo-500 text-white border-transparent shadow-md shadow-indigo-500/25' },
-                                                                                        { id: 'Growth', active: 'bg-emerald-500 text-white border-transparent shadow-md shadow-emerald-500/25' },
-                                                                                        { id: 'Life', active: 'bg-sky-500 text-white border-transparent shadow-md shadow-sky-500/25' }
-                                                                                    ].map(c => (
+                                                                                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Hệ số điểm (1 - 7)</label>
+                                                                                <div className="grid grid-cols-7 gap-1.5">
+                                                                                    {[1, 2, 3, 4, 5, 6, 7].map(w => (
                                                                                         <button
-                                                                                            key={c.id}
+                                                                                            key={w}
                                                                                             type="button"
-                                                                                            onClick={() => setWorkTaskForm(prev => ({ ...prev, category: c.id }))}
-                                                                                            className={`py-2.5 rounded-xl text-xs font-black tracking-wide border transition-all active:scale-95 ${
-                                                                                                workTaskForm.category === c.id
-                                                                                                    ? c.active
+                                                                                            onClick={() => setWorkTaskForm(prev => ({ ...prev, weight: w }))}
+                                                                                            className={`py-2.5 rounded-xl text-xs font-black tabular-nums border transition-all active:scale-95 ${
+                                                                                                Number(workTaskForm.weight) === w
+                                                                                                    ? 'bg-cyan-500 text-zinc-950 border-cyan-400 shadow-md shadow-cyan-500/25'
                                                                                                     : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
                                                                                             }`}
                                                                                         >
-                                                                                            {c.id}
+                                                                                            {w}
                                                                                         </button>
                                                                                     ))}
                                                                                 </div>
@@ -3701,28 +3811,28 @@
 
                                                                             <div className="grid grid-cols-2 gap-3">
                                                                                 <div>
-                                                                                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Duration (Phút)</label>
+                                                                                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 ml-1">Duration (Số Block)</label>
                                                                                     <input
                                                                                         type="number"
                                                                                         min="1"
-                                                                                        value={workTaskForm.duration}
-                                                                                        onChange={(e) => setWorkTaskForm(p => ({ ...p, duration: e.target.value }))}
-                                                                                        placeholder="VD: 45"
+                                                                                        value={workTaskForm.blocks || ''}
+                                                                                        onChange={(e) => setWorkTaskForm(p => ({ ...p, blocks: e.target.value }))}
+                                                                                        placeholder="VD: 3"
                                                                                         className="w-full bg-zinc-950 border border-zinc-800 focus:border-teal-400 rounded-xl px-3.5 py-2.5 outline-none font-bold text-sm text-zinc-100"
                                                                                     />
                                                                                     <div className="flex flex-wrap gap-1 mt-1.5">
-                                                                                        {[15, 30, 45, 60, 90, 120].map(m => (
+                                                                                        {[1, 2, 3, 4, 5, 6].map(b => (
                                                                                             <button
-                                                                                                key={m}
+                                                                                                key={b}
                                                                                                 type="button"
-                                                                                                onClick={() => setWorkTaskForm(p => ({ ...p, duration: String(p.duration) === String(m) ? '' : String(m) }))}
+                                                                                                onClick={() => setWorkTaskForm(p => ({ ...p, blocks: String(p.blocks) === String(b) ? '' : String(b) }))}
                                                                                                 className={`px-2 py-0.5 rounded-lg text-[10px] font-black border transition-all ${
-                                                                                                    String(workTaskForm.duration) === String(m)
+                                                                                                    String(workTaskForm.blocks) === String(b)
                                                                                                         ? 'bg-teal-500 text-zinc-950 border-teal-400'
                                                                                                         : 'bg-zinc-950 text-zinc-400 border-zinc-800'
                                                                                                 }`}
                                                                                             >
-                                                                                                {m}p
+                                                                                                {b}B
                                                                                             </button>
                                                                                         ))}
                                                                                     </div>
@@ -3764,6 +3874,51 @@
                                                                                 </button>
                                                                             </div>
                                                                         </form>
+                                                                    </div>
+                                                                </div>
+                                                            </div>,
+                                                            document.body
+                                                        )}
+
+                                                        {blockSelectModal && ReactDOM.createPortal(
+                                                            <div className="dark">
+                                                                <div className="fixed inset-0 z-[220] flex justify-center items-center p-4" onClick={() => setBlockSelectModal(null)}>
+                                                                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm modal-overlay"></div>
+                                                                    <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-[2rem] p-6 relative z-10 shadow-2xl space-y-4 animate-[fadeScale_0.2s_ease-out]">
+                                                                        <div className="flex justify-between items-start gap-2">
+                                                                            <div>
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest text-teal-400 block mb-1">Ghi nhận tiến độ Block</span>
+                                                                                <h3 className="text-base font-black text-zinc-100 leading-snug break-words">{blockSelectModal.cleanName}</h3>
+                                                                            </div>
+                                                                            <button type="button" onClick={() => setBlockSelectModal(null)} className="p-2 rounded-full bg-zinc-800 text-zinc-400 hover:text-white active:scale-90 transition-all shrink-0">
+                                                                                <XIcon size={16} />
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Chọn số block đã hoàn thành (Tổng: {blockSelectModal.blocks})</label>
+                                                                            <div className="grid grid-cols-4 gap-2">
+                                                                                {Array.from({ length: blockSelectModal.blocks + 1 }, (_, idx) => idx).map(bNum => {
+                                                                                    const isCurr = blockSelectModal.doneBlocks === bNum;
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={bNum}
+                                                                                            type="button"
+                                                                                            onClick={() => handleConfirmTaskBlocks(blockSelectModal.category, blockSelectModal.task.id, bNum, blockSelectModal.blocks, blockSelectModal.isOverdue)}
+                                                                                            className={`py-3 rounded-xl text-sm font-black tabular-nums border transition-all active:scale-95 ${
+                                                                                                isCurr
+                                                                                                    ? 'bg-teal-500 text-zinc-950 border-teal-400 shadow-lg shadow-teal-500/25'
+                                                                                                    : bNum === 0
+                                                                                                        ? 'bg-zinc-950 text-zinc-500 border-zinc-800 hover:text-red-400'
+                                                                                                        : 'bg-zinc-950 text-zinc-200 border-zinc-800 hover:border-teal-500/50'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {bNum === 0 ? '0 (Bỏ)' : `${bNum}/${blockSelectModal.blocks}`}
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>,
@@ -7394,7 +7549,7 @@
                                             <UploadIcon size={24} className="mb-1" />
                                             <span className="text-xs uppercase tracking-widest">Đẩy lên Sheet</span>
                                         </button>
-                                        <button onClick={() => { setIsAutoSyncEnabled(true); setHasUnsavedChanges(false); handleSyncPull(); }} disabled={isSyncing} className="py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-emerald-500/30">
+                                        <button onClick={() => { setHasUnsavedChanges(false); handleSyncPull(); }} disabled={isSyncing} className="py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95 shadow-xl shadow-emerald-500/30">
                                             <DownloadIcon size={24} className="mb-1" />
                                             <span className="text-xs uppercase tracking-widest">Tải từ Sheet</span>
                                         </button>
