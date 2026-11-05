@@ -3,7 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Calasu Life Tracker</title>
+    <title>C.L.S</title>
+    <meta name="theme-color" content="#09090b">
+    <meta name="cls-build" content="d54a6a102b">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <script>
+        // === CÀI THÀNH APP: đăng ký file nhớ sẵn (sw.js) và báo khi trên GitHub có bản mới ===
+        // Chỉ chạy trên web thật; mở file trên máy để thử thì phần này tự bỏ qua.
+        (function () {
+            var secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+            if (!('serviceWorker' in navigator) || !secure) return;
+            navigator.serviceWorker.register('./sw.js').catch(function () {});
+            var PAGE_CACHE = 'cls-trang'; // phải trùng tên trong sw.js
+            function showUpdateBar() {
+                if (document.getElementById('cls-update-bar')) return;
+                var bar = document.createElement('div');
+                bar.id = 'cls-update-bar';
+                bar.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 16px;border-radius:999px;background:rgba(24,24,27,0.96);border:1px solid rgba(255,255,255,0.12);box-shadow:0 10px 30px rgba(0,0,0,0.45);font:600 13px "Plus Jakarta Sans",Inter,sans-serif;color:#f4f4f5;white-space:nowrap';
+                bar.innerHTML = '<span>Có bản mới</span>'
+                    + '<button type="button" data-act="later" style="border:0;background:transparent;color:#a1a1aa;font:inherit;padding:6px 8px;cursor:pointer">Để sau</button>'
+                    + '<button type="button" data-act="now" style="border:0;background:#fafafa;color:#09090b;font-family:inherit;font-weight:800;font-size:12px;padding:7px 14px;border-radius:999px;cursor:pointer">Cập nhật</button>';
+                bar.addEventListener('click', function (ev) {
+                    var act = ev.target && ev.target.getAttribute('data-act');
+                    if (act === 'now') location.reload();
+                    if (act === 'later') bar.remove();
+                });
+                document.body.appendChild(bar);
+            }
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    var mineMeta = document.querySelector('meta[name="cls-build"]');
+                    var mine = mineMeta ? mineMeta.content : '';
+                    var pageUrl = new URL('./', location.href).href;
+                    fetch(pageUrl + '?cls-check=' + Date.now(), { cache: 'no-store' })
+                        .then(function (r) { return r.ok ? r.text() : null; })
+                        .then(function (html) {
+                            if (!html) return;
+                            var m = html.match(/<meta name="cls-build" content="([^"]+)"/);
+                            if (!m || m[1] === mine) return;
+                            return caches.open(PAGE_CACHE)
+                                .then(function (c) { return c.put(pageUrl, new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })); })
+                                .then(showUpdateBar);
+                        })
+                        .catch(function () {});
+                }, 1500);
+            });
+        })();
+    </script>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -844,6 +892,39 @@ try {
       }, 400);
       return () => clearTimeout(t);
     }, [statsByDate]);
+    const pendingSaveRef = useRef({ values: {}, changedAt: {} });
+    {
+      const nowVals = { macro_foods: foodsByDate, macro_meal_notes: mealNotesByDate, macro_sleeps: sleepByDate, macro_naps: napByDate, macro_sleep_notes: sleepNotesByDate, macro_workouts: workoutsByDate, macro_cardio: cardioByDate, workout_templates: workoutTemplates, macro_stats: statsByDate };
+      const ps = pendingSaveRef.current;
+      Object.keys(nowVals).forEach((k) => {
+        if (ps.values[k] !== nowVals[k]) {
+          if (k in ps.values) ps.changedAt[k] = Date.now();
+          ps.values[k] = nowVals[k];
+        }
+      });
+    }
+    useEffect(() => {
+      const flush = () => {
+        const ps = pendingSaveRef.current;
+        const now = Date.now();
+        Object.keys(ps.changedAt).forEach((k) => {
+          if (now - ps.changedAt[k] > 1500) return;
+          try {
+            localStorage.setItem(k, JSON.stringify(ps.values[k]));
+          } catch (e) {
+          }
+        });
+      };
+      const onVisibility = () => {
+        if (document.visibilityState === "hidden") flush();
+      };
+      window.addEventListener("pagehide", flush);
+      document.addEventListener("visibilitychange", onVisibility);
+      return () => {
+        window.removeEventListener("pagehide", flush);
+        document.removeEventListener("visibilitychange", onVisibility);
+      };
+    }, []);
     const [toast, setToast] = useState(null);
     const showToast = (msg, type = "success") => {
       const cleanMsg = String(msg || "").replace(/^([✅❌⚠️✨☁️🏃🗑️📓🎵🎯🎉⏭️💭]+\s*)+/u, "").trim();
@@ -854,7 +935,7 @@ try {
     const [musicNoteBubble, setMusicNoteBubble] = useState(null);
     const defaultScriptUrl = "https://script.google.com/macros/s/AKfycbzSWoB0-c_2pqBQXjsik3u1ajAtQIRZlYpxtWy95OJpaKiwLQjn4AOOiAM7sY1swad7/exec";
     const oldDefaultScriptUrls = ["https://script.google.com/macros/s/AKfycbwZUtdDdAz_WclwppPIfmQsNU5J-uM1EDSTbyRBH-YgMdwEoQXGAx97YWwMN_4iJKCR/exec"];
-    const defaultGeminiKey = "AQ.Ab8RN6JwPEjMvaLfjQ54z"+"1uldTge-aqNjAc_m1-n0dyeeTTMVw";
+    const defaultGeminiKey = "AQ.Ab8RN6JwPEjMvaLfjQ54" + "z1uldTge-aqNjAc_m1-n0dyeeTTMVw";
     const [showSettings, setShowSettings] = useState(false);
     const [gasUrl, setGasUrl] = useState(() => {
       const saved = (localStorage.getItem("gas_url") || "").trim();
