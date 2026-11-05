@@ -412,9 +412,57 @@ try {
     }
     return spotifyMetaPending[trackId];
   };
-  const SpotifyTrackFacade = ({ musicUrl, onPlay }) => {
+  const addGasKey = (url, key) => {
+    const k = String(key || "").trim();
+    if (!url || !k) return url;
+    return url + (url.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(k);
+  };
+  const SPOTIFY_ARTIST_RETRY_MS = 7 * 24 * 3600 * 1e3;
+  const spotifyArtistPending = {};
+  const spotifyArtistTried = /* @__PURE__ */ new Set();
+  let spotifyArtistPauseUntil = 0;
+  const getCachedSpotifyArtist = (trackId) => {
+    const c = spotifyMetaCache[trackId];
+    if (!c || typeof c.artist !== "string") return null;
+    if (c.artist === "" && Date.now() - (c.artistAt || 0) > SPOTIFY_ARTIST_RETRY_MS) return null;
+    return c.artist;
+  };
+  const fetchSpotifyArtist = (trackId, gasUrl, gasKey) => {
+    const cached = getCachedSpotifyArtist(trackId);
+    if (cached !== null) return Promise.resolve(cached);
+    if (!gasUrl || spotifyArtistTried.has(trackId) || Date.now() < spotifyArtistPauseUntil) return Promise.resolve(null);
+    if (!spotifyArtistPending[trackId]) {
+      spotifyArtistTried.add(trackId);
+      spotifyArtistPending[trackId] = fetch(addGasKey(gasUrl, gasKey), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ type: "SPOTIFY", id: trackId })
+      }).then((res) => res.json()).then((json) => {
+        if (json && json.status === "unauthorized") {
+          spotifyArtistTried.delete(trackId);
+          spotifyArtistPauseUntil = Date.now() + 3e4;
+          return null;
+        }
+        if (!json || json.type !== "SPOTIFY" || json.status !== "success") return null;
+        const artist = String(json.artist || "").trim();
+        if (spotifyMetaCache[trackId]) {
+          spotifyMetaCache[trackId] = { ...spotifyMetaCache[trackId], artist, artistAt: Date.now() };
+          try {
+            localStorage.setItem(SPOTIFY_META_KEY, JSON.stringify(spotifyMetaCache));
+          } catch (e) {
+          }
+        }
+        return artist;
+      }).catch(() => null).finally(() => {
+        delete spotifyArtistPending[trackId];
+      });
+    }
+    return spotifyArtistPending[trackId];
+  };
+  const SpotifyTrackFacade = ({ musicUrl, onPlay, gasUrl, gasKey }) => {
     const trackId = getSpotifyTrackId(musicUrl);
     const [meta, setMeta] = useState(() => trackId && spotifyMetaCache[trackId] || null);
+    const [artist, setArtist] = useState(() => trackId && getCachedSpotifyArtist(trackId) || "");
     const [status, setStatus] = useState(() => trackId && spotifyMetaCache[trackId] ? "done" : trackId && !spotifyMetaFailed.has(trackId) ? "loading" : "error");
     const [imgFailed, setImgFailed] = useState(false);
     useEffect(() => {
@@ -422,6 +470,7 @@ try {
         setStatus("error");
         return;
       }
+      setArtist(getCachedSpotifyArtist(trackId) || "");
       const cached = spotifyMetaCache[trackId];
       if (cached) {
         setMeta(cached);
@@ -449,6 +498,16 @@ try {
         alive = false;
       };
     }, [trackId]);
+    useEffect(() => {
+      if (!trackId || status !== "done") return;
+      let alive = true;
+      fetchSpotifyArtist(trackId, gasUrl, gasKey).then((a) => {
+        if (alive && a) setArtist(a);
+      });
+      return () => {
+        alive = false;
+      };
+    }, [trackId, status, gasUrl, gasKey]);
     const hasMeta = status === "done" && meta && meta.title;
     const isLoading = status === "loading";
     const title = hasMeta ? meta.title : "Spotify Track";
@@ -464,7 +523,7 @@ try {
         className: "w-full min-h-[60px] rounded-2xl bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/[0.08] p-2 pr-2.5 flex items-center gap-3 cursor-pointer shadow-sm active:scale-[0.98] transition-all"
       },
       showCover ? React.createElement("img", { src: meta.thumb, alt: "", loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-11 h-11 rounded-xl object-cover shrink-0 shadow-md shadow-black/40" }) : isLoading ? React.createElement("div", { className: "w-11 h-11 rounded-xl bg-white/10 animate-pulse shrink-0" }) : React.createElement("div", { className: "w-11 h-11 rounded-xl bg-white/10 text-zinc-200 flex items-center justify-center shrink-0" }, React.createElement(MusicIcon, { size: 18, strokeWidth: 2.5 })),
-      isLoading ? React.createElement("div", { className: "flex-1 min-w-0 flex flex-col gap-1.5" }, React.createElement("div", { className: "h-3 w-3/4 rounded-full bg-white/15 animate-pulse" }), React.createElement("div", { className: "h-3 w-1/2 rounded-full bg-white/10 animate-pulse" })) : React.createElement("p", { className: "flex-1 min-w-0 text-[13px] leading-snug font-black text-zinc-50 line-clamp-2 break-words" }, title),
+      isLoading ? React.createElement("div", { className: "flex-1 min-w-0 flex flex-col gap-1.5" }, React.createElement("div", { className: "h-3 w-3/4 rounded-full bg-white/15 animate-pulse" }), React.createElement("div", { className: "h-3 w-1/2 rounded-full bg-white/10 animate-pulse" })) : React.createElement("div", { className: "flex-1 min-w-0 flex flex-col justify-center" }, React.createElement("p", { className: "text-[13px] leading-snug font-black text-zinc-50 line-clamp-2 break-words" }, title), hasMeta && artist && React.createElement("p", { className: "mt-0.5 text-[11px] leading-tight font-semibold text-zinc-400 truncate" }, artist)),
       React.createElement("span", { className: "w-9 h-9 rounded-full bg-white text-zinc-950 flex items-center justify-center shrink-0 shadow-md shadow-black/40" }, React.createElement("svg", { viewBox: "0 0 24 24", width: "16", height: "16", fill: "currentColor", className: "ml-0.5", "aria-hidden": "true" }, React.createElement("path", { d: "M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" })))
     );
   };
@@ -793,10 +852,14 @@ try {
     };
     const [secretBubble, setSecretBubble] = useState(null);
     const [musicNoteBubble, setMusicNoteBubble] = useState(null);
-    const defaultScriptUrl = "https://script.google.com/macros/s/AKfycbwZUtdDdAz_WclwppPIfmQsNU5J-uM1EDSTbyRBH-YgMdwEoQXGAx97YWwMN_4iJKCR/exec";
-    const defaultGeminiKey = "AQ.Ab8RN6JwPEjMv"+"aLfjQ54z1uldTge-aqNjAc_m1-n0dyeeTTMVw";
+    const defaultScriptUrl = "https://script.google.com/macros/s/AKfycbzSWoB0-c_2pqBQXjsik3u1ajAtQIRZlYpxtWy95OJpaKiwLQjn4AOOiAM7sY1swad7/exec";
+    const oldDefaultScriptUrls = ["https://script.google.com/macros/s/AKfycbwZUtdDdAz_WclwppPIfmQsNU5J-uM1EDSTbyRBH-YgMdwEoQXGAx97YWwMN_4iJKCR/exec"];
+    const defaultGeminiKey = "AQ.Ab8RN6JwPEjMvaLfjQ54z"+"1uldTge-aqNjAc_m1-n0dyeeTTMVw";
     const [showSettings, setShowSettings] = useState(false);
-    const [gasUrl, setGasUrl] = useState(() => localStorage.getItem("gas_url") || defaultScriptUrl);
+    const [gasUrl, setGasUrl] = useState(() => {
+      const saved = (localStorage.getItem("gas_url") || "").trim();
+      return !saved || oldDefaultScriptUrls.includes(saved) ? defaultScriptUrl : saved;
+    });
     const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem("gemini_api_key") || defaultGeminiKey);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
@@ -829,6 +892,42 @@ try {
     useEffect(() => {
       localStorage.setItem("gemini_api_key", geminiApiKey);
     }, [geminiApiKey]);
+    const [gasKey, setGasKey] = useState(() => {
+      try {
+        return localStorage.getItem("gas_key") || "";
+      } catch (e) {
+        return "";
+      }
+    });
+    const [showGasKey, setShowGasKey] = useState(false);
+    useEffect(() => {
+      try {
+        localStorage.setItem("gas_key", gasKey);
+      } catch (e) {
+      }
+    }, [gasKey]);
+    const withGasKey = (url) => addGasKey(url, gasKey);
+    const keyWarnAtRef = useRef(0);
+    const notifyKeyProblem = (force = false) => {
+      const now = Date.now();
+      if (!force && now - keyWarnAtRef.current < 8e3) return;
+      keyWarnAtRef.current = now;
+      showToast(gasKey.trim() ? "Sai mật mã đồng bộ! Bấm nút đám mây để nhập lại" : "Chưa nhập mật mã đồng bộ! Bấm nút đám mây để nhập", "error");
+    };
+    const gasPost = async (body) => {
+      const res = await fetch(withGasKey(gasUrl), {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(body)
+      });
+      let json = null;
+      try {
+        json = await res.json();
+      } catch (e) {
+      }
+      if (json && json.status === "unauthorized") notifyKeyProblem();
+      return json;
+    };
     const [isAddingFood, setIsAddingFood] = useState(false);
     const [addingMeal, setAddingMeal] = useState("Sáng");
     const [entryMode, setEntryMode] = useState("quick");
@@ -1671,11 +1770,7 @@ try {
         if (!gasUrl) return;
         startSyncRing("push");
         try {
-          await fetch(gasUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ type: "TODO", date: dKey, data })
-          });
+          await gasPost({ type: "TODO", date: dKey, data });
         } catch (e) {
           console.error(e);
         } finally {
@@ -1714,8 +1809,9 @@ try {
         try {
           await Promise.all(missingDates.map(async (dKey) => {
             try {
-              const res = await fetch(`${gasUrl}?type=WORK&date=${dKey}`);
+              const res = await fetch(withGasKey(`${gasUrl}?type=WORK&date=${dKey}`));
               const json = await res.json();
+              if (json && json.status === "unauthorized") notifyKeyProblem();
               if (!isCancelled && json.status === "success" && json.data) {
                 if (json.data.todo) {
                   const td = json.data.todo;
@@ -1957,11 +2053,7 @@ try {
       if (!gasUrl) return;
       startSyncRing("push");
       try {
-        await fetch(gasUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ type: "URGENT_ADD", item: newItem })
-        });
+        await gasPost({ type: "URGENT_ADD", item: newItem });
       } catch (e) {
         console.error(e);
       } finally {
@@ -1973,11 +2065,7 @@ try {
       if (!gasUrl) return;
       startSyncRing("push");
       try {
-        await fetch(gasUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ type: "URGENT_DELETE", id })
-        });
+        await gasPost({ type: "URGENT_DELETE", id });
       } catch (e) {
         console.error(e);
       } finally {
@@ -1992,11 +2080,7 @@ try {
         if (!gasUrl) return;
         startSyncRing("push");
         try {
-          await fetch(gasUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ type: "SCRATCHPAD", text: val })
-          });
+          await gasPost({ type: "SCRATCHPAD", text: val });
         } catch (e) {
           console.error(e);
         } finally {
@@ -2110,10 +2194,12 @@ try {
         });
         formattedWorkouts.sort((a, b) => parseDateToNumber(a.date) - parseDateToNumber(b.date));
         const cardioPayload = Object.keys(cardioByDate).map((d) => ({ date: d, duration: cardioByDate[d]?.duration || "", note: cardioByDate[d]?.note || "" }));
-        const response = await fetch(gasUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ data: finalPayload, workoutsData: formattedWorkouts, cardioData: cardioPayload, statsData: statsPayload }) });
+        const response = await fetch(withGasKey(gasUrl), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ data: finalPayload, workoutsData: formattedWorkouts, cardioData: cardioPayload, statsData: statsPayload }) });
         const res = await response.json();
         if (res.status === "success") {
           if (!isSilent) showToast(`✅ Đã đồng bộ thành công!`, "success");
+        } else if (res.status === "unauthorized") {
+          notifyKeyProblem(!isSilent);
         } else {
           if (!isSilent) showToast("❌ Lỗi: " + res.error, "error");
         }
@@ -2143,8 +2229,9 @@ try {
         return s;
       };
       try {
-        const response = await fetch(targetUrl);
+        const response = await fetch(withGasKey(targetUrl));
         const data = await response.json();
+        if (data && data.status === "unauthorized") notifyKeyProblem(true);
         if (data.status === "success" && data.data) {
           if (data.data.workouts) {
             let newTemplates = {};
@@ -4752,7 +4839,7 @@ try {
             ), sDay && outIcon && React.createElement("span", { className: "h-7 px-2.5 rounded-full bg-slate-50 dark:bg-zinc-800/90 text-slate-600 dark:text-zinc-300 border border-slate-200/70 dark:border-zinc-700/80 flex items-center gap-1 text-[10px] font-bold shadow-sm" }, React.createElement(outIcon.Icon, { size: 12, className: outIcon.color }), React.createElement("span", null, outIcon.label)))), hasExtraMetrics && React.createElement("div", { className: "flex flex-wrap items-center gap-1.5 mb-3 relative z-10 shrink-0" }, Math.round(foodTotals.kcal) > 0 && React.createElement("div", { className: "bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[10px] font-bold" }, React.createElement("span", { className: "flex items-center gap-0.5" }, React.createElement(FlameIcon, { size: 11 }), " ", Math.round(foodTotals.kcal)), React.createElement("span", { className: "opacity-40" }, "•"), React.createElement("span", { className: "flex items-center gap-0.5" }, React.createElement(BeefIcon, { size: 11 }), " ", cleanNum(foodTotals.protein), "g")), sleepDay.length > 0 && React.createElement("div", { className: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-flex items-center gap-1 text-[10px] font-bold" }, React.createElement(MoonIcon, { size: 11 }), " ", sleepDay[sleepDay.length - 1].sleepTime, "–", sleepDay[sleepDay.length - 1].wakeTime), workDay && (() => {
               const wCol = getWorkoutColor(workDay.type);
               return React.createElement("div", { className: `${wCol.lightBg} ${wCol.text} px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 border ${wCol.border} border-opacity-30` }, React.createElement(DumbbellIcon, { size: 11 }), " ", workDay.type);
-            })()), sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && React.createElement("div", { className: "w-full relative z-20 mb-3 shrink-0", onClick: (e) => e.stopPropagation() }, activeSpotifyDays[dKey] ? React.createElement("div", { className: "rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-800" }, React.createElement("iframe", { src: getSpotifyEmbedUrl(sDay.musicUrl), width: "100%", height: "80", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })) : React.createElement(SpotifyTrackFacade, { musicUrl: sDay.musicUrl, onPlay: () => setActiveSpotifyDays((prev) => ({ ...prev, [dKey]: true })) })), React.createElement("div", { className: "w-full flex-1 flex flex-col justify-between gap-3 min-h-0 overflow-hidden" }, React.createElement("div", { className: "flex flex-col relative z-10 shrink-0" }, React.createElement("p", { className: `text-slate-600 dark:text-zinc-200 text-sm font-medium line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${sDay ? moodColor.twBorder : "border-slate-200 dark:border-zinc-700"}` }, '"', sDay?.summary || "Không có ghi chú", '"')), resolvedImgs && resolvedImgs.length > 0 && React.createElement("div", { className: "relative w-full flex-1 min-h-0 z-20 pointer-events-auto overflow-hidden" }, (() => {
+            })()), sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && React.createElement("div", { className: "w-full relative z-20 mb-3 shrink-0", onClick: (e) => e.stopPropagation() }, activeSpotifyDays[dKey] ? React.createElement("div", { className: "rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-800" }, React.createElement("iframe", { src: getSpotifyEmbedUrl(sDay.musicUrl), width: "100%", height: "80", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })) : React.createElement(SpotifyTrackFacade, { musicUrl: sDay.musicUrl, gasUrl, gasKey, onPlay: () => setActiveSpotifyDays((prev) => ({ ...prev, [dKey]: true })) })), React.createElement("div", { className: "w-full flex-1 flex flex-col justify-between gap-3 min-h-0 overflow-hidden" }, React.createElement("div", { className: "flex flex-col relative z-10 shrink-0" }, React.createElement("p", { className: `text-slate-600 dark:text-zinc-200 text-sm font-medium line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${sDay ? moodColor.twBorder : "border-slate-200 dark:border-zinc-700"}` }, '"', sDay?.summary || "Không có ghi chú", '"')), resolvedImgs && resolvedImgs.length > 0 && React.createElement("div", { className: "relative w-full flex-1 min-h-0 z-20 pointer-events-auto overflow-hidden" }, (() => {
               const imgs = resolvedImgs;
               const count = imgs.length;
               const safeLightboxList = imgs.map((u) => formatDriveImgUrl(u, 1600));
@@ -5493,7 +5580,7 @@ try {
     }, className: "w-full bg-transparent outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark]", required: true })), React.createElement("div", { className: "flex-1 bg-slate-50 dark:bg-zinc-800/50 p-3.5 rounded-2xl border border-slate-100 dark:border-zinc-700/50" }, React.createElement("label", { className: "block text-[9px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-1.5" }, "Đến ngày"), React.createElement("input", { type: "date", value: avgEndDate, onChange: (e) => {
       setAvgEndDate(e.target.value);
       setAvgPresetMode("custom");
-    }, className: "w-full bg-transparent outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark]", required: true }))), React.createElement("button", { type: "submit", className: "w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-black rounded-xl shadow-md shadow-blue-500/30 active:scale-95 transition-all" }, "Tính Toán")), avgResult && React.createElement("div", { className: "bg-slate-800 dark:bg-black p-5 rounded-[2rem] text-white shadow-inner border border-slate-700 dark:border-zinc-800 animate-[fadeScale_0.2s_ease-out]" }, React.createElement("p", { className: "text-xs font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-700 pb-3 flex items-center justify-between" }, React.createElement("span", null, "Kết quả (", appMode === "macro" ? avgResult.mDays : avgResult.sDays, " ngày có dl)"), React.createElement(CheckCircleIcon, { size: 16, className: "text-emerald-500" })), appMode === "macro" && React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1" }, "Kcal TB"), React.createElement("p", { className: "text-3xl font-black text-emerald-50" }, avgResult.kcal)), React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-black text-red-400 uppercase tracking-widest mb-1" }, "Protein TB"), React.createElement("p", { className: "text-3xl font-black text-red-50" }, avgResult.pro, React.createElement("span", { className: "text-sm ml-1" }, "g")))), appMode === "sleep" && React.createElement("div", { className: "space-y-4" }, React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Ngủ lúc"), React.createElement("span", { className: "text-xl font-black text-indigo-300" }, avgResult.sleep)), React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Dậy lúc"), React.createElement("span", { className: "text-xl font-black text-orange-300" }, avgResult.wake)), React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Thời lượng TB"), React.createElement("span", { className: "text-xl font-black text-emerald-400" }, formatDuration(avgResult.dur))))))), showSettings && React.createElement("div", { className: "fixed inset-0 z-[100] flex justify-center items-center p-4" }, React.createElement("div", { className: "absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm modal-overlay", onClick: () => setShowSettings(false) }), React.createElement("div", { className: "bg-white dark:bg-zinc-900 w-full max-w-md rounded-[2.5rem] shadow-2xl p-6 transition-colors relative z-10 bottom-sheet" }, React.createElement("div", { className: "flex justify-between items-center mb-8" }, React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight" }, React.createElement("div", { className: "p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl" }, React.createElement(CloudIcon, { className: "text-blue-500", size: 24 })), "Đồng bộ Dữ liệu"), React.createElement("button", { onClick: () => setShowSettings(false), className: "text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "space-y-6" }, React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 shadow-sm" }, React.createElement("label", { className: "block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3" }, "Link Apps Script (Web App URL)"), React.createElement("input", { type: "text", value: gasUrl, onChange: (e) => setGasUrl(e.target.value), placeholder: "https://script.google.com/macros/s/...", className: "w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-3.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" })), React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 shadow-sm" }, React.createElement("label", { className: "block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 14, className: "text-emerald-500" }), " Gemini API Key"), React.createElement("input", { type: "text", value: geminiApiKey, onChange: (e) => setGeminiApiKey(e.target.value), placeholder: "Nhập API Key để dùng AI...", className: "w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-3.5 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" })), React.createElement("div", { className: "grid grid-cols-2 gap-4 mt-2" }, React.createElement("button", { onClick: () => {
+    }, className: "w-full bg-transparent outline-none text-sm font-bold text-slate-800 dark:text-zinc-100 dark:[color-scheme:dark]", required: true }))), React.createElement("button", { type: "submit", className: "w-full py-3.5 bg-blue-500 hover:bg-blue-600 text-white font-black rounded-xl shadow-md shadow-blue-500/30 active:scale-95 transition-all" }, "Tính Toán")), avgResult && React.createElement("div", { className: "bg-slate-800 dark:bg-black p-5 rounded-[2rem] text-white shadow-inner border border-slate-700 dark:border-zinc-800 animate-[fadeScale_0.2s_ease-out]" }, React.createElement("p", { className: "text-xs font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-700 pb-3 flex items-center justify-between" }, React.createElement("span", null, "Kết quả (", appMode === "macro" ? avgResult.mDays : avgResult.sDays, " ngày có dl)"), React.createElement(CheckCircleIcon, { size: 16, className: "text-emerald-500" })), appMode === "macro" && React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1" }, "Kcal TB"), React.createElement("p", { className: "text-3xl font-black text-emerald-50" }, avgResult.kcal)), React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-black text-red-400 uppercase tracking-widest mb-1" }, "Protein TB"), React.createElement("p", { className: "text-3xl font-black text-red-50" }, avgResult.pro, React.createElement("span", { className: "text-sm ml-1" }, "g")))), appMode === "sleep" && React.createElement("div", { className: "space-y-4" }, React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Ngủ lúc"), React.createElement("span", { className: "text-xl font-black text-indigo-300" }, avgResult.sleep)), React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Dậy lúc"), React.createElement("span", { className: "text-xl font-black text-orange-300" }, avgResult.wake)), React.createElement("div", { className: "flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm" }, React.createElement("span", { className: "text-[11px] font-black text-slate-300 uppercase tracking-widest" }, "Thời lượng TB"), React.createElement("span", { className: "text-xl font-black text-emerald-400" }, formatDuration(avgResult.dur))))))), showSettings && React.createElement("div", { className: "fixed inset-0 z-[100] flex justify-center items-center p-4" }, React.createElement("div", { className: "absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm modal-overlay", onClick: () => setShowSettings(false) }), React.createElement("div", { className: "bg-white dark:bg-zinc-900 w-full max-w-md rounded-[2.5rem] shadow-2xl p-6 transition-colors relative z-10 bottom-sheet" }, React.createElement("div", { className: "flex justify-between items-center mb-8" }, React.createElement("h2", { className: "text-2xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 tracking-tight" }, React.createElement("div", { className: "p-2 bg-blue-50 dark:bg-blue-500/10 rounded-xl" }, React.createElement(CloudIcon, { className: "text-blue-500", size: 24 })), "Đồng bộ Dữ liệu"), React.createElement("button", { onClick: () => setShowSettings(false), className: "text-slate-400 bg-slate-100 dark:bg-zinc-800 p-2.5 rounded-full hover:bg-slate-200 dark:hover:bg-zinc-700 transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "space-y-6" }, React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 shadow-sm" }, React.createElement("label", { className: "block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3" }, "Link Apps Script (Web App URL)"), React.createElement("input", { type: "text", value: gasUrl, onChange: (e) => setGasUrl(e.target.value), placeholder: "https://script.google.com/macros/s/...", className: "w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-3.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" })), React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 shadow-sm" }, React.createElement("label", { className: "block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3" }, "Mật mã đồng bộ"), React.createElement("div", { className: "relative" }, React.createElement("input", { type: showGasKey ? "text" : "password", value: gasKey, onChange: (e) => setGasKey(e.target.value), placeholder: "Giống mật mã đặt trong Apps Script", autoComplete: "off", spellCheck: false, className: "w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl pl-4 pr-16 py-3.5 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" }), React.createElement("button", { type: "button", onClick: () => setShowGasKey((v) => !v), className: "absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-[11px] font-black text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-all" }, showGasKey ? "Ẩn" : "Hiện")), React.createElement("p", { className: "mt-2 text-[11px] font-semibold text-slate-400 dark:text-zinc-500" }, "Mỗi máy nhập một lần, web tự nhớ.")), React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800/50 p-5 rounded-[1.5rem] border border-slate-100 dark:border-zinc-700/50 shadow-sm" }, React.createElement("label", { className: "block text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 14, className: "text-emerald-500" }), " Gemini API Key"), React.createElement("input", { type: "text", value: geminiApiKey, onChange: (e) => setGeminiApiKey(e.target.value), placeholder: "Nhập API Key để dùng AI...", className: "w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-xl px-4 py-3.5 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 text-sm font-semibold text-slate-800 dark:text-zinc-200 transition-all shadow-sm" })), React.createElement("div", { className: "grid grid-cols-2 gap-4 mt-2" }, React.createElement("button", { onClick: () => {
       setIsAutoSyncEnabled(true);
       setHasUnsavedChanges(false);
       handleSyncPush(false);
