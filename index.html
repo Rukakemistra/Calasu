@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="56db10bb56">
+    <meta name="cls-build" content="0da2dfdbe3">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -321,6 +321,9 @@ try {
     Filter: FilterIcon,
     Copy: CopyIcon
   } = IconLib;
+  const iconFallback = (ch) => ({ size, className }) => React.createElement("span", { className, style: { fontSize: size ? size * 0.8 : "inherit", lineHeight: 1, display: "inline-flex", alignItems: "center", justifyContent: "center" } }, ch);
+  const LockIcon = IconLib.Lock || iconFallback("🔒");
+  const ZapIcon = IconLib.Zap || iconFallback("⚡");
   const { useState, useEffect, useRef } = React;
   const { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts || {};
   const VN_DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
@@ -419,6 +422,45 @@ try {
     { val: 3, label: "Đi chơi", Icon: CoffeeIcon, color: "text-emerald-600 dark:text-emerald-400" },
     { val: 4, label: "Đi xa/Mới", Icon: PlaneIcon, color: "text-purple-600 dark:text-purple-400" }
   ];
+  const MOOD5 = [
+    { val: 1, label: "Tệ", hex: "#f43f5e", twBg: "bg-rose-50 dark:bg-rose-500/10", twText: "text-rose-600 dark:text-rose-400", twBorder: "border-rose-200 dark:border-rose-500/20", icon: FrownIcon },
+    { val: 2, label: "Hơi tệ", hex: "#f97316", twBg: "bg-orange-50 dark:bg-orange-500/10", twText: "text-orange-600 dark:text-orange-400", twBorder: "border-orange-200 dark:border-orange-500/20", icon: CloudIcon },
+    { val: 3, label: "Ổn", hex: "#0ea5e9", twBg: "bg-sky-50 dark:bg-sky-500/10", twText: "text-sky-600 dark:text-sky-400", twBorder: "border-sky-200 dark:border-sky-500/20", icon: MehIcon },
+    { val: 4, label: "Vui", hex: "#10b981", twBg: "bg-emerald-50 dark:bg-emerald-500/10", twText: "text-emerald-600 dark:text-emerald-400", twBorder: "border-emerald-200 dark:border-emerald-500/20", icon: SmileIcon },
+    { val: 5, label: "Rất vui", hex: "#a855f7", twBg: "bg-purple-50 dark:bg-purple-500/10", twText: "text-purple-600 dark:text-purple-400", twBorder: "border-purple-200 dark:border-purple-500/20", icon: SparklesIcon }
+  ];
+  const ENERGY5 = [
+    { val: 1, label: "Mệt", hex: "#d97706" },
+    { val: 2, label: "Hơi mệt", hex: "#f59e0b" },
+    { val: 3, label: "Bình thường", hex: "#fbbf24" },
+    { val: 4, label: "Sung", hex: "#facc15" },
+    { val: 5, label: "Rất sung", hex: "#fde047" }
+  ];
+  const MOOD_PARTS = [
+    { key: "moodSang", note: "noteSang", label: "Sáng" },
+    { key: "moodTrua", note: "noteTrua", label: "Trưa" },
+    { key: "moodChieu", note: "noteChieu", label: "Chiều" }
+  ];
+  const DAY_PART_FIELDS = ["moodSang", "moodTrua", "moodChieu", "energy", "noteSang", "noteTrua", "noteChieu", "noteEnergy"];
+  const OLD_MOOD_TO_5 = { 0: 1, 1: 2, 2: 2, 3: 3, 4: 4, 5: 5 };
+  const EMPTY_STAT = { outing: 1, detail: "", summary: "", images: [], musicUrl: "", musicNote: "" };
+  const muc15 = (v) => {
+    const n = parseInt(v, 10);
+    return n >= 1 && n <= 5 ? n : 0;
+  };
+  const getDayMood = (sDay) => {
+    if (!sDay) return { kind: "none", vals: [0, 0, 0], tone: null };
+    const vals = MOOD_PARTS.map((p) => muc15(sDay[p.key]));
+    const chosen = vals.filter(Boolean);
+    if (chosen.length) {
+      const avg = chosen.reduce((a, b) => a + b, 0) / chosen.length;
+      return { kind: "new", vals, tone: MOOD5[Math.round(avg) - 1] };
+    }
+    const rawOld = sDay.mood;
+    const old = rawOld === "" || rawOld === null || rawOld === void 0 ? null : MOODS.find((m) => m.val === Number(rawOld));
+    if (old) return { kind: "old", vals, old, tone: old };
+    return { kind: "empty", vals, tone: null };
+  };
   const cleanNum = (num) => Number(num).toFixed(1).replace(/\.0$/, "");
   const getSpotifyEmbedUrl = (url) => {
     if (!url) return null;
@@ -741,9 +783,14 @@ try {
         const q = query.toLowerCase().trim();
         const matchSummary = sDay?.summary?.toLowerCase().includes(q);
         const matchOuting2 = sDay?.outing && OUTINGS.find((o) => o.val === sDay.outing)?.label.toLowerCase().includes(q);
-        matchQuery = matchSummary || matchOuting2;
+        const matchPartNotes = DAY_PART_FIELDS.filter((k) => k.startsWith("note")).some((k) => sDay && sDay[k] && String(sDay[k]).toLowerCase().includes(q));
+        matchQuery = matchSummary || matchOuting2 || matchPartNotes;
       }
-      let matchMood = moods.length === 0 || sDay && moods.includes(sDay.mood);
+      let matchMood = true;
+      if (moods.length > 0) {
+        const dm = getDayMood(sDay);
+        matchMood = dm.kind === "new" ? dm.vals.some((v) => moods.includes(v)) : dm.kind === "old" ? moods.includes(OLD_MOOD_TO_5[dm.old.val]) : false;
+      }
       let matchOuting = outings.length === 0 || sDay && outings.includes(sDay.outing);
       let matchWorkout = workouts.length === 0 || wDay && workouts.includes(wDay.type);
       let matchFood = true;
@@ -934,6 +981,28 @@ try {
     };
     const [secretBubble, setSecretBubble] = useState(null);
     const [musicNoteBubble, setMusicNoteBubble] = useState(null);
+    const [dayEdit, setDayEdit] = useState(null);
+    const [diaryOpenKey, setDiaryOpenKey] = useState(null);
+    const [dayImageEditKey, setDayImageEditKey] = useState(null);
+    const [outingPickerKey, setOutingPickerKey] = useState(null);
+    const oldScriptWarnedRef = useRef(false);
+    const updateDayStat = (dKey, patch) => setStatsByDate((prev) => {
+      const base = prev[dKey] || EMPTY_STAT;
+      const extra = typeof patch === "function" ? patch(base) : patch;
+      return { ...prev, [dKey]: { ...base, ...extra } };
+    });
+    const commitDayEdit = (pe) => {
+      if (!pe) return;
+      const v = String(pe.text || "").trim();
+      const cur = String((statsByDate[pe.dateKey] || {})[pe.field] || "").trim();
+      if (v !== cur) updateDayStat(pe.dateKey, { [pe.field]: v });
+    };
+    const saveDayEdit = () => {
+      commitDayEdit(dayEdit);
+      setDayEdit(null);
+    };
+    const dayEditRef = useRef(null);
+    dayEditRef.current = dayEdit;
     const defaultScriptUrl = "https://script.google.com/macros/s/AKfycbzSWoB0-c_2pqBQXjsik3u1ajAtQIRZlYpxtWy95OJpaKiwLQjn4AOOiAM7sY1swad7/exec";
     const oldDefaultScriptUrls = ["https://script.google.com/macros/s/AKfycbwZUtdDdAz_WclwppPIfmQsNU5J-uM1EDSTbyRBH-YgMdwEoQXGAx97YWwMN_4iJKCR/exec"];
     const defaultGeminiKey = "AQ.Ab8RN6JwPEjMvaLfjQ54" + "z1uldTge-aqNjAc_m1-n0dyeeTTMVw";
@@ -1336,6 +1405,14 @@ try {
     const currentTotalNapMins = currentNaps.reduce((acc, curr) => acc + curr.duration, 0);
     const currentWorkout = workoutsByDate[dateKey] || null;
     const currentStat = statsByDate[dateKey] || null;
+    useEffect(() => {
+      const pe = dayEditRef.current;
+      if (pe && pe.dateKey !== dateKey) commitDayEdit(pe);
+      setDayEdit(null);
+      setDiaryOpenKey(null);
+      setDayImageEditKey(null);
+      setOutingPickerKey(null);
+    }, [dateKey]);
     const currentCircadian = getCircadianWarning(currentSleeps);
     const calculateTotals = (foods) => {
       return foods.reduce((acc, food) => {
@@ -1415,6 +1492,44 @@ try {
         };
         reader.readAsDataURL(file);
       }
+    };
+    const compressDayImages = (files) => Promise.all(files.map((file) => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onerror = () => resolve(null);
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+          if (width > height && width > 600) {
+            height *= 600 / width;
+            width = 600;
+          } else if (height > 600) {
+            width *= 600 / height;
+            height = 600;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.6));
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }))).then((arr) => arr.filter(Boolean));
+    const handleDayImageAdd = (e, dKey) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = "";
+      if (!files.length) return;
+      compressDayImages(files).then((arr) => {
+        if (!arr.length) {
+          showToast("Không đọc được ảnh này", "error");
+          return;
+        }
+        updateDayStat(dKey, (base) => ({ images: [...getValidStatImages(dKey, base.images), ...arr] }));
+        showToast(`Đã thêm ${arr.length} ảnh`, "success");
+      });
     };
     const handleStatImageUpload = (e) => {
       const files = Array.from(e.target.files);
@@ -2247,7 +2362,28 @@ try {
           return { date: dKey, sang: formatMeal("Sáng"), trua: formatMeal("Trưa"), chieu: formatMeal("Chiều"), ngoai_le: formatMeal("Ngoài lề"), ngu: sleepStr, nguTrua: napStr, sleepNote: sNote, totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein), mealNotes: mNotes, hasAnyMealNote };
         });
         const finalPayload = syncDataPayload.filter((item) => item.sang !== "X" || item.trua !== "X" || item.chieu !== "X" || item.ngoai_le !== "X" || item.ngu !== "" || item.nguTrua !== "X" || item.sleepNote !== "" || item.hasAnyMealNote);
-        const statsPayload = Object.keys(statsByDate).map((d) => ({ date: d, mood: statsByDate[d].mood, outing: statsByDate[d].outing, detail: statsByDate[d].detail || "", summary: statsByDate[d].summary, images: (statsByDate[d].images || []).filter((img) => img && typeof img === "string"), musicUrl: statsByDate[d].musicUrl || "", musicNote: statsByDate[d].musicNote || "" }));
+        const statsPayload = Object.keys(statsByDate).map((d) => {
+          const st = statsByDate[d];
+          return {
+            date: d,
+            mood: st.mood === void 0 || st.mood === null ? "" : st.mood,
+            outing: st.outing,
+            detail: st.detail || "",
+            summary: st.summary,
+            images: (st.images || []).filter((img) => img && typeof img === "string"),
+            musicUrl: st.musicUrl || "",
+            musicNote: st.musicNote || "",
+            // bản 144: cột D–G trang Stat
+            moodSang: muc15(st.moodSang) || "",
+            moodTrua: muc15(st.moodTrua) || "",
+            moodChieu: muc15(st.moodChieu) || "",
+            energy: muc15(st.energy) || "",
+            noteSang: String(st.noteSang || "").trim(),
+            noteTrua: String(st.noteTrua || "").trim(),
+            noteChieu: String(st.noteChieu || "").trim(),
+            noteEnergy: String(st.noteEnergy || "").trim()
+          };
+        });
         let formattedWorkouts = [];
         Object.keys(workoutsByDate).forEach((wDate) => {
           const wOut = workoutsByDate[wDate];
@@ -2278,6 +2414,10 @@ try {
         const cardioPayload = Object.keys(cardioByDate).map((d) => ({ date: d, duration: cardioByDate[d]?.duration || "", note: cardioByDate[d]?.note || "" }));
         const response = await fetch(withGasKey(gasUrl), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ data: finalPayload, workoutsData: formattedWorkouts, cardioData: cardioPayload, statsData: statsPayload }) });
         const res = await response.json();
+        if (res.status === "success" && !res.v && !oldScriptWarnedRef.current && statsPayload.some((x) => DAY_PART_FIELDS.some((k) => x[k]))) {
+          oldScriptWarnedRef.current = true;
+          setTimeout(() => showToast("⚠️ Apps Script chưa lên bản 144: tâm trạng theo buổi và năng lượng chưa lưu lên Sheets được", "error"), isSilent ? 0 : 3100);
+        }
         if (res.status === "success") {
           if (!isSilent) showToast(`✅ Đã đồng bộ thành công!`, "success");
         } else if (res.status === "unauthorized") {
@@ -2464,10 +2604,36 @@ try {
               const dClean = parseRawDate(r[0]);
               if (!dClean) continue;
               const rawMood = String(r[1] ?? "").trim();
-              const parsedMood = rawMood !== "" && !isNaN(Number(rawMood)) ? Number(rawMood) : 3;
-              nS[dClean] = { mood: parsedMood, outing: Number(r[2]) || 1, detail: String(r[7] || ""), summary: String(r[8] || ""), images: r[9] ? String(r[9]).split(",").filter((url) => url.trim() !== "") : [], musicUrl: String(r[10] || ""), musicNote: String(r[11] || "") };
+              const parsedMood = rawMood !== "" && !isNaN(Number(rawMood)) ? Number(rawMood) : null;
+              const sn = Array.isArray(data.data.statNotes) && data.data.statNotes[i] || [];
+              nS[dClean] = {
+                mood: parsedMood,
+                outing: Number(r[2]) || 1,
+                detail: String(r[7] || ""),
+                summary: String(r[8] || ""),
+                images: r[9] ? String(r[9]).split(",").filter((url) => url.trim() !== "") : [],
+                musicUrl: String(r[10] || ""),
+                musicNote: String(r[11] || ""),
+                moodSang: muc15(r[3]),
+                moodTrua: muc15(r[4]),
+                moodChieu: muc15(r[5]),
+                energy: muc15(r[6]),
+                noteSang: String(sn[3] || "").trim(),
+                noteTrua: String(sn[4] || "").trim(),
+                noteChieu: String(sn[5] || "").trim(),
+                noteEnergy: String(sn[6] || "").trim()
+              };
             }
-            setStatsByDate(nS);
+            if (Array.isArray(data.data.statNotes)) setStatsByDate(nS);
+            else setStatsByDate((prev) => {
+              Object.keys(nS).forEach((d) => {
+                const p = prev[d];
+                if (p) DAY_PART_FIELDS.forEach((k) => {
+                  if (p[k] && !nS[d][k]) nS[d][k] = p[k];
+                });
+              });
+              return nS;
+            });
           }
           if (data.data.tdl && Array.isArray(data.data.tdl)) {
             const parseTdlStr = (rawText) => {
@@ -2899,7 +3065,7 @@ try {
           onClick: () => {
             const dKey = musicNoteBubble.dateKey;
             setStatsByDate((prev) => {
-              const existing = prev[dKey] || { mood: 3, outing: 1, detail: "", summary: "", images: [], musicUrl: "", musicNote: "" };
+              const existing = prev[dKey] || EMPTY_STAT;
               return {
                 ...prev,
                 [dKey]: {
@@ -4804,33 +4970,81 @@ try {
             labelStyle: { color: "#cbd5e1", fontWeight: "bold", marginBottom: "4px" }
           }
         ), React.createElement(Line, { type: "monotone", dataKey: macroChartMetric, stroke: macroChartMetric === "kcal" ? "#10b981" : "#ef4444", strokeWidth: 3, dot: { r: 3, fill: "#0f172a" }, activeDot: { r: 5 } }))) : React.createElement("div", { className: "flex flex-col h-full items-center justify-center text-slate-500 font-bold text-sm gap-2" }, React.createElement(ActivityIcon, { size: 24, className: "opacity-30" }), "Không đủ dữ liệu vẽ biểu đồ")))), React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("button", { onClick: () => handleFilterClick("protein"), className: `w-full bg-red-50 dark:bg-red-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === "protein" ? "ring-2 ring-red-500 border-transparent shadow-lg shadow-red-500/20" : "border-red-100 dark:border-red-500/20"}` }, React.createElement("div", { className: "absolute right-0 top-0 bottom-0 w-2.5 bg-red-100 dark:bg-red-500/20" }, React.createElement("div", { className: "absolute bottom-0 w-full bg-red-500 transition-all duration-1000 rounded-t", style: { height: `${pctThieuDam}%` } })), React.createElement("p", { className: "text-[10px] font-black text-red-500 dark:text-red-400 uppercase tracking-widest mb-3" }, "Thiếu đạm"), React.createElement("div", { className: "flex items-baseline justify-center gap-1.5 mb-3" }, React.createElement("span", { className: "text-4xl font-black text-red-600 dark:text-red-500 leading-none" }, monthThieuDam), React.createElement("span", { className: "text-[10px] font-bold text-red-400 dark:text-red-500 uppercase tracking-widest" }, "/ ", elapsedDays)), React.createElement("div", { className: "bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-red-100 dark:border-red-500/20 inline-block" }, React.createElement("span", { className: "text-sm font-black text-red-500" }, pctThieuDam, "%"))), React.createElement("button", { onClick: () => handleFilterClick("calorie"), className: `w-full bg-orange-50 dark:bg-orange-500/10 p-5 rounded-3xl border text-center relative overflow-hidden group w-full transition-all active:scale-95 ${activeFilter === "calorie" ? "ring-2 ring-orange-500 border-transparent shadow-lg shadow-orange-500/20" : "border-orange-100 dark:border-orange-500/20"}` }, React.createElement("div", { className: "absolute right-0 top-0 bottom-0 w-2.5 bg-orange-100 dark:bg-orange-500/20" }, React.createElement("div", { className: "absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t", style: { height: `${pctCheatDay}%` } })), React.createElement("p", { className: "text-[10px] font-black text-orange-500 dark:text-orange-400 uppercase tracking-widest mb-3" }, "Cheatday"), React.createElement("div", { className: "flex items-baseline justify-center gap-1.5 mb-3" }, React.createElement("span", { className: "text-4xl font-black text-orange-600 dark:text-orange-500 leading-none" }, monthCheatDay), React.createElement("span", { className: "text-[10px] font-bold text-orange-400 dark:text-orange-500 uppercase tracking-widest" }, "/ ", elapsedDays)), React.createElement("div", { className: "bg-white dark:bg-zinc-800 px-4 py-1.5 rounded-xl shadow-sm border border-orange-100 dark:border-orange-500/20 inline-block" }, React.createElement("span", { className: "text-sm font-black text-orange-500" }, pctCheatDay, "%")))));
-      })(), appMode === "workout" && React.createElement("div", { className: "bg-orange-50 dark:bg-orange-500/10 p-6 rounded-3xl border border-orange-100 dark:border-orange-500/20 text-center relative overflow-hidden flex flex-col items-center justify-center" }, React.createElement("div", { className: "absolute right-0 top-0 bottom-0 w-3 bg-orange-100 dark:bg-orange-500/20" }, React.createElement("div", { className: "absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t", style: { height: `${pctWorkout}%` } })), React.createElement("p", { className: "text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-3" }, "Tần suất work out"), React.createElement("div", { className: "flex items-baseline justify-center gap-2 mb-4" }, React.createElement("span", { className: "text-5xl font-black text-orange-600 dark:text-orange-500 leading-none" }, monthWorkout), React.createElement("span", { className: "text-xs font-bold text-orange-500 dark:text-orange-600 uppercase tracking-widest" }, "/ ", elapsedDays, " ngày")), React.createElement("div", { className: "bg-white dark:bg-zinc-800 px-5 py-2 rounded-xl border border-orange-100 dark:border-orange-500/20 inline-block shadow-sm" }, React.createElement("span", { className: "text-lg font-black text-orange-500" }, pctWorkout, "%"))))), (appMode === "journal" || appMode === "stat") && currentView === "day" && React.createElement("div", { className: "animate-[fadeScale_0.3s_ease-out]" }, currentStat ? (() => {
-        const dayImages = getValidStatImages(dateKey, currentStat.images);
-        const hasDayMusicNote = !!(currentStat.musicNote && currentStat.musicNote.trim() !== "");
-        return React.createElement("div", { className: "bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-5 transition-colors relative z-20" }, React.createElement("div", { className: "flex justify-between items-center pb-5 border-b border-slate-100 dark:border-zinc-800/50" }, React.createElement("div", { className: "flex items-center gap-2" }, (() => {
-          const cMood = MOODS.find((m) => m.val === currentStat.mood) || MOODS[3];
-          const hasSecret = !!(currentStat.detail && currentStat.detail.trim());
-          return React.createElement("button", { type: "button", onClick: (e) => {
-            e.stopPropagation();
-            setSecretBubble({ dateKey, isEditing: !hasSecret, text: currentStat.detail || "" });
-          }, className: `relative px-4 py-2 rounded-2xl text-sm font-black ${cMood.twBg} ${cMood.twText} border ${cMood.twBorder} shadow-sm flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer`, title: "Bấm để mở Bong bóng hồi tưởng" }, React.createElement(cMood.icon, { size: 18, strokeWidth: 2.5 }), " ", cMood.label, hasSecret && React.createElement("span", { className: "ml-0.5 text-[11px] animate-pulse" }, "✦"));
-        })(), React.createElement(
-          "button",
-          {
-            type: "button",
-            onClick: (e) => {
-              e.stopPropagation();
-              setMusicNoteBubble({ dateKey, musicUrl: currentStat.musicUrl || "", note: currentStat.musicNote || "" });
-            },
-            className: `w-9 h-9 rounded-2xl border flex items-center justify-center transition-all hover:scale-105 active:scale-90 ${hasDayMusicNote ? "bg-emerald-500 border-emerald-400 text-zinc-950 shadow-md shadow-emerald-500/25" : "bg-zinc-800/70 border-zinc-700/70 text-emerald-400/60 hover:text-emerald-300 hover:border-emerald-500/40"}`,
-            title: hasDayMusicNote ? "Xem ghi chú bài hát" : "Thêm ghi chú bài hát"
-          },
-          React.createElement(MusicIcon, { size: 16, strokeWidth: hasDayMusicNote ? 2.75 : 2 })
-        )), React.createElement("div", { className: "flex items-center gap-2" }, (() => {
-          const out = OUTINGS.find((o) => o.val === currentStat.outing);
-          if (out) return React.createElement("span", { className: "bg-slate-50 dark:bg-zinc-800 p-2.5 rounded-2xl border border-slate-100 dark:border-zinc-700 shadow-sm flex items-center justify-center" }, React.createElement(out.Icon, { size: 20, className: out.color }));
-          return null;
-        })())), currentStat.musicUrl && getSpotifyEmbedUrl(currentStat.musicUrl) && React.createElement("div", { className: "w-full rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-700/50" }, React.createElement("iframe", { src: getSpotifyEmbedUrl(currentStat.musicUrl), width: "100%", height: "152", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })), dayImages && dayImages.length > 0 && React.createElement("div", { className: `grid gap-2.5 rounded-3xl overflow-hidden ${dayImages.length === 1 ? "grid-cols-1" : "grid-cols-2"}` }, dayImages.slice(0, 4).map((img, i) => {
+      })(), appMode === "workout" && React.createElement("div", { className: "bg-orange-50 dark:bg-orange-500/10 p-6 rounded-3xl border border-orange-100 dark:border-orange-500/20 text-center relative overflow-hidden flex flex-col items-center justify-center" }, React.createElement("div", { className: "absolute right-0 top-0 bottom-0 w-3 bg-orange-100 dark:bg-orange-500/20" }, React.createElement("div", { className: "absolute bottom-0 w-full bg-orange-500 transition-all duration-1000 rounded-t", style: { height: `${pctWorkout}%` } })), React.createElement("p", { className: "text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-3" }, "Tần suất work out"), React.createElement("div", { className: "flex items-baseline justify-center gap-2 mb-4" }, React.createElement("span", { className: "text-5xl font-black text-orange-600 dark:text-orange-500 leading-none" }, monthWorkout), React.createElement("span", { className: "text-xs font-bold text-orange-500 dark:text-orange-600 uppercase tracking-widest" }, "/ ", elapsedDays, " ngày")), React.createElement("div", { className: "bg-white dark:bg-zinc-800 px-5 py-2 rounded-xl border border-orange-100 dark:border-orange-500/20 inline-block shadow-sm" }, React.createElement("span", { className: "text-lg font-black text-orange-500" }, pctWorkout, "%"))))), (appMode === "journal" || appMode === "stat") && currentView === "day" && React.createElement("div", { className: "animate-[fadeScale_0.3s_ease-out]" }, (() => {
+        const st = currentStat || EMPTY_STAT;
+        const dm = getDayMood(currentStat);
+        const dayImages = getValidStatImages(dateKey, st.images);
+        const hasDayMusicNote = !!(st.musicNote && st.musicNote.trim() !== "");
+        const embedUrl = st.musicUrl ? getSpotifyEmbedUrl(st.musicUrl) : null;
+        const editing = (field) => !!(dayEdit && dayEdit.dateKey === dateKey && dayEdit.field === field);
+        const openEdit = (field, text) => {
+          if (editing(field)) {
+            saveDayEdit();
+            return;
+          }
+          commitDayEdit(dayEdit);
+          setDayEdit({ dateKey, field, text: String(text || "") });
+        };
+        const energyVal = muc15(st.energy);
+        const energyNote = String(st.noteEnergy || "").trim();
+        const out = OUTINGS.find((o) => o.val === st.outing) || OUTINGS[0];
+        const detailText = String(st.detail || "").trim();
+        const detailParas = detailText ? detailText.split(/\n+/).filter((x) => x.trim()).length : 0;
+        const summaryText = String(st.summary || "").trim();
+        const diaryOpen = diaryOpenKey === dateKey;
+        const imgEditMode = dayImageEditKey === dateKey && dayImages.length > 0;
+        const divider = React.createElement("div", { className: "border-t border-slate-100 dark:border-zinc-800/70" });
+        const secHead = (title, icon, right) => React.createElement("div", { className: "flex items-center justify-between gap-2 min-h-[32px]" }, React.createElement("span", { className: "text-[11px] font-black tracking-[0.15em] uppercase text-slate-400 dark:text-zinc-500 flex items-center gap-1.5" }, icon, title), React.createElement("div", { className: "flex items-center gap-2 shrink-0" }, right));
+        const penBtn = (field, text, hasNote, title) => React.createElement("button", { type: "button", title, "aria-label": title, onClick: () => openEdit(field, text), className: `w-8 h-8 shrink-0 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${editing(field) ? "bg-amber-500 border-amber-400 text-zinc-950" : hasNote ? "bg-amber-50 dark:bg-amber-500/10 border-amber-300 dark:border-amber-500/40 text-amber-600 dark:text-amber-300" : "bg-slate-50 dark:bg-zinc-800/70 border-slate-200 dark:border-zinc-700/70 text-slate-400 dark:text-zinc-400 hover:text-slate-600 dark:hover:text-zinc-200"}` }, React.createElement(PencilIcon, { size: 14 }));
+        const editBox = (field, opts = {}) => editing(field) && React.createElement("div", { className: `flex gap-2 items-start ${opts.indent ? "ml-[52px]" : ""}` }, opts.multiline ? React.createElement("textarea", { autoFocus: true, rows: opts.rows || 4, value: dayEdit.text, onChange: (e) => {
+          const v = e.target.value;
+          setDayEdit((p) => p ? { ...p, text: v } : p);
+        }, onKeyDown: (e) => {
+          if (e.key === "Escape") setDayEdit(null);
+        }, placeholder: opts.placeholder, className: "flex-1 min-w-0 bg-slate-50 dark:bg-zinc-950 border border-amber-400 dark:border-amber-500/50 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-zinc-100 outline-none resize-y leading-relaxed" }) : React.createElement("input", { autoFocus: true, type: "text", value: dayEdit.text, onChange: (e) => {
+          const v = e.target.value;
+          setDayEdit((p) => p ? { ...p, text: v } : p);
+        }, onKeyDown: (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            saveDayEdit();
+          }
+          if (e.key === "Escape") setDayEdit(null);
+        }, placeholder: opts.placeholder, className: "flex-1 min-w-0 h-10 bg-slate-50 dark:bg-zinc-950 border border-amber-400 dark:border-amber-500/50 rounded-xl px-3 text-[13px] font-medium text-slate-800 dark:text-zinc-100 outline-none" }), React.createElement("div", { className: `flex ${opts.multiline ? "flex-col" : ""} gap-1.5 shrink-0` }, React.createElement("button", { type: "button", onClick: saveDayEdit, className: "h-10 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 text-xs font-black active:scale-95 transition-all" }, "Lưu"), React.createElement("button", { type: "button", onClick: () => setDayEdit(null), title: "Hủy", "aria-label": "Hủy", className: "h-10 w-10 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 flex items-center justify-center active:scale-95 transition-all" }, React.createElement(XIcon, { size: 14 }))));
+        const emptyBtn = (label, onClick) => React.createElement("button", { type: "button", onClick, className: "w-full py-3.5 rounded-2xl border-2 border-dashed border-slate-200 dark:border-zinc-800 text-xs font-bold text-slate-400 dark:text-zinc-500 hover:border-purple-400/60 dark:hover:border-purple-500/40 transition-colors" }, label);
+        return React.createElement("div", { "data-day-card": "144", className: "bg-white dark:bg-zinc-900 p-5 sm:p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-5 transition-colors relative z-20" }, (() => {
+          const fDay = foodsByDate[dateKey] || [];
+          const kcal = Math.round(calculateTotals(fDay).kcal);
+          const slDay = sleepByDate[dateKey] || [];
+          const lastSleep = slDay.length ? slDay[slDay.length - 1] : null;
+          const td = todoCache[dateKey];
+          const tasks = td ? [...td.must || [], ...td.should || [], ...td.can || []].filter((t) => t && String(t.text || "").trim()) : [];
+          const doneCount = tasks.filter((t) => t.done).length;
+          const wDay = workoutsByDate[dateKey];
+          const cDay = cardioByDate[dateKey];
+          const hasCardio = !!(cDay && (String(cDay.duration || "").trim() || String(cDay.note || "").trim()));
+          const woVal = wDay && wDay.type ? wDay.type + (hasCardio ? " + Cardio" : "") : hasCardio ? "Cardio" : "";
+          const links = [
+            { id: "macro", label: "Ăn uống", Icon: UtensilsIcon, color: "text-emerald-500 dark:text-emerald-400", val: fDay.length ? `${kcal.toLocaleString("vi-VN")} kcal` : "" },
+            { id: "sleep", label: "Ngủ", Icon: MoonIcon, color: "text-indigo-500 dark:text-indigo-400", val: lastSleep ? `${lastSleep.sleepTime}–${lastSleep.wakeTime}` : "" },
+            { id: "work", label: "Working", Icon: BrainIcon, color: "text-cyan-500 dark:text-cyan-400", val: tasks.length ? `${doneCount}/${tasks.length} việc` : "" },
+            { id: "workout", label: "W.O", Icon: DumbbellIcon, color: "text-orange-500 dark:text-orange-400", val: woVal }
+          ];
+          return React.createElement("div", { className: "flex gap-2", "data-day-links": "145" }, links.map((it) => React.createElement("button", { key: it.id, type: "button", onClick: () => {
+            setAppMode(it.id);
+            setCurrentView("day");
+          }, "aria-label": `Mở ${it.label} ngày này`, className: `flex-1 min-w-0 rounded-2xl border px-1.5 py-2.5 flex flex-col items-center gap-1 transition-all active:scale-95 ${it.val ? "bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700/70 hover:border-slate-300 dark:hover:border-zinc-600" : "border-dashed border-slate-200 dark:border-zinc-800 opacity-50"}` }, React.createElement(it.Icon, { size: 18, className: it.color }), React.createElement("span", { className: "text-[10px] font-black text-slate-700 dark:text-zinc-300" }, it.label), React.createElement("span", { className: `text-[10px] font-semibold whitespace-nowrap truncate max-w-full ${it.val ? "text-slate-500 dark:text-zinc-400" : "text-slate-400 dark:text-zinc-600"}` }, it.val || "chưa có"))));
+        })(), divider, React.createElement("div", { className: "space-y-3" }, secHead("Bài hát ngày", React.createElement(MusicIcon, { size: 12 }), React.createElement(React.Fragment, null, React.createElement("button", { type: "button", onClick: () => setMusicNoteBubble({ dateKey, musicUrl: st.musicUrl || "", note: st.musicNote || "" }), title: hasDayMusicNote ? "Xem ghi chú bài hát" : "Thêm ghi chú bài hát", "aria-label": "Ghi chú bài hát", className: `w-8 h-8 rounded-xl border flex items-center justify-center transition-all hover:scale-105 active:scale-90 ${hasDayMusicNote ? "bg-emerald-500 border-emerald-400 text-zinc-950 shadow-md shadow-emerald-500/25" : "bg-slate-50 dark:bg-zinc-800/70 border-slate-200 dark:border-zinc-700/70 text-emerald-500/70 dark:text-emerald-400/60 hover:text-emerald-500 dark:hover:text-emerald-300"}` }, React.createElement(MusicIcon, { size: 15, strokeWidth: hasDayMusicNote ? 2.75 : 2 })), penBtn("musicUrl", st.musicUrl, false, "Đổi link bài hát"))), editBox("musicUrl", { placeholder: "Dán link bài hát Spotify..." }), embedUrl ? React.createElement("div", { className: "w-full rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-700/50" }, React.createElement("iframe", { src: embedUrl, width: "100%", height: "152", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })) : !editing("musicUrl") && emptyBtn(st.musicUrl ? "Link này không phải bài Spotify, bấm để sửa" : "+ Dán link bài hát Spotify", () => openEdit("musicUrl", st.musicUrl))), divider, React.createElement("div", { className: "space-y-3.5" }, secHead("Tâm trạng", React.createElement(SmileIcon, { size: 12 }), React.createElement("button", { type: "button", onClick: () => setOutingPickerKey(outingPickerKey === dateKey ? null : dateKey), title: "Hôm nay ở nhà hay ra ngoài", className: "h-8 px-2.5 rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-[11px] font-bold text-slate-600 dark:text-zinc-300 flex items-center gap-1.5 active:scale-95 transition-all" }, React.createElement(out.Icon, { size: 14, className: out.color }), " ", out.label)), outingPickerKey === dateKey && React.createElement("div", { className: "grid grid-cols-4 gap-2" }, OUTINGS.map((o) => React.createElement("button", { key: o.val, type: "button", onClick: () => {
+          updateDayStat(dateKey, { outing: o.val });
+          setOutingPickerKey(null);
+        }, className: `py-2.5 px-1 rounded-xl text-[10px] font-bold border flex flex-col items-center gap-1 transition-all active:scale-95 ${st.outing === o.val ? `bg-white dark:bg-zinc-900 ${o.color} border-current shadow-sm` : "bg-slate-50 dark:bg-zinc-800/60 text-slate-400 dark:text-zinc-500 border-slate-200 dark:border-zinc-700"}` }, React.createElement(o.Icon, { size: 16 }), " ", o.label))), dm.kind === "old" && React.createElement("div", { className: "text-[11px] font-semibold text-slate-400 dark:text-zinc-500 flex items-center gap-1.5 flex-wrap" }, React.createElement("span", null, "Thang cũ:"), React.createElement("span", { className: `px-2 py-0.5 rounded-full ${dm.old.twBg} ${dm.old.twText} border ${dm.old.twBorder} flex items-center gap-1` }, React.createElement(dm.old.icon, { size: 11, strokeWidth: 2.5 }), " ", dm.old.label), React.createElement("span", null, "· chọn theo buổi để chuyển sang kiểu mới")), MOOD_PARTS.map((p) => {
+          const v = muc15(st[p.key]);
+          const note = String(st[p.note] || "").trim();
+          return React.createElement("div", { key: p.key, className: "space-y-1.5", "data-part": p.key }, React.createElement("div", { className: "flex items-center gap-2" }, React.createElement("span", { className: "w-11 shrink-0 text-[13px] font-bold text-slate-600 dark:text-zinc-300" }, p.label), React.createElement("div", { className: "flex items-center gap-1.5 flex-1 min-w-0 flex-wrap" }, MOOD5.map((m) => v === m.val ? React.createElement("button", { key: m.val, type: "button", onClick: () => updateDayStat(dateKey, { [p.key]: 0 }), title: "Bấm lần nữa để bỏ chọn", "aria-label": `${p.label}: ${m.label}`, "aria-pressed": "true", className: "h-8 px-3 rounded-full text-[12px] font-black flex items-center gap-1.5 shrink-0 active:scale-95 transition-all", style: { background: m.hex + "22", color: m.hex, boxShadow: `inset 0 0 0 1.5px ${m.hex}aa` } }, React.createElement("span", { className: "w-2 h-2 rounded-full", style: { background: m.hex } }), m.label) : React.createElement("button", { key: m.val, type: "button", onClick: () => updateDayStat(dateKey, { [p.key]: m.val }), title: m.label, "aria-label": `${p.label}: ${m.label}`, "aria-pressed": "false", className: "w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-slate-100 dark:bg-zinc-800/80 hover:scale-110 active:scale-90 transition-all" }, React.createElement("span", { className: "w-2.5 h-2.5 rounded-full", style: { background: m.hex, opacity: 0.5 } })))), penBtn(p.note, note, !!note, `Ghi chú buổi ${p.label.toLowerCase()}`)), editBox(p.note, { indent: true, placeholder: `Buổi ${p.label.toLowerCase()} thế nào...` }), note && !editing(p.note) && React.createElement("div", { className: "ml-[52px] text-[12px] text-slate-500 dark:text-zinc-400 italic break-words whitespace-pre-wrap" }, note));
+        })), divider, React.createElement("div", { className: "space-y-3" }, secHead("Năng lượng", React.createElement(ZapIcon, { size: 12 }), penBtn("noteEnergy", st.noteEnergy, !!energyNote, "Ghi chú năng lượng")), React.createElement("div", { className: "flex gap-1", "data-part": "energy" }, ENERGY5.map((e) => {
+          const on = energyVal >= e.val;
+          return React.createElement("button", { key: e.val, type: "button", onClick: () => updateDayStat(dateKey, (base) => ({ energy: muc15(base.energy) === e.val ? 0 : e.val })), title: energyVal === e.val ? "Bấm lần nữa để bỏ chọn" : e.label, "aria-label": `Năng lượng: ${e.label}`, "aria-pressed": energyVal === e.val ? "true" : "false", className: "flex-1 min-w-0 flex flex-col items-center gap-1.5 py-1 active:scale-95 transition-all" }, React.createElement("span", { className: `w-full h-2.5 rounded-full ${on ? "" : "bg-slate-200 dark:bg-zinc-800"}`, style: on ? { background: e.hex } : void 0 }), React.createElement("span", { className: `text-[10px] font-bold whitespace-nowrap ${energyVal === e.val ? "text-amber-600 dark:text-amber-300" : "text-slate-400 dark:text-zinc-500"}` }, e.label));
+        })), !energyVal && React.createElement("div", { className: "text-[11px] text-slate-400 dark:text-zinc-500" }, "Tính sức lúc ban ngày, đừng tính lúc đang ghi."), editBox("noteEnergy", { placeholder: "Sức hôm nay thế nào..." }), energyNote && !editing("noteEnergy") && React.createElement("div", { className: "text-[12px] text-slate-500 dark:text-zinc-400 italic break-words whitespace-pre-wrap" }, energyNote)), divider, React.createElement("div", { className: "space-y-3" }, secHead("Nhật ký chi tiết", React.createElement(LockIcon, { size: 12 }), penBtn("detail", st.detail, false, "Viết nhật ký chi tiết")), editBox("detail", { multiline: true, rows: 7, placeholder: "Hôm nay mình đã nghĩ gì, cảm thấy sao, làm những gì..." }), !editing("detail") && (detailText ? diaryOpen ? React.createElement("div", { onClick: () => setDiaryOpenKey(null), "data-diary": "open", className: "bg-slate-50 dark:bg-zinc-800/50 border border-slate-100 dark:border-zinc-700/50 rounded-2xl px-4 py-3 text-sm font-medium text-slate-700 dark:text-zinc-200 whitespace-pre-wrap break-words leading-relaxed cursor-pointer" }, detailText, React.createElement("div", { className: "mt-2.5 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-500 flex items-center gap-1" }, React.createElement(LockIcon, { size: 10 }), " Chạm để khóa lại")) : React.createElement("button", { type: "button", onClick: () => setDiaryOpenKey(dateKey), "data-diary": "closed", className: "w-full rounded-2xl bg-slate-50 dark:bg-zinc-800/50 border border-slate-100 dark:border-zinc-700/50 px-4 py-3 flex items-center justify-between text-[13px] text-slate-500 dark:text-zinc-400 active:scale-[0.99] transition-all" }, React.createElement("span", { className: "flex items-center gap-2" }, React.createElement(LockIcon, { size: 14 }), " ", detailParas, " đoạn · chạm để mở"), React.createElement(ChevronRightIcon, { size: 16 })) : emptyBtn("+ Viết nhật ký chi tiết", () => openEdit("detail", "")))), React.createElement("div", { className: "space-y-3" }, secHead("Tóm tắt ngày", React.createElement(FileTextIcon, { size: 12 }), penBtn("summary", st.summary, false, "Sửa tóm tắt")), editBox("summary", { multiline: true, rows: 3, placeholder: "Cook sương sương..." }), !editing("summary") && (summaryText ? React.createElement("div", { className: "text-[15px] font-semibold text-slate-700 dark:text-zinc-300 italic border-l-4 border-purple-500 pl-4 py-2.5 bg-slate-50 dark:bg-zinc-800/50 rounded-r-2xl break-words whitespace-pre-wrap leading-relaxed" }, '"', summaryText, '"') : emptyBtn("+ Viết một dòng tóm tắt", () => openEdit("summary", "")))), React.createElement("div", { className: "space-y-3" }, secHead("Ảnh", React.createElement(ImageIcon, { size: 12 }), React.createElement(React.Fragment, null, dayImages.length > 0 && React.createElement("button", { type: "button", onClick: () => setDayImageEditKey(imgEditMode ? null : dateKey), className: `h-8 px-3 rounded-xl border text-xs font-bold flex items-center gap-1 active:scale-95 transition-all ${imgEditMode ? "bg-rose-500 border-rose-400 text-white" : "bg-slate-50 dark:bg-zinc-800/70 border-slate-200 dark:border-zinc-700/70 text-slate-500 dark:text-zinc-400"}` }, imgEditMode ? "Xong" : "Bớt ảnh"), React.createElement("label", { className: "h-8 px-3 rounded-xl border bg-slate-50 dark:bg-zinc-800/70 border-slate-200 dark:border-zinc-700/70 text-slate-600 dark:text-zinc-300 text-xs font-bold flex items-center gap-1 cursor-pointer active:scale-95 transition-all" }, React.createElement(PlusIcon, { size: 13 }), " Thêm", React.createElement("input", { type: "file", accept: "image/*", multiple: true, className: "hidden", onChange: (e) => handleDayImageAdd(e, dateKey) })))), imgEditMode ? React.createElement("div", { className: "grid grid-cols-3 gap-2" }, dayImages.map((img, i) => React.createElement("div", { key: i, className: "relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-800" }, React.createElement("img", { src: formatDriveImgUrl(img, 400), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: "w-full h-full object-cover", onError: (e) => handleDriveImgError(e, img) }), React.createElement("button", { type: "button", onClick: () => updateDayStat(dateKey, (base) => ({ images: getValidStatImages(dateKey, base.images).filter((_, idx) => idx !== i) })), title: "Bỏ ảnh này", "aria-label": "Bỏ ảnh này", className: "absolute top-1 right-1 bg-red-500/90 text-white rounded-lg p-1.5 shadow-sm active:scale-90 transition-transform" }, React.createElement(XIcon, { size: 12 }))))) : dayImages.length > 0 && React.createElement("div", { className: `grid gap-2.5 rounded-3xl overflow-hidden ${dayImages.length === 1 ? "grid-cols-1" : "grid-cols-2"}` }, dayImages.slice(0, 4).map((img, i) => {
           let classes = "w-full h-60 object-cover bg-zinc-800 cursor-pointer hover:opacity-95 hover:scale-[1.02] transition-all duration-300";
           if (dayImages.length === 3 && i === 0) classes = "w-full h-60 object-cover col-span-2 bg-zinc-800 cursor-pointer hover:opacity-95 hover:scale-[1.02] transition-all duration-300";
           else if (dayImages.length === 3) classes = "w-full h-40 object-cover bg-zinc-800 cursor-pointer hover:opacity-95 hover:scale-[1.02] transition-all duration-300";
@@ -4839,14 +5053,8 @@ try {
             setLightboxImages(dayImages.map((u) => formatDriveImgUrl(u, 1600)));
             setLightboxIndex(i);
           } }, React.createElement("img", { src: formatDriveImgUrl(img, 800), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: classes, onError: (e) => handleDriveImgError(e, img) }), i === 3 && dayImages.length > 4 && React.createElement("div", { className: "absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center text-white font-black text-2xl" }, "+", dayImages.length - 4));
-        })), currentStat.summary && React.createElement("div", { className: "text-base font-semibold text-slate-700 dark:text-zinc-300 italic border-l-4 border-purple-500 pl-5 py-3 bg-slate-50 dark:bg-zinc-800/50 rounded-r-2xl break-words shadow-sm leading-relaxed" }, '"', currentStat.summary, '"'), React.createElement("button", { onClick: () => {
-          setIsAddingStat(true);
-          setStatFormData({ mood: 3, outing: 1, summary: "", images: [], musicUrl: "", musicNote: "", ...currentStat, images: dayImages });
-        }, className: "w-full py-4 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 font-bold rounded-2xl flex justify-center items-center gap-2 transition-all active:scale-95 shadow-sm" }, React.createElement(PencilIcon, { size: 18 }), " Cập nhật Nhật ký"));
-      })() : React.createElement("div", { className: "text-center py-20 bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors relative z-20 mb-6" }, React.createElement("div", { className: "bg-slate-50 dark:bg-zinc-800 w-24 h-24 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner border border-slate-100 dark:border-zinc-700" }, React.createElement(BookIcon, { className: "text-slate-400 dark:text-zinc-500", size: 48 })), React.createElement("h3", { className: "font-black text-slate-800 dark:text-zinc-100 text-2xl mb-3 tracking-tight" }, "Chưa có nhật ký"), React.createElement("p", { className: "text-slate-500 dark:text-zinc-400 text-sm mb-8 px-8 font-medium leading-relaxed" }, '"Cooking" time'), React.createElement("button", { onClick: () => {
-        setIsAddingStat(true);
-        setStatFormData({ mood: 3, outing: 1, summary: "", images: [], musicUrl: "", musicNote: "" });
-      }, className: "bg-purple-600 text-white rounded-2xl px-8 py-4 font-black shadow-xl shadow-purple-500/20 active:scale-95 transition-all text-lg flex items-center justify-center gap-2 mx-auto" }, React.createElement(SparklesIcon, { size: 20 }), " Check-in Ngày Này"))), (appMode === "journal" || appMode === "stat") && currentView === "week" && React.createElement("div", { className: "animate-[fadeScale_0.25s_ease-out] flex-1 flex flex-col justify-center" }, isFiltering && React.createElement("div", { className: "bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-3 flex justify-between items-center shadow-sm shrink-0" }, React.createElement("span", { className: "text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-2" }, React.createElement(FilterIcon, { size: 14 }), " Đang áp dụng bộ lọc"), React.createElement("button", { onClick: () => setJournalFilters({ query: "", moods: [], outings: [], workouts: [], foodQuery: "", foodType: "all", proType: "all", sleepStart: "all", sleepEnd: "all" }), className: "text-[10px] bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm font-bold text-slate-600 dark:text-zinc-300 active:scale-95" }, "Xóa Lọc")), React.createElement(
+        }))));
+      })()), (appMode === "journal" || appMode === "stat") && currentView === "week" && React.createElement("div", { className: "animate-[fadeScale_0.25s_ease-out] flex-1 flex flex-col justify-center" }, isFiltering && React.createElement("div", { className: "bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 p-3 rounded-2xl mb-3 flex justify-between items-center shadow-sm shrink-0" }, React.createElement("span", { className: "text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-2" }, React.createElement(FilterIcon, { size: 14 }), " Đang áp dụng bộ lọc"), React.createElement("button", { onClick: () => setJournalFilters({ query: "", moods: [], outings: [], workouts: [], foodQuery: "", foodType: "all", proType: "all", sleepStart: "all", sleepEnd: "all" }), className: "text-[10px] bg-white dark:bg-zinc-800 px-3 py-1.5 rounded-lg shadow-sm font-bold text-slate-600 dark:text-zinc-300 active:scale-95" }, "Xóa Lọc")), React.createElement(
         "div",
         {
           id: "journal-week-scroll",
@@ -4928,13 +5136,13 @@ try {
             const workDay = workoutsByDate[dKey];
             const foodDay = foodsByDate[dKey] || [];
             const foodTotals = calculateTotals(foodDay);
-            let moodColor = MOODS[3];
+            const dayMood = getDayMood(sDay);
+            const hasMoodTone = !!dayMood.tone;
+            let moodColor = dayMood.tone || MOODS[3];
             let outIcon = OUTINGS[0];
-            let moodIcon = MOODS[3].icon;
+            let moodIcon = moodColor.icon;
             if (sDay) {
-              moodColor = MOODS.find((m) => m.val === sDay.mood) || MOODS[3];
               outIcon = OUTINGS.find((o) => o.val === sDay.outing) || OUTINGS[0];
-              moodIcon = moodColor.icon;
             }
             const hasExtraMetrics = (journalDetailLevel === "detail" || journalDetailLevel === "all") && (Math.round(foodTotals.kcal) > 0 || sleepDay.length > 0 || workDay);
             const hasMusicNote = !!(sDay?.musicNote && sDay.musicNote.trim() !== "");
@@ -4951,11 +5159,11 @@ try {
                   e.stopPropagation();
                   setSecretBubble({ dateKey: dKey, isEditing: !(sDay?.detail && sDay.detail.trim()), text: sDay?.detail || "" });
                 },
-                className: `${sDay ? moodColor.twBg + " " + moodColor.twText + " border " + moodColor.twBorder : "bg-zinc-800/80 text-zinc-500 border border-zinc-700/80"} h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer`,
+                className: `${hasMoodTone ? moodColor.twBg + " " + moodColor.twText + " border " + moodColor.twBorder : "bg-zinc-800/80 text-zinc-500 border border-zinc-700/80"} h-7 px-2.5 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer`,
                 title: "Bấm để mở Bong bóng hồi tưởng"
               },
-              React.createElement(moodIcon, { size: 12, strokeWidth: 2.5 }),
-              React.createElement("span", null, sDay ? moodColor.label : "Trống"),
+              dayMood.kind === "new" ? React.createElement("span", { className: "flex items-center gap-[3px]", title: "Sáng · Trưa · Chiều" }, dayMood.vals.map((v, vi) => React.createElement("span", { key: vi, className: "w-1.5 h-1.5 rounded-full", style: { background: v ? MOOD5[v - 1].hex : "rgba(113,113,122,0.45)" } }))) : React.createElement(moodIcon, { size: 12, strokeWidth: 2.5 }),
+              React.createElement("span", null, hasMoodTone ? moodColor.label : "Trống"),
               sDay?.detail && sDay.detail.trim() !== "" && React.createElement("span", { className: "text-[10px] animate-pulse" }, "✦")
             ), hasMusicAny && React.createElement(
               "span",
@@ -4971,7 +5179,7 @@ try {
             ), sDay && outIcon && React.createElement("span", { className: "h-7 px-2.5 rounded-full bg-slate-50 dark:bg-zinc-800/90 text-slate-600 dark:text-zinc-300 border border-slate-200/70 dark:border-zinc-700/80 flex items-center gap-1 text-[10px] font-bold shadow-sm" }, React.createElement(outIcon.Icon, { size: 12, className: outIcon.color }), React.createElement("span", null, outIcon.label)))), hasExtraMetrics && React.createElement("div", { className: "flex flex-wrap items-center gap-1.5 mb-3 relative z-10 shrink-0" }, Math.round(foodTotals.kcal) > 0 && React.createElement("div", { className: "bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[10px] font-bold" }, React.createElement("span", { className: "flex items-center gap-0.5" }, React.createElement(FlameIcon, { size: 11 }), " ", Math.round(foodTotals.kcal)), React.createElement("span", { className: "opacity-40" }, "•"), React.createElement("span", { className: "flex items-center gap-0.5" }, React.createElement(BeefIcon, { size: 11 }), " ", cleanNum(foodTotals.protein), "g")), sleepDay.length > 0 && React.createElement("div", { className: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-flex items-center gap-1 text-[10px] font-bold" }, React.createElement(MoonIcon, { size: 11 }), " ", sleepDay[sleepDay.length - 1].sleepTime, "–", sleepDay[sleepDay.length - 1].wakeTime), workDay && (() => {
               const wCol = getWorkoutColor(workDay.type);
               return React.createElement("div", { className: `${wCol.lightBg} ${wCol.text} px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 border ${wCol.border} border-opacity-30` }, React.createElement(DumbbellIcon, { size: 11 }), " ", workDay.type);
-            })()), sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && React.createElement("div", { className: "w-full relative z-20 mb-3 shrink-0", onClick: (e) => e.stopPropagation() }, activeSpotifyDays[dKey] ? React.createElement("div", { className: "rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-800" }, React.createElement("iframe", { src: getSpotifyEmbedUrl(sDay.musicUrl), width: "100%", height: "80", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })) : React.createElement(SpotifyTrackFacade, { musicUrl: sDay.musicUrl, gasUrl, gasKey, onPlay: () => setActiveSpotifyDays((prev) => ({ ...prev, [dKey]: true })) })), React.createElement("div", { className: "w-full flex-1 flex flex-col justify-between gap-3 min-h-0 overflow-hidden" }, React.createElement("div", { className: "flex flex-col relative z-10 shrink-0" }, React.createElement("p", { className: `text-slate-600 dark:text-zinc-200 text-sm font-medium line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${sDay ? moodColor.twBorder : "border-slate-200 dark:border-zinc-700"}` }, '"', sDay?.summary || "Không có ghi chú", '"')), resolvedImgs && resolvedImgs.length > 0 && React.createElement("div", { className: "relative w-full flex-1 min-h-0 z-20 pointer-events-auto overflow-hidden" }, (() => {
+            })()), sDay?.musicUrl && getSpotifyEmbedUrl(sDay.musicUrl) && React.createElement("div", { className: "w-full relative z-20 mb-3 shrink-0", onClick: (e) => e.stopPropagation() }, activeSpotifyDays[dKey] ? React.createElement("div", { className: "rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-zinc-800" }, React.createElement("iframe", { src: getSpotifyEmbedUrl(sDay.musicUrl), width: "100%", height: "80", frameBorder: "0", allowFullScreen: "", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy" })) : React.createElement(SpotifyTrackFacade, { musicUrl: sDay.musicUrl, gasUrl, gasKey, onPlay: () => setActiveSpotifyDays((prev) => ({ ...prev, [dKey]: true })) })), React.createElement("div", { className: "w-full flex-1 flex flex-col justify-between gap-3 min-h-0 overflow-hidden" }, React.createElement("div", { className: "flex flex-col relative z-10 shrink-0" }, React.createElement("p", { className: `text-slate-600 dark:text-zinc-200 text-sm font-medium line-clamp-3 italic whitespace-normal break-words leading-relaxed border-l-2 pl-3 py-0.5 ${hasMoodTone ? moodColor.twBorder : "border-slate-200 dark:border-zinc-700"}` }, '"', sDay?.summary || "Không có ghi chú", '"')), resolvedImgs && resolvedImgs.length > 0 && React.createElement("div", { className: "relative w-full flex-1 min-h-0 z-20 pointer-events-auto overflow-hidden" }, (() => {
               const imgs = resolvedImgs;
               const count = imgs.length;
               const safeLightboxList = imgs.map((u) => formatDriveImgUrl(u, 1600));
@@ -5081,8 +5289,8 @@ try {
           }
         } else {
           if (sDay) {
-            const moodColor = MOODS.find((m) => m.val === sDay.mood) || MOODS[3];
-            cellClass = `${moodColor.twBg} border-transparent shadow-sm text-slate-800 dark:text-white`;
+            const moodColor = getDayMood(sDay).tone;
+            cellClass = moodColor ? `${moodColor.twBg} border-transparent shadow-sm text-slate-800 dark:text-white` : "bg-slate-100 dark:bg-zinc-800 border-transparent shadow-sm text-slate-800 dark:text-white";
           } else if (isToday) {
             cellClass += " ring-2 ring-purple-500 border-transparent";
           }
@@ -5091,7 +5299,12 @@ try {
           setSelectedDate(day);
           setCurrentView("day");
           setJournalFilters({ query: "", moods: [], outings: [], workouts: [], foodQuery: "", foodType: "all", proType: "all", sleepStart: "all", sleepEnd: "all" });
-        }, className: `h-12 sm:h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all active:scale-90 ${cellClass}` }, React.createElement("span", { className: `z-10 text-[10px] font-bold ${hasData && !isFiltering ? "absolute top-1 left-1.5 opacity-60" : ""}` }, day.getDate()), !isFiltering && sDay && React.createElement("span", { className: "absolute bottom-1.5" }, React.createElement((MOODS.find((m) => m.val === sDay.mood) || MOODS[3]).icon, { size: 14, strokeWidth: 2.5 })));
+        }, className: `h-12 sm:h-14 w-full flex flex-col items-center justify-center rounded-xl relative transition-all active:scale-90 ${cellClass}` }, React.createElement("span", { className: `z-10 text-[10px] font-bold ${hasData && !isFiltering ? "absolute top-1 left-1.5 opacity-60" : ""}` }, day.getDate()), !isFiltering && sDay && (() => {
+          const dm = getDayMood(sDay);
+          if (dm.kind === "new") return React.createElement("span", { className: "absolute bottom-1.5 flex gap-[2px]" }, dm.vals.map((v, vi) => React.createElement("span", { key: vi, className: "w-1.5 h-1.5 rounded-full", style: { background: v ? MOOD5[v - 1].hex : "rgba(113,113,122,0.35)" } })));
+          if (dm.kind === "old") return React.createElement("span", { className: "absolute bottom-1.5" }, React.createElement(dm.old.icon, { size: 14, strokeWidth: 2.5 }));
+          return null;
+        })());
       })))))
     ), React.createElement("nav", { className: "shrink-0 z-40 glass border-t border-slate-200/60 dark:border-zinc-800/60 pb-[env(safe-area-inset-bottom,1rem)] pt-1 transition-colors relative" }, React.createElement("div", { className: `${isDesktopMode ? "max-w-5xl" : "max-w-md"} mx-auto px-4 h-[60px] flex justify-between items-center relative transition-all duration-500` }, [
       { id: "work", icon: BrainIcon, label: "Work", activeColor: "text-cyan-500", activeBg: "bg-cyan-500/10" },
@@ -5640,7 +5853,7 @@ try {
           el.scrollTo({ left: Math.max(0, scrollPos), behavior: "smooth" });
         }
       }, 80);
-    }, className: "px-4 py-3 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-purple-500/30 active:scale-95 transition-all shrink-0" }, "Đi tới"))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1" }, "Tìm Kiếm Nhanh"), React.createElement("div", { className: "relative" }, React.createElement(SearchIcon, { size: 16, className: "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" }), React.createElement("input", { type: "text", value: journalFilters.query, onChange: (e) => setJournalFilters((p) => ({ ...p, query: e.target.value })), placeholder: "Memo Keeper...", className: "w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl pl-11 pr-4 py-3.5 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 font-bold text-sm text-slate-800 dark:text-zinc-100 transition-all shadow-sm" }))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5" }, React.createElement(UtensilsIcon, { size: 14 }), " Dinh Dưỡng"), React.createElement("div", { className: "space-y-3" }, React.createElement("div", { className: "relative" }, React.createElement(SearchIcon, { size: 14, className: "absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" }), React.createElement("input", { type: "text", value: journalFilters.foodQuery, onChange: (e) => setJournalFilters((p) => ({ ...p, foodQuery: e.target.value })), placeholder: "Tìm tên món ăn...", className: "w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-emerald-500 focus:ring-2 text-xs font-bold text-slate-800 dark:text-zinc-100 transition-all shadow-sm" })), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "cheatday" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "cheatday" ? "bg-orange-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Cheatday"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "normal" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "normal" ? "bg-emerald-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Bình thường")), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "lack" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "lack" ? "bg-red-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thiếu Pro"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "enough" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "enough" ? "bg-blue-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Đủ Pro")))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5" }, React.createElement(MoonIcon, { size: 14 }), " Giấc Ngủ"), React.createElement("div", { className: "space-y-3" }, React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "late" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "late" ? "bg-rose-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thức khuya"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "early" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "early" ? "bg-indigo-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Ngủ sớm")), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "late" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "late" ? "bg-rose-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Ngủ nướng"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "early" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "early" ? "bg-indigo-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thức sớm")))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("h3", { className: "text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1" }, "Tâm Trạng"), React.createElement("div", { className: "grid grid-cols-2 gap-2" }, MOODS.map((m) => {
+    }, className: "px-4 py-3 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-md shadow-purple-500/30 active:scale-95 transition-all shrink-0" }, "Đi tới"))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1" }, "Tìm Kiếm Nhanh"), React.createElement("div", { className: "relative" }, React.createElement(SearchIcon, { size: 16, className: "absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" }), React.createElement("input", { type: "text", value: journalFilters.query, onChange: (e) => setJournalFilters((p) => ({ ...p, query: e.target.value })), placeholder: "Memo Keeper...", className: "w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-2xl pl-11 pr-4 py-3.5 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 font-bold text-sm text-slate-800 dark:text-zinc-100 transition-all shadow-sm" }))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-emerald-500 dark:text-emerald-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5" }, React.createElement(UtensilsIcon, { size: 14 }), " Dinh Dưỡng"), React.createElement("div", { className: "space-y-3" }, React.createElement("div", { className: "relative" }, React.createElement(SearchIcon, { size: 14, className: "absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" }), React.createElement("input", { type: "text", value: journalFilters.foodQuery, onChange: (e) => setJournalFilters((p) => ({ ...p, foodQuery: e.target.value })), placeholder: "Tìm tên món ăn...", className: "w-full bg-slate-50 dark:bg-zinc-800/50 border border-slate-200 dark:border-zinc-700/50 rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-emerald-500 focus:ring-2 text-xs font-bold text-slate-800 dark:text-zinc-100 transition-all shadow-sm" })), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "cheatday" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "cheatday" ? "bg-orange-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Cheatday"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, foodType: "normal" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.foodType === "normal" ? "bg-emerald-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Bình thường")), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "lack" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "lack" ? "bg-red-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thiếu Pro"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, proType: "enough" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.proType === "enough" ? "bg-blue-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Đủ Pro")))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("h3", { className: "text-[10px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest mb-3 ml-1 flex items-center gap-1.5" }, React.createElement(MoonIcon, { size: 14 }), " Giấc Ngủ"), React.createElement("div", { className: "space-y-3" }, React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "late" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "late" ? "bg-rose-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thức khuya"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepStart: "early" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepStart === "early" ? "bg-indigo-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Ngủ sớm")), React.createElement("div", { className: "flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl w-full border border-slate-200/50 dark:border-zinc-700/50 shadow-inner" }, React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "late" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "late" ? "bg-rose-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Ngủ nướng"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "all" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "all" ? "bg-white dark:bg-zinc-700 shadow-sm text-slate-800 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Tất cả"), React.createElement("button", { onClick: () => setJournalFilters((p) => ({ ...p, sleepEnd: "early" })), className: `flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${journalFilters.sleepEnd === "early" ? "bg-indigo-500 shadow-sm text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-zinc-300"}` }, "Thức sớm")))), React.createElement("div", { className: "pt-4 border-t border-slate-100 dark:border-zinc-800/50" }, React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("h3", { className: "text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1" }, "Tâm Trạng"), React.createElement("div", { className: "grid grid-cols-2 gap-2" }, MOOD5.map((m) => {
       const isSel = journalFilters.moods.includes(m.val);
       return React.createElement("button", { key: m.val, onClick: () => toggleFilterItem("moods", m.val), className: `p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all border ${isSel ? m.twBg + " " + m.twText + " border-transparent shadow-md scale-105 ring-2 ring-current" : "bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-400 hover:bg-slate-50 dark:hover:bg-zinc-800"}` }, React.createElement(m.icon, { size: 16, strokeWidth: 2.5 }), React.createElement("span", { className: "text-[8px] font-black uppercase tracking-wider" }, m.label));
     }))), React.createElement("div", null, React.createElement("h3", { className: "text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase tracking-widest mb-3 ml-1" }, "Hoạt Động"), React.createElement("div", { className: "flex flex-col gap-2" }, OUTINGS.map((o) => {
@@ -5670,8 +5883,8 @@ try {
         setShowFilterModal(false);
       }
     }, className: "flex-1 py-4 bg-purple-600 text-white rounded-[1.25rem] font-black text-lg shadow-xl shadow-purple-500/30 flex justify-center items-center gap-2 transition-all active:scale-[0.98]" }, "Áp dụng Filter")))), secretBubble && (() => {
-      const bStat = statsByDate[secretBubble.dateKey] || { mood: 3, outing: 1, detail: "", summary: "", images: [], musicUrl: "" };
-      const bMood = MOODS.find((m) => m.val === bStat.mood) || MOODS[3];
+      const bStat = statsByDate[secretBubble.dateKey] || EMPTY_STAT;
+      const bMood = getDayMood(bStat).tone || { ...MOOD5[2], label: "Chưa ghi" };
       const bOut = OUTINGS.find((o) => o.val === bStat.outing) || OUTINGS[0];
       return React.createElement("div", { className: "fixed inset-0 z-[180] flex justify-center items-center p-5" }, React.createElement("div", { className: "absolute inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-md modal-overlay", onClick: () => setSecretBubble(null) }), React.createElement("div", { className: "relative z-10 w-full max-w-sm animate-[fadeScale_0.25s_cubic-bezier(0.16,1,0.3,1)] flex flex-col items-center" }, React.createElement("div", { className: `w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-[2.5rem] p-6 shadow-2xl border-2 ${bMood.twBorder} relative overflow-hidden` }, React.createElement("div", { className: `absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-30 pointer-events-none ${bMood.twBg}` }), React.createElement("div", { className: "flex justify-between items-center mb-4 pb-3 border-b border-slate-100 dark:border-zinc-800/80" }, React.createElement("div", { className: "flex items-center gap-2.5" }, React.createElement("span", { className: `px-3 py-1.5 rounded-xl text-xs font-black ${bMood.twBg} ${bMood.twText} border ${bMood.twBorder} flex items-center gap-1.5 shadow-sm` }, React.createElement(bMood.icon, { size: 15, strokeWidth: 2.5 }), " ", bMood.label), React.createElement("span", { className: "text-xs font-black text-slate-400 dark:text-zinc-500 tracking-wider" }, secretBubble.dateKey)), React.createElement("button", { onClick: () => setSecretBubble(null), className: "p-2 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 active:scale-90 transition-all" }, React.createElement(XIcon, { size: 16 }))), React.createElement("div", { className: "mb-2 flex items-center justify-between" }, React.createElement("span", { className: "text-[10px] font-black uppercase tracking-widest text-purple-500 dark:text-purple-400 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 13 }), " Bong bóng hồi tưởng"), React.createElement("span", { className: "text-[10px] font-bold text-slate-400 dark:text-zinc-500 flex items-center gap-1" }, React.createElement(bOut.Icon, { size: 12, className: bOut.color }), " ", bOut.label)), secretBubble.isEditing ? React.createElement("div", { className: "space-y-3 mt-3" }, React.createElement(
         "textarea",
@@ -5687,7 +5900,7 @@ try {
         setStatsByDate((prev) => ({
           ...prev,
           [secretBubble.dateKey]: {
-            ...prev[secretBubble.dateKey] || { mood: 3, outing: 1, summary: "", images: [], musicUrl: "" },
+            ...prev[secretBubble.dateKey] || EMPTY_STAT,
             detail: newDetail
           }
         }));
