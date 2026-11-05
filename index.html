@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="d54a6a102b">
+    <meta name="cls-build" content="56db10bb56">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -379,6 +379,7 @@ try {
         return { text: "text-slate-600 dark:text-slate-400", fill: "bg-slate-500 dark:bg-zinc-600", border: "border-slate-500 dark:border-zinc-600", textLight: "text-white", lightBg: "bg-slate-50 dark:bg-zinc-800/50" };
     }
   };
+  const KHUNG_NGU = { ngu: "22:30", day: "06:00", truaToiDa: 30 };
   const getCircadianWarning = (sleeps) => {
     if (!sleeps || sleeps.length === 0) return null;
     const mainSleep = sleeps[sleeps.length - 1];
@@ -4230,7 +4231,57 @@ try {
         '"',
         currentSleepNote,
         '"'
-      )), React.createElement("div", { className: "bg-white dark:bg-zinc-900 rounded-[2rem] p-5 border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors" }, React.createElement("div", { className: "flex justify-between items-center mb-4" }, React.createElement("div", { className: "flex items-center gap-3" }, React.createElement("div", { className: "p-2.5 rounded-2xl bg-indigo-500/15 text-indigo-400" }, React.createElement(MoonIcon, { size: 20 })), React.createElement("div", null, React.createElement("h4", { className: "font-black text-slate-800 dark:text-zinc-100 text-base tracking-tight" }, "Giấc ngủ chính"), React.createElement("p", { className: "text-[10px] font-bold text-zinc-500 uppercase tracking-wider" }, "Ngủ đêm • ", formatDuration(currentTotalSleepMins)))), React.createElement(
+      )), (() => {
+        const toMin = (t) => {
+          const m = /^(\d{1,2}):(\d{2})/.exec(String(t || "").trim());
+          return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+        };
+        const hhmm = (mins) => {
+          const v = (Math.round(mins) % 1440 + 1440) % 1440;
+          return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+        };
+        const doDai = (mins) => {
+          const v = Math.round(Math.abs(mins));
+          if (v < 60) return `${v} phút`;
+          const h = Math.floor(v / 60), mm = v % 60;
+          return `${h}h${mm ? String(mm).padStart(2, "0") : ""}`;
+        };
+        const mucDay = toMin(KHUNG_NGU.day);
+        const mucNgu = toMin(KHUNG_NGU.ngu);
+        const ngay7 = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(selectedDate);
+          d.setDate(d.getDate() - i);
+          const k = formatDate(d);
+          const list = sleepByDate[k] || [];
+          const main = list.length ? list[list.length - 1] : null;
+          const wake = main ? toMin(main.wakeTime) : null;
+          let bed = main ? toMin(main.sleepTime) : null;
+          if (bed !== null && bed < 12 * 60) bed += 24 * 60;
+          ngay7.push({ k, label: VN_DAYS[d.getDay()], wake, bed, wakeTxt: main ? main.wakeTime : "", bedTxt: main ? main.sleepTime : "" });
+        }
+        const coDay = ngay7.filter((x) => x.wake !== null);
+        const coNgu = ngay7.filter((x) => x.bed !== null);
+        const lechDay = (x) => x.wake - mucDay;
+        const treNgu = (x) => x.bed - mucNgu;
+        const dayDung = coDay.filter((x) => Math.abs(lechDay(x)) <= 30).length;
+        const nguDung = coNgu.filter((x) => treNgu(x) <= 30).length;
+        const mauDay = (x) => x.wake === null ? "bg-slate-200 dark:bg-zinc-800" : Math.abs(lechDay(x)) <= 30 ? "bg-emerald-500" : Math.abs(lechDay(x)) <= 90 ? "bg-amber-400" : "bg-rose-500";
+        const mauNgu = (x) => x.bed === null ? "bg-slate-200 dark:bg-zinc-800" : treNgu(x) <= 30 ? "bg-emerald-500" : treNgu(x) <= 90 ? "bg-amber-400" : "bg-rose-500";
+        const tbDay = coDay.length ? coDay.reduce((a, x) => a + x.wake, 0) / coDay.length : null;
+        const tbLech = tbDay !== null ? tbDay - mucDay : 0;
+        const tbTxt = tbDay === null ? "" : Math.abs(tbLech) <= 30 ? "đúng khung" : `${tbLech > 0 ? "trễ" : "sớm"} ${doDai(tbLech)} so với ${KHUNG_NGU.day}`;
+        const tbCls = Math.abs(tbLech) <= 30 ? "text-emerald-600 dark:text-emerald-400" : Math.abs(tbLech) <= 90 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
+        const hanNgu = hhmm(mucNgu + 30);
+        const truaQua = currentTotalNapMins - KHUNG_NGU.truaToiDa;
+        const laHomNay = formatDate(getCalasuToday()) === dateKey;
+        const truaNhan = laHomNay ? "Ngủ trưa hôm nay" : `Ngủ trưa ngày ${dateKey.slice(0, 5)}`;
+        const truaGhiChu = currentTotalNapMins <= 0 ? `Có ngủ trưa thì ghi lại để so với mốc ${KHUNG_NGU.truaToiDa} phút` : truaQua <= 0 ? `Trong mốc ${KHUNG_NGU.truaToiDa} phút` : `Quá mốc ${doDai(truaQua)}`;
+        const truaCls = currentTotalNapMins <= 0 ? "text-zinc-500" : truaQua <= 0 ? "text-emerald-600 dark:text-emerald-400" : truaQua <= 30 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
+        const dem = (dung, tong) => tong > 0 ? React.createElement("p", { className: "font-black text-slate-800 dark:text-zinc-100 text-xl leading-none tabular-nums" }, dung, React.createElement("span", { className: "text-xs font-bold text-zinc-500" }, "/", tong, " ngày")) : React.createElement("p", { className: "text-xs font-bold text-zinc-500" }, "chưa có số");
+        const vach = (prefix, mau, txt, co) => React.createElement("div", { className: "mt-2.5 grid grid-cols-7 gap-1.5" }, ngay7.map((x) => React.createElement("div", { key: prefix + x.k, className: "flex flex-col items-center gap-1 min-w-0" }, React.createElement("span", { className: `w-full h-1.5 rounded-full ${mau(x)}` }), React.createElement("span", { className: "text-[10px] font-black text-slate-700 dark:text-zinc-200 tabular-nums" }, co(x) ? txt(x) : "–"), React.createElement("span", { className: `text-[9px] font-bold ${x.k === dateKey ? "text-slate-800 dark:text-zinc-100" : "text-zinc-500"}` }, x.label))));
+        return React.createElement("div", { className: "bg-white dark:bg-zinc-900 rounded-[2rem] p-5 border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors" }, React.createElement("div", { className: "flex items-center gap-3 mb-4" }, React.createElement("div", { className: "p-2.5 rounded-2xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400" }, React.createElement(ClockIcon, { size: 20 })), React.createElement("div", null, React.createElement("h4", { className: "font-black text-slate-800 dark:text-zinc-100 text-base tracking-tight" }, "Khung chuẩn ", KHUNG_NGU.ngu, " → ", KHUNG_NGU.day), React.createElement("p", { className: "text-[10px] font-bold text-zinc-500 uppercase tracking-wider" }, "7 ngày tới ", dateKey.slice(0, 5)))), React.createElement("div", null, React.createElement("div", { className: "flex items-end justify-between gap-3" }, React.createElement("p", { className: "text-xs font-bold text-slate-600 dark:text-zinc-300" }, "Dậy quanh ", KHUNG_NGU.day), dem(dayDung, coDay.length)), vach("d", mauDay, (x) => x.wakeTxt, (x) => x.wake !== null), tbDay !== null && React.createElement("p", { className: `mt-2.5 text-[11px] font-bold ${tbCls}` }, "Trung bình dậy ", hhmm(tbDay), " · ", tbTxt)), React.createElement("div", { className: "mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800" }, React.createElement("div", { className: "flex items-end justify-between gap-3" }, React.createElement("p", { className: "text-xs font-bold text-slate-600 dark:text-zinc-300" }, "Lên giường trước ", hanNgu), dem(nguDung, coNgu.length)), vach("n", mauNgu, (x) => x.bedTxt, (x) => x.bed !== null)), React.createElement("div", { className: "mt-4 pt-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3" }, React.createElement("div", { className: "min-w-0" }, React.createElement("p", { className: "text-xs font-bold text-slate-600 dark:text-zinc-300" }, truaNhan), React.createElement("p", { className: `mt-0.5 text-[11px] font-bold ${truaCls}` }, truaGhiChu)), React.createElement("p", { className: "font-black text-slate-800 dark:text-zinc-100 text-xl leading-none tabular-nums shrink-0" }, currentTotalNapMins > 0 ? doDai(currentTotalNapMins) : "–")));
+      })(), React.createElement("div", { className: "bg-white dark:bg-zinc-900 rounded-[2rem] p-5 border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors" }, React.createElement("div", { className: "flex justify-between items-center mb-4" }, React.createElement("div", { className: "flex items-center gap-3" }, React.createElement("div", { className: "p-2.5 rounded-2xl bg-indigo-500/15 text-indigo-400" }, React.createElement(MoonIcon, { size: 20 })), React.createElement("div", null, React.createElement("h4", { className: "font-black text-slate-800 dark:text-zinc-100 text-base tracking-tight" }, "Giấc ngủ chính"), React.createElement("p", { className: "text-[10px] font-bold text-zinc-500 uppercase tracking-wider" }, "Ngủ đêm • ", formatDuration(currentTotalSleepMins)))), React.createElement(
         "button",
         {
           onClick: () => {
