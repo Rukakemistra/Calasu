@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="20474bd490">
+    <meta name="cls-build" content="65e6668241">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -1004,7 +1004,7 @@ try {
   const spMarks = { get: () => null };
   const spStartOpt = (trackId, dateKey) => {
     const m = dateKey ? spMarks.get(dateKey, trackId) : null;
-    return { dateKey: dateKey || null, positionMs: m !== null && m !== void 0 ? Math.max(0, m - 3e3) : 0 };
+    return { dateKey: dateKey || null, positionMs: m !== null && m !== void 0 ? Math.max(0, m) : 0 };
   };
   const playOrEmbed = (trackId, embed, dateKey) => {
     if (!trackId) {
@@ -1991,6 +1991,7 @@ try {
       else setThumb("");
     }, className: "w-full h-full object-cover" }) : React.createElement("div", { className: "w-full h-full flex items-center justify-center", style: { background: tone + "26" } }, React.createElement("span", { className: "cls-hand text-6xl", style: { color: tone } }, d))), React.createElement("div", { className: "flex items-baseline justify-between gap-2 mt-2 px-0.5" }, React.createElement("span", { className: "cls-hand text-xl text-[#27272a]" }, d, ".", m, ".", y), React.createElement("span", { className: "text-[11px] font-bold text-[#a1a1aa] tabular-nums" }, ago, " ngày trước")), summary && React.createElement("p", { className: "cls-hand text-[19px] leading-tight text-[#3f3f46] mt-0.5 px-0.5 break-words" }, summary), (dots.length > 0 || out) && React.createElement("div", { className: "flex items-center gap-1.5 mt-2 px-0.5" }, dots.map((c, i) => React.createElement("span", { key: i, className: "w-2.5 h-2.5 rounded-full", style: c ? { background: c } : { border: "1.5px solid #d4d4d8" } })), out && React.createElement("span", { className: "ml-auto text-[11px] font-bold inline-flex items-center gap-1", style: { color: OUTING_HEX[out.val] } }, React.createElement(out.Icon, { size: 12 }), " ", out.label)), embed && React.createElement("div", { className: "mt-2.5 rounded-[2px] bg-[#151517] p-1" }, playing ? React.createElement("iframe", { src: embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", className: "rounded-[2px] block", title: "Spotify" }) : React.createElement(SpotifyTrackFacade, { musicUrl: st.musicUrl, onPlay: () => playOrEmbed(trackId, () => setPlaying(true), dKey), gasUrl, gasKey })));
   };
+  const SHOW_MEMORY_BTN = false;
   const MemorySheet = ({ statsByDate, gasUrl, gasKey, onOpenDay, onClose }) => {
     const [mode, setMode] = useState(() => {
       try {
@@ -5394,7 +5395,7 @@ try {
         title: isHeaderCollapsed ? "Hiện thanh Ngày / Tuần / Tháng" : "Ẩn thanh Ngày / Tuần / Tháng"
       },
       React.createElement(ChevronRightIcon, { size: 16, className: `transition-transform duration-300 ${isHeaderCollapsed ? "rotate-90" : "-rotate-90"}` })
-    ))), isWide && showPullReminder && React.createElement("div", { className: "flex items-center gap-2.5 h-[34px] pl-3 pr-1 ml-4 mr-1 border border-line text-[13px] text-sub shrink-0", "data-pull-cell": true }, React.createElement("span", { className: "w-1.5 h-1.5 rounded-full bg-accent cls-glow shrink-0" }), "Nhớ lấy dữ liệu về nha!", React.createElement("button", { type: "button", disabled: isSyncing, onClick: () => handleSyncPull(), className: "h-[26px] px-2.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50" }, React.createElement(DownloadIcon, { size: 14 }), " Pull")), React.createElement("div", { className: "flex items-center justify-end shrink-0" }, (appMode === "journal" || appMode === "stat") && React.createElement(
+    ))), isWide && showPullReminder && React.createElement("div", { className: "flex items-center gap-2.5 h-[34px] pl-3 pr-1 ml-4 mr-1 border border-line text-[13px] text-sub shrink-0", "data-pull-cell": true }, React.createElement("span", { className: "w-1.5 h-1.5 rounded-full bg-accent cls-glow shrink-0" }), "Nhớ lấy dữ liệu về nha!", React.createElement("button", { type: "button", disabled: isSyncing, onClick: () => handleSyncPull(), className: "h-[26px] px-2.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all disabled:opacity-50" }, React.createElement(DownloadIcon, { size: 14 }), " Pull")), React.createElement("div", { className: "flex items-center justify-end shrink-0" }, SHOW_MEMORY_BTN && (appMode === "journal" || appMode === "stat") && React.createElement(
       "button",
       {
         type: "button",
