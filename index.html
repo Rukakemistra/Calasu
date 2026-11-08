@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="ca4867fd6f">
+    <meta name="cls-build" content="e33bfc7da8">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -183,6 +183,14 @@
         .cls-app { background: var(--app-glow), rgb(var(--c-bg)); }
         .font-num { font-family: 'Chakra Petch', 'Be Vietnam Pro', sans-serif; }
         .cls-glow { box-shadow: 0 0 14px #6EA8FFaa, 0 0 3px #6EA8FF88; }
+        /* bản 162: thanh tua của thanh phát nhạc */
+        .cls-seek { -webkit-appearance: none; appearance: none; height: 16px; background: transparent; cursor: pointer; margin: 0; }
+        .cls-seek:disabled { cursor: default; }
+        .cls-seek::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, rgb(var(--c-accent)) var(--p, 0%), rgb(var(--c-line)) var(--p, 0%)); }
+        .cls-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgb(var(--c-ink)); margin-top: -4.5px; }
+        .cls-seek::-moz-range-track { height: 3px; background: rgb(var(--c-line)); }
+        .cls-seek::-moz-range-progress { height: 3px; background: rgb(var(--c-accent)); }
+        .cls-seek::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: rgb(var(--c-ink)); }
         .cls-glow-svg { filter: drop-shadow(0 0 6px rgba(110, 168, 255, 0.85)); }
 
         .planner-ruled-bg {
@@ -601,10 +609,46 @@ try {
     crypto.getRandomValues(a);
     return spB64url(a.buffer).slice(0, n);
   };
-  const Spotify = /* @__PURE__ */ (() => {
-    const st = { playingTrack: null, paused: true, mode: null, player: null, deviceId: null, sdkBroken: false, invite: false };
+  const Spotify = (() => {
+    const st = {
+      playingTrack: null,
+      paused: true,
+      mode: null,
+      player: null,
+      deviceId: null,
+      sdkBroken: false,
+      invite: false,
+      pos: 0,
+      posAt: 0,
+      dur: 0,
+      item: null,
+      srcTrack: null,
+      srcDate: null,
+      closed: false
+    };
     const subs = /* @__PURE__ */ new Set();
-    const snap = () => ({ playingTrack: st.playingTrack, paused: st.paused, mode: st.mode, loggedIn: loggedIn(), invite: st.invite });
+    const snap = () => ({
+      playingTrack: st.playingTrack,
+      paused: st.paused,
+      mode: st.mode,
+      loggedIn: loggedIn(),
+      invite: st.invite,
+      pos: st.pos,
+      posAt: st.posAt,
+      dur: st.dur,
+      item: st.item,
+      srcTrack: st.srcTrack,
+      srcDate: st.srcDate,
+      closed: st.closed
+    });
+    const setPos = (ms) => {
+      st.pos = Math.max(0, Number(ms) || 0);
+      st.posAt = Date.now();
+    };
+    const position = () => {
+      const p = st.paused ? st.pos : st.pos + (Date.now() - st.posAt);
+      return Math.max(0, st.dur ? Math.min(st.dur, p) : p);
+    };
     const emit = () => {
       const v = snap();
       subs.forEach((f) => {
@@ -735,8 +779,7 @@ try {
         player.addListener("account_error", fail);
         player.addListener("player_state_changed", (s) => {
           if (!s || st.mode !== "sdk") return;
-          st.paused = !!s.paused;
-          emit();
+          applyState(fromSdk(s));
         });
         Promise.resolve(player.connect()).then((ok) => {
           if (!ok) fail(new Error("connect"));
@@ -744,17 +787,97 @@ try {
         setTimeout(() => fail(new Error("sdk timeout")), 1e4);
       });
     };
-    const play = async (trackId) => {
+    const trackItem = (t) => {
+      if (!t) return null;
+      const imgs = t.album && t.album.images || [];
+      const pic = imgs.slice().sort((a, b) => (a.width || 0) - (b.width || 0)).find((x) => (x.width || 0) >= 200) || imgs[0];
+      return { id: t.linked_from && t.linked_from.id || t.id || null, title: t.name || "", artist: (t.artists || []).map((a) => a && a.name).filter(Boolean).join(", "), thumb: pic && pic.url || "" };
+    };
+    const fromSdk = (s) => ({ paused: !!s.paused, pos: s.position, dur: s.duration, item: trackItem(s.track_window && s.track_window.current_track) });
+    const fromApi = (j) => ({ paused: !j.is_playing, pos: j.progress_ms, dur: j.item && j.item.duration_ms, item: trackItem(j.item) });
+    const applyState = (o) => {
+      if (!o) {
+        if (!st.paused) {
+          st.pos = position();
+          st.posAt = Date.now();
+          st.paused = true;
+        }
+        emit();
+        return;
+      }
+      st.paused = !!o.paused;
+      setPos(o.pos);
+      if (o.dur) st.dur = Number(o.dur) || 0;
+      if (o.item && o.item.id) {
+        const keep = st.item && st.item.id === o.item.id ? st.item : {};
+        st.item = { ...keep, ...Object.fromEntries(Object.entries(o.item).filter(([, v]) => v)) };
+        st.playingTrack = o.item.id;
+      }
+      emit();
+    };
+    let pollT = null, busy = false, slow = 0;
+    const visible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
+    const schedule = () => {
+      clearTimeout(pollT);
+      pollT = null;
+      if (st.mode !== "connect" || st.paused || st.closed || !visible()) return;
+      pollT = setTimeout(refresh, 5e3 * (1 + slow));
+    };
+    const refresh = async () => {
+      if (!st.mode || busy) return;
+      busy = true;
+      try {
+        if (st.mode === "sdk" && st.player) {
+          const s = await st.player.getCurrentState();
+          applyState(s ? fromSdk(s) : null);
+        } else if (st.mode === "connect") {
+          const j = await api("GET", "/me/player");
+          applyState(j && j.item ? fromApi(j) : null);
+        }
+        slow = 0;
+      } catch (e) {
+        slow = Math.min(slow + 1, 5);
+      } finally {
+        busy = false;
+        schedule();
+      }
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", () => {
+      if (visible()) {
+        if (st.mode && !st.closed) refresh();
+      } else {
+        clearTimeout(pollT);
+        pollT = null;
+      }
+    });
+    const play = async (trackId, opt) => {
+      const o = opt || {};
       const uri = "spotify:track:" + trackId;
+      const startMs = Math.max(0, Math.round(Number(o.positionMs) || 0));
+      const body = startMs ? { uris: [uri], position_ms: startMs } : { uris: [uri] };
+      const started = (mode) => {
+        const m = spotifyMetaCache[trackId];
+        Object.assign(st, {
+          mode,
+          playingTrack: trackId,
+          paused: false,
+          closed: false,
+          srcTrack: trackId,
+          srcDate: o.dateKey || null,
+          dur: 0,
+          item: { id: trackId, title: m && m.title || "", artist: getCachedSpotifyArtist(trackId) || "", thumb: m && m.thumb || "" }
+        });
+        setPos(startMs);
+        emit();
+        clearTimeout(pollT);
+        pollT = setTimeout(refresh, 1200);
+        return mode;
+      };
       if (!st.sdkBroken) {
         try {
           const dev = await connectSdk();
-          await api("PUT", "/me/player/play?device_id=" + encodeURIComponent(dev), { uris: [uri] });
-          st.mode = "sdk";
-          st.playingTrack = trackId;
-          st.paused = false;
-          emit();
-          return "sdk";
+          await api("PUT", "/me/player/play?device_id=" + encodeURIComponent(dev), body);
+          return started("sdk");
         } catch (e) {
           if (e && e.message === "chưa đăng nhập") throw e;
           st.sdkBroken = true;
@@ -764,12 +887,8 @@ try {
       const devs = (d.devices || []).filter((x) => !x.is_restricted);
       const pick = devs.find((x) => x.is_active) || devs.find((x) => /smartphone|computer|tablet/i.test(x.type || "")) || devs[0];
       if (!pick) throw new Error("không có máy nào đang mở Spotify");
-      await api("PUT", "/me/player/play?device_id=" + encodeURIComponent(pick.id), { uris: [uri] });
-      st.mode = "connect";
-      st.playingTrack = trackId;
-      st.paused = false;
-      emit();
-      return "connect";
+      await api("PUT", "/me/player/play?device_id=" + encodeURIComponent(pick.id), body);
+      return started("connect");
     };
     const pause = async () => {
       try {
@@ -777,7 +896,55 @@ try {
         else await api("PUT", "/me/player/pause");
       } catch (e) {
       }
+      st.pos = position();
+      st.posAt = Date.now();
       st.paused = true;
+      emit();
+      schedule();
+    };
+    const resume = async () => {
+      if (st.mode === "sdk" && st.player) await st.player.resume();
+      else await api("PUT", "/me/player/play");
+      st.posAt = Date.now();
+      st.paused = false;
+      st.closed = false;
+      emit();
+      schedule();
+    };
+    const seek = async (ms) => {
+      const v = Math.max(0, Math.round(Number(ms) || 0));
+      setPos(v);
+      emit();
+      try {
+        if (st.mode === "sdk" && st.player) await st.player.seek(v);
+        else await api("PUT", "/me/player/seek?position_ms=" + v);
+      } catch (e) {
+      }
+      if (st.mode === "connect") {
+        clearTimeout(pollT);
+        pollT = setTimeout(refresh, 1e3);
+      }
+    };
+    const playPause = async () => {
+      if (!st.paused) {
+        await pause();
+        return;
+      }
+      try {
+        await resume();
+      } catch (e) {
+        if (st.playingTrack) {
+          try {
+            await play(st.playingTrack, { positionMs: position(), dateKey: st.playingTrack === st.srcTrack ? st.srcDate : null });
+          } catch (x) {
+          }
+        }
+      }
+    };
+    const close = () => {
+      st.closed = true;
+      clearTimeout(pollT);
+      pollT = null;
       emit();
     };
     const invite = () => {
@@ -792,36 +959,39 @@ try {
         emit();
       }
     };
-    const toggle = async (trackId) => {
+    const toggle = async (trackId, opt) => {
       if (st.playingTrack === trackId && !st.paused) {
         await pause();
         return "pause";
       }
-      if (st.playingTrack === trackId && st.paused && st.mode) {
+      if (st.playingTrack === trackId && st.paused && st.mode && !st.closed) {
         try {
-          if (st.mode === "sdk" && st.player) await st.player.resume();
-          else await api("PUT", "/me/player/play");
-          st.paused = false;
-          emit();
+          await resume();
           return st.mode;
         } catch (e) {
         }
       }
-      return play(trackId);
+      return play(trackId, opt);
+    };
+    const ensure = async (trackId, opt) => {
+      if (st.playingTrack === trackId && !st.paused) return "dang-phat";
+      return toggle(trackId, opt);
     };
     const logout = () => {
       try {
         if (st.player) st.player.disconnect();
       } catch (e) {
       }
-      Object.assign(st, { player: null, deviceId: null, playingTrack: null, paused: true, mode: null, sdkBroken: false });
+      clearTimeout(pollT);
+      pollT = null;
+      Object.assign(st, { player: null, deviceId: null, playingTrack: null, paused: true, mode: null, sdkBroken: false, item: null, srcTrack: null, srcDate: null, dur: 0, pos: 0, closed: false });
       spSave(null);
       emit();
     };
     return { loggedIn, login: () => {
       st.invite = false;
       return login();
-    }, handleRedirect, toggle, pause, logout, invite, dismissInvite, get: snap, subscribe: (f) => {
+    }, handleRedirect, toggle, ensure, pause, resume, playPause, seek, position, refresh, close, logout, invite, dismissInvite, get: snap, subscribe: (f) => {
       subs.add(f);
       return () => subs.delete(f);
     } };
@@ -831,7 +1001,12 @@ try {
     useEffect(() => Spotify.subscribe(set), []);
     return s;
   };
-  const playOrEmbed = (trackId, embed) => {
+  const spMarks = { get: () => null };
+  const spStartOpt = (trackId, dateKey) => {
+    const m = dateKey ? spMarks.get(dateKey, trackId) : null;
+    return { dateKey: dateKey || null, positionMs: m !== null && m !== void 0 ? Math.max(0, m - 3e3) : 0 };
+  };
+  const playOrEmbed = (trackId, embed, dateKey) => {
     if (!trackId) {
       embed();
       return;
@@ -841,9 +1016,15 @@ try {
       return;
     }
     Spotify.dismissInvite();
-    Spotify.toggle(trackId).catch(() => {
+    Spotify.toggle(trackId, spStartOpt(trackId, dateKey)).catch(() => {
       if (!Spotify.loggedIn()) Spotify.invite();
       else embed();
+    });
+  };
+  const playDayPhoto = (trackId, dateKey) => {
+    if (!trackId || !Spotify.loggedIn()) return;
+    Spotify.dismissInvite();
+    Spotify.ensure(trackId, spStartOpt(trackId, dateKey)).catch(() => {
     });
   };
   const PauseBars = ({ size = 15 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": "true", style: { filter: "drop-shadow(0 1px 3px rgba(0,0,0,.5))" } }, React.createElement("rect", { x: "6", y: "4", width: "4.5", height: "16", rx: "1", fill: "#fff" }), React.createElement("rect", { x: "13.5", y: "4", width: "4.5", height: "16", rx: "1", fill: "#fff" }));
@@ -1212,6 +1393,97 @@ try {
   };
   const mpFormat = (obj) => MEALS.filter((m) => (obj && obj[m] || []).length).map((m) => `${m}: ${obj[m].join(", ")}`).join("\n");
   const capSafeLimit = (limit) => Number(limit) > 0 ? Math.floor(Number(limit) * 0.8) : 2e4;
+  const PinIcon = IconLib.Pin || iconFallback("📌");
+  const MARK_RE = /^Cao trào (\d{1,3}):([0-5]\d)[ \t]*$/;
+  const markFmt = (ms) => {
+    const s = Math.max(0, Math.floor((Number(ms) || 0) / 1e3));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+  const markGet = (note) => {
+    const lines = String(note || "").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const m = MARK_RE.exec(lines[i]);
+      if (m) return (Number(m[1]) * 60 + Number(m[2])) * 1e3;
+    }
+    return null;
+  };
+  const markSet = (note, ms) => {
+    const line = "Cao trào " + markFmt(ms);
+    const n = String(note || "");
+    if (!n) return line;
+    const lines = n.split("\n");
+    const i = lines.findIndex((l) => MARK_RE.test(l));
+    if (i >= 0) {
+      lines[i] = line;
+      return lines.join("\n");
+    }
+    return n + (n.endsWith("\n") ? "" : "\n") + line;
+  };
+  const markClear = (note) => {
+    const n = String(note || "");
+    const lines = n.split("\n");
+    const i = lines.findIndex((l) => MARK_RE.test(l));
+    if (i < 0) return n;
+    lines.splice(i, 1);
+    return lines.join("\n");
+  };
+  const markOnUrlChange = (base, newUrl) => {
+    if (!base || getSpotifyTrackId(base.musicUrl) === getSpotifyTrackId(newUrl)) return {};
+    if (markGet(base.musicMarkNote) === null) return {};
+    return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
+  };
+  const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
+  const PlayerBar = ({ sp, markMs, canPin, onPin }) => {
+    const [, setTick] = useState(0);
+    const [drag, setDrag] = useState(null);
+    const dragRef = useRef(null);
+    const [imgFailed, setImgFailed] = useState(false);
+    const it = sp && sp.item || {};
+    useEffect(() => {
+      setImgFailed(false);
+    }, [it.thumb]);
+    useEffect(() => {
+      if (!sp || sp.paused || drag !== null) return;
+      const t = setInterval(() => setTick((x) => x + 1), 500);
+      return () => clearInterval(t);
+    }, [sp && sp.paused, drag !== null]);
+    if (!spBarOn(sp)) return null;
+    const dur = sp.dur || 0;
+    const pos = drag !== null ? drag : Spotify.position();
+    const pct = dur ? Math.min(100, pos / dur * 100) : 0;
+    const hasMark = canPin && markMs !== null && markMs !== void 0;
+    const move = (v) => {
+      dragRef.current = v;
+      setDrag(v);
+    };
+    const commit = () => {
+      const v = dragRef.current;
+      if (v === null) return;
+      dragRef.current = null;
+      setDrag(null);
+      Spotify.seek(v);
+    };
+    return React.createElement("div", { className: "shrink-0 bg-card border-t border-line", onClick: (e) => e.stopPropagation(), "data-player-bar": sp.paused ? "dung" : "dang-phat" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto flex items-center gap-2.5 pl-3 pr-2 py-2" }, React.createElement("div", { className: "w-10 h-10 shrink-0 overflow-hidden", style: { background: COVER_FALLBACK } }, it.thumb && !imgFailed && React.createElement("img", { src: it.thumb, alt: "", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" })), React.createElement("div", { className: "flex-1 min-w-0" }, React.createElement("div", { className: "text-[13px] leading-tight text-ink truncate", "data-player-title": true }, React.createElement("span", { className: "font-semibold" }, it.title || "Spotify"), it.artist ? React.createElement("span", { className: "text-sub" }, " · ", it.artist) : null), React.createElement("div", { className: "flex items-center gap-2 mt-1 font-num text-[11px] text-sub tabular-nums" }, React.createElement("span", { className: "w-8 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-4 flex items-center" }, React.createElement(
+      "input",
+      {
+        type: "range",
+        min: "0",
+        max: dur || 1,
+        step: "1000",
+        value: Math.min(Math.round(pos), dur || 1),
+        disabled: !dur,
+        "aria-label": "Tua",
+        className: "cls-seek w-full",
+        style: { "--p": pct + "%" },
+        onChange: (e) => move(Number(e.target.value)),
+        onPointerUp: commit,
+        onTouchEnd: commit,
+        onKeyUp: commit,
+        onBlur: commit,
+        "data-player-seek": true
+      }
+    ), hasMark && dur > 0 && React.createElement("span", { className: "absolute pointer-events-none", style: { left: `calc(${Math.min(100, markMs / dur * 100)}% - 1px)`, top: 1, bottom: 1, width: 2, background: "rgb(var(--c-accent))" }, "data-player-mark": markFmt(markMs) })), React.createElement("span", { className: "w-8 shrink-0 text-right", "data-player-dur": true }, dur ? markFmt(dur) : ""))), canPin && React.createElement("button", { type: "button", "aria-label": "Ghim cao trào", "aria-pressed": hasMark ? "true" : "false", onClick: () => onPin(Spotify.position()), className: `w-9 h-9 shrink-0 flex items-center justify-center active:scale-90 transition-transform ${hasMark ? "text-accent" : "text-sub"}`, "data-player-pin": true }, React.createElement(PinIcon, { size: 18 })), React.createElement("button", { type: "button", "aria-label": sp.paused ? "Phát" : "Dừng", onClick: () => Spotify.playPause(), className: "w-9 h-9 shrink-0 flex items-center justify-center bg-ink text-bg active:scale-90 transition-transform", "data-player-toggle": true }, sp.paused ? React.createElement("svg", { viewBox: "0 0 24 24", width: "16", height: "16", fill: "currentColor", className: "ml-0.5", "aria-hidden": "true" }, React.createElement("path", { d: "M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" })) : React.createElement("svg", { viewBox: "0 0 24 24", width: "16", height: "16", fill: "currentColor", "aria-hidden": "true" }, React.createElement("rect", { x: "6", y: "4", width: "4.5", height: "16", rx: "1" }), React.createElement("rect", { x: "13.5", y: "4", width: "4.5", height: "16", rx: "1" }))), sp.paused && React.createElement("button", { type: "button", "aria-label": "Tắt thanh phát", onClick: () => Spotify.close(), className: "w-7 h-9 shrink-0 flex items-center justify-center text-sub hover:text-ink", "data-player-close": true }, React.createElement(XIcon, { size: 16 }))));
+  };
   const BasketIcon = IconLib.ShoppingBasket || iconFallback("🧺");
   const ListChecksIcon = IconLib.ListChecks || iconFallback("☑");
   const LightbulbIcon = IconLib.Lightbulb || iconFallback("💡");
@@ -1533,18 +1805,12 @@ try {
     });
     return out;
   };
-  const BasketSheet = ({ basket, todoCache, parseTask, matches, onToggleItem, onToggleGroup, onSaveOps, onClose }) => {
+  const BasketSheet = ({ basket, todoCache, parseTask, matches, onToggleItem, onToggleGroup, onSaveOps, onAddTask, onEditTask, onClose }) => {
     const hist = React.useMemo(() => basketHistory(todoCache, parseTask, getCalasuToday()), [todoCache]);
-    const [adding, setAdding] = useState(null);
-    const [addText, setAddText] = useState("");
-    const [editing, setEditing] = useState(null);
     const press = useRef({ timer: null, fired: false });
     const inBasket = new Set(basket.map((b) => hwNorm(parseTask(b.name).cleanText)));
     const suggest = basketSuggestions(hist, inBasket);
-    const openEdit = (item) => {
-      const items = hwCleanItems(hwItemsFromText(item.howto));
-      setEditing({ oldName: item.name, name: item.name, group: item.group, items });
-    };
+    const openEdit = (item) => onEditTask(item);
     const pressStart = (item) => {
       const p = press.current;
       p.fired = false;
@@ -1562,32 +1828,12 @@ try {
       }
       onToggleItem(item);
     };
-    const commitAdd = (gid) => {
-      const n = addText.replace(/\s+/g, " ").trim();
-      setAdding(null);
-      setAddText("");
-      if (n) onSaveOps([{ op: "add", name: n, group: gid }]);
-    };
-    const saveEdit = () => {
-      const n = String(editing.name || "").replace(/\s+/g, " ").trim();
-      if (!n) return;
-      const tpl = hwCleanItems(editing.items).map(hwItemLine).join("\n");
-      onSaveOps([{ op: "update", oldName: editing.oldName, name: n, group: editing.group, howto: tpl }]);
-      setEditing(null);
-    };
-    const delEdit = () => {
-      onSaveOps([{ op: "delete", name: editing.oldName }]);
-      setEditing(null);
-    };
     useEffect(() => () => clearTimeout(press.current.timer), []);
-    return React.createElement("div", { className: "fixed inset-0 z-[215] flex justify-center items-end sm:items-center p-0 sm:p-4", "data-basket": true }, React.createElement("div", { className: "absolute inset-0 bg-bg/65 backdrop-blur-sm modal-overlay", onClick: onClose }), React.createElement("div", { className: "relative z-10 w-full max-w-md rounded-t-[2px] sm:rounded-[2px] border-t sm:border border-line bottom-sheet max-h-[88dvh] overflow-y-auto no-scrollbar px-4 pt-3 pb-6", style: { background: "linear-gradient(168deg, #1f2330 0%, #161923 100%)" } }, React.createElement("div", { className: "w-10 h-1.5 bg-line/80 rounded-full mx-auto mb-1" }), editing ? React.createElement("div", { "data-basket-edit": true, className: "pt-3" }, React.createElement("div", { className: "flex items-center gap-2 mb-3" }, React.createElement("input", { type: "text", value: editing.name, onChange: (e) => setEditing((p) => ({ ...p, name: e.target.value })), className: "flex-1 min-w-0 bg-bg border border-line focus:border-accent/40 rounded-[2px] px-4 py-2.5 outline-none font-bold text-sm text-ink" }), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => setEditing(null), className: "p-2 rounded-[2px] bg-groove text-sub hover:bg-line active:scale-90 transition-all shrink-0" }, React.createElement(XIcon, { size: 16 }))), React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-4" }, BASKET_GROUPS.map((g) => React.createElement("button", { key: g.id, type: "button", "aria-pressed": editing.group === g.id ? "true" : "false", onClick: () => setEditing((p) => ({ ...p, group: g.id })), className: `py-2 rounded-[2px] text-xs font-bold border transition-all active:scale-95 ${editing.group === g.id ? "text-ink border-transparent" : "bg-bg text-sub border-line"}`, style: editing.group === g.id ? { background: g.hex } : void 0 }, g.label))), React.createElement("label", { className: "block text-[10px] font-bold text-sub mb-1.5 ml-1" }, "Cách làm"), React.createElement(HowtoEditor, { items: editing.items, onChange: (items) => setEditing((p) => ({ ...p, items })) }), React.createElement("div", { className: "flex gap-2 mt-5" }, React.createElement("button", { type: "button", "aria-label": "Xóa khỏi giỏ", onClick: delEdit, className: "w-12 rounded-[2px] bg-groove text-sub hover:text-bad flex items-center justify-center active:scale-95 transition-all" }, React.createElement(Trash2Icon, { size: 16 })), React.createElement("button", { type: "button", onClick: saveEdit, className: "flex-1 py-3 text-onaccent rounded-[2px] font-bold text-sm active:scale-[0.98] transition-all bg-accent" }, "Lưu"))) : BASKET_GROUPS.map((g) => {
+    return React.createElement("div", { className: "fixed inset-0 z-[215] flex justify-center items-end sm:items-center p-0 sm:p-4", "data-basket": true }, React.createElement("div", { className: "absolute inset-0 bg-bg/65 backdrop-blur-sm modal-overlay", onClick: onClose }), React.createElement("div", { className: "relative z-10 w-full max-w-md rounded-t-[2px] sm:rounded-[2px] border-t sm:border border-line bottom-sheet max-h-[88dvh] overflow-y-auto no-scrollbar px-4 pt-3 pb-6", style: { background: "linear-gradient(168deg, #1f2330 0%, #161923 100%)" } }, React.createElement("div", { className: "w-10 h-1.5 bg-line/80 rounded-full mx-auto mb-1" }), BASKET_GROUPS.map((g) => {
       const items = basket.filter((b) => b.group === g.id);
       const sug = suggest[g.id] || [];
       const allIn = items.length > 0 && items.every((b) => matches(b).length > 0);
-      return React.createElement("div", { key: g.id, "data-basket-group": g.id }, React.createElement("div", { className: `flex items-center gap-2 mt-3 mb-2 text-xs font-bold ${g.text}` }, React.createElement("span", { className: "w-6 h-6 rounded-[2px] flex items-center justify-center", style: { background: g.hex + "24" } }, React.createElement(g.Icon, { size: 13 })), React.createElement("span", null, g.label), React.createElement("span", { className: "flex-1" }), React.createElement("button", { type: "button", "aria-label": `Cả nhóm ${g.label}`, "aria-pressed": allIn ? "true" : "false", onClick: () => onToggleGroup(g.id), className: `w-7 h-7 rounded-[2px] border flex items-center justify-center transition-all active:scale-90 ${allIn ? "text-ink border-transparent" : "text-sub bg-ink/[0.04] border-line"}`, style: allIn ? { background: g.hex } : void 0 }, React.createElement(CheckCheckIcon, { size: 14 })), React.createElement("button", { type: "button", "aria-label": `Thêm vào giỏ ${g.label}`, onClick: () => {
-        setAdding(g.id);
-        setAddText("");
-      }, className: "w-7 h-7 rounded-[2px] border border-line bg-ink/[0.04] text-sub flex items-center justify-center transition-all active:scale-90" }, React.createElement(PlusIcon, { size: 14 }))), React.createElement("div", { className: "grid grid-cols-2 gap-2" }, items.map((b) => {
+      return React.createElement("div", { key: g.id, "data-basket-group": g.id }, React.createElement("div", { className: `flex items-center gap-2 mt-3 mb-2 text-xs font-bold ${g.text}` }, React.createElement("span", { className: "w-6 h-6 rounded-[2px] flex items-center justify-center", style: { background: g.hex + "24" } }, React.createElement(g.Icon, { size: 13 })), React.createElement("span", null, g.label), React.createElement("span", { className: "flex-1" }), React.createElement("button", { type: "button", "aria-label": `Cả nhóm ${g.label}`, "aria-pressed": allIn ? "true" : "false", onClick: () => onToggleGroup(g.id), className: `w-7 h-7 rounded-[2px] border flex items-center justify-center transition-all active:scale-90 ${allIn ? "text-ink border-transparent" : "text-sub bg-ink/[0.04] border-line"}`, style: allIn ? { background: g.hex } : void 0 }, React.createElement(CheckCheckIcon, { size: 14 })), React.createElement("button", { type: "button", "aria-label": `Thêm vào giỏ ${g.label}`, onClick: () => onAddTask(g.id), className: "w-7 h-7 rounded-[2px] border border-line bg-ink/[0.04] text-sub flex items-center justify-center transition-all active:scale-90" }, React.createElement(PlusIcon, { size: 14 }))), React.createElement("div", { className: "grid grid-cols-2 gap-2" }, items.map((b) => {
         const clean = parseTask(b.name).cleanText;
         const st = hist.get(hwNorm(clean));
         const on = matches(b).length > 0;
@@ -1620,25 +1866,7 @@ try {
       }), sug.map((sg) => {
         const clean = parseTask(sg.name).cleanText;
         return React.createElement("button", { key: "goi-y-" + clean, type: "button", "data-basket-suggest": clean, onClick: () => onSaveOps([{ op: "add", name: sg.name, group: g.id }]), className: "relative text-left rounded-[2px] border border-dashed border-line px-3 py-2 transition-all active:scale-[0.97]" }, React.createElement("span", { className: "absolute top-2 right-2 text-dim" }, React.createElement(PlusIcon, { size: 13 })), React.createElement("span", { className: "block text-[13px] font-bold text-sub truncate pr-5" }, clean), React.createElement("span", { className: "block text-[11px] font-semibold text-dim tabular-nums min-h-[16px]" }, sg.done ? String(sg.done) : ""));
-      }), adding === g.id && React.createElement("div", { className: "col-span-2 flex items-center rounded-[2px] border px-3 py-2", style: { borderColor: g.hex + "8c", background: g.hex + "14" } }, React.createElement(
-        "input",
-        {
-          type: "text",
-          autoFocus: true,
-          "aria-label": `Tên việc mới cho nhóm ${g.label}`,
-          value: addText,
-          onChange: (e) => setAddText(e.target.value),
-          onKeyDown: (e) => {
-            if (e.key === "Enter") commitAdd(g.id);
-            if (e.key === "Escape") {
-              setAdding(null);
-              setAddText("");
-            }
-          },
-          onBlur: () => commitAdd(g.id),
-          className: "flex-1 min-w-0 bg-transparent outline-none text-sm font-bold text-ink"
-        }
-      ))));
+      })));
     })));
   };
   const MEMORY_MODES = [["random", "Ngẫu nhiên"], ["week", "Tuần trước"], ["month", "Tháng trước"], ["happy", "Ngày vui"]];
@@ -1761,7 +1989,7 @@ try {
     return React.createElement("div", { "data-memory-card": dKey, className: "relative w-[262px] max-w-full bg-[#fafaf9] rounded-[2px] p-2.5 pb-3.5", style: { transform: "rotate(-2deg)", animation: "clsFlip .6s cubic-bezier(.2,.8,.2,1)" } }, React.createElement("div", { className: "absolute -top-2.5 left-1/2 -ml-10 w-20 h-5 bg-[#fde68a]/80", style: { transform: "rotate(4deg)" } }), React.createElement("div", { className: "w-full aspect-[4/3] overflow-hidden rounded-[2px] bg-[#e4e4e7]" }, photo ? React.createElement("img", { src: photo, alt: "", loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", onError: () => {
       if (photo === img) setImgFailed(true);
       else setThumb("");
-    }, className: "w-full h-full object-cover" }) : React.createElement("div", { className: "w-full h-full flex items-center justify-center", style: { background: tone + "26" } }, React.createElement("span", { className: "cls-hand text-6xl", style: { color: tone } }, d))), React.createElement("div", { className: "flex items-baseline justify-between gap-2 mt-2 px-0.5" }, React.createElement("span", { className: "cls-hand text-xl text-[#27272a]" }, d, ".", m, ".", y), React.createElement("span", { className: "text-[11px] font-bold text-[#a1a1aa] tabular-nums" }, ago, " ngày trước")), summary && React.createElement("p", { className: "cls-hand text-[19px] leading-tight text-[#3f3f46] mt-0.5 px-0.5 break-words" }, summary), (dots.length > 0 || out) && React.createElement("div", { className: "flex items-center gap-1.5 mt-2 px-0.5" }, dots.map((c, i) => React.createElement("span", { key: i, className: "w-2.5 h-2.5 rounded-full", style: c ? { background: c } : { border: "1.5px solid #d4d4d8" } })), out && React.createElement("span", { className: "ml-auto text-[11px] font-bold inline-flex items-center gap-1", style: { color: OUTING_HEX[out.val] } }, React.createElement(out.Icon, { size: 12 }), " ", out.label)), embed && React.createElement("div", { className: "mt-2.5 rounded-[2px] bg-[#151517] p-1" }, playing ? React.createElement("iframe", { src: embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", className: "rounded-[2px] block", title: "Spotify" }) : React.createElement(SpotifyTrackFacade, { musicUrl: st.musicUrl, onPlay: () => playOrEmbed(trackId, () => setPlaying(true)), gasUrl, gasKey })));
+    }, className: "w-full h-full object-cover" }) : React.createElement("div", { className: "w-full h-full flex items-center justify-center", style: { background: tone + "26" } }, React.createElement("span", { className: "cls-hand text-6xl", style: { color: tone } }, d))), React.createElement("div", { className: "flex items-baseline justify-between gap-2 mt-2 px-0.5" }, React.createElement("span", { className: "cls-hand text-xl text-[#27272a]" }, d, ".", m, ".", y), React.createElement("span", { className: "text-[11px] font-bold text-[#a1a1aa] tabular-nums" }, ago, " ngày trước")), summary && React.createElement("p", { className: "cls-hand text-[19px] leading-tight text-[#3f3f46] mt-0.5 px-0.5 break-words" }, summary), (dots.length > 0 || out) && React.createElement("div", { className: "flex items-center gap-1.5 mt-2 px-0.5" }, dots.map((c, i) => React.createElement("span", { key: i, className: "w-2.5 h-2.5 rounded-full", style: c ? { background: c } : { border: "1.5px solid #d4d4d8" } })), out && React.createElement("span", { className: "ml-auto text-[11px] font-bold inline-flex items-center gap-1", style: { color: OUTING_HEX[out.val] } }, React.createElement(out.Icon, { size: 12 }), " ", out.label)), embed && React.createElement("div", { className: "mt-2.5 rounded-[2px] bg-[#151517] p-1" }, playing ? React.createElement("iframe", { src: embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", className: "rounded-[2px] block", title: "Spotify" }) : React.createElement(SpotifyTrackFacade, { musicUrl: st.musicUrl, onPlay: () => playOrEmbed(trackId, () => setPlaying(true), dKey), gasUrl, gasKey })));
   };
   const MemorySheet = ({ statsByDate, gasUrl, gasKey, onOpenDay, onClose }) => {
     const [mode, setMode] = useState(() => {
@@ -1861,7 +2089,7 @@ try {
       thumb: meta && meta.thumb || ""
     };
   };
-  const DaySongStrip = ({ musicUrl, songName, gasUrl, gasKey, actions }) => {
+  const DaySongStrip = ({ musicUrl, songName, gasUrl, gasKey, actions, dateKey }) => {
     const t = useTrackMeta(musicUrl, songName, gasUrl, gasKey);
     const [imgFailed, setImgFailed] = useState(false);
     const [playing, setPlaying] = useState(false);
@@ -1874,7 +2102,7 @@ try {
     const spOn = !!t.trackId && sp.playingTrack === t.trackId && !sp.paused;
     const toggle = () => playOrEmbed(t.trackId, () => {
       if (t.embed) setPlaying((p) => !p);
-    });
+    }, dateKey);
     return React.createElement("div", { "data-day-song": true }, React.createElement("div", { className: "flex gap-3.5 px-4 py-3.5", style: { background: "linear-gradient(100deg, rgb(var(--c-accent) / 0.34), transparent 72%)" } }, React.createElement("button", { type: "button", onClick: toggle, "aria-label": spOn ? "Dừng" : "Nghe bài này", className: "relative w-[76px] h-[76px] shrink-0 rounded-[2px] overflow-hidden active:scale-[0.97] transition-transform", style: { boxShadow: "0 8px 24px rgba(40,80,140,0.45)", background: COVER_FALLBACK } }, cover && React.createElement("img", { src: cover, alt: "", loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" }), spOn && React.createElement("span", { className: "absolute inset-0 flex items-center justify-center bg-bg/40" }, React.createElement(PauseBars, { size: 20 }))), React.createElement("div", { className: "flex-1 min-w-0 flex flex-col pt-0.5" }, React.createElement("span", { className: "flex items-center gap-1.5 text-[12px] text-sub" }, React.createElement(MusicIcon, { size: 13 }), " Bài hát ngày"), React.createElement("button", { type: "button", onClick: toggle, className: "font-num font-semibold text-[19px] leading-[1.2] pt-[3px] mt-0.5 text-left text-ink line-clamp-2 break-words" }, t.title), t.artist && React.createElement("span", { className: "text-[13px] leading-normal text-sub truncate" }, t.artist), React.createElement("div", { className: "flex gap-1.5 mt-auto pt-2" }, actions))), playing && t.embed && React.createElement("div", { className: "px-4 pt-2" }, React.createElement("iframe", { src: t.embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", title: "Spotify", className: "block rounded-[2px]" })));
   };
   const WeekCover = ({ thumb, onPlay, isPlaying }) => {
@@ -1961,7 +2189,7 @@ try {
     const moodLabel = dayMood && dayMood.tone ? dayMood.tone.label : "";
     const sp = useSpotifyState();
     const isPlaying = !!t.trackId && sp.playingTrack === t.trackId && !sp.paused;
-    const doPlay = () => playOrEmbed(t.trackId, onPlay);
+    const doPlay = () => playOrEmbed(t.trackId, onPlay, formatDate(day));
     const embedOpen = playing && !!t.embed;
     return React.createElement(React.Fragment, null, React.createElement("div", { className: "flex items-center gap-3.5 shrink-0", "data-week-head": true }, hasMusic && !embedOpen && React.createElement(WeekCover, { thumb: t.thumb, onPlay: doPlay, isPlaying }), React.createElement("div", { className: "min-w-0 flex-1" }, React.createElement("div", { className: "flex items-baseline gap-2" }, React.createElement("span", { className: "font-num font-bold text-[22px] leading-[1.05] text-ink" }, VN_DAYS[day.getDay()]), React.createElement("span", { className: `font-num font-medium text-[13px] leading-[1.05] ${isToday ? "text-accent" : "text-dim"}` }, String(day.getDate()).padStart(2, "0"), "/", String(day.getMonth() + 1).padStart(2, "0")), React.createElement("span", { className: "ml-auto flex items-center gap-3 text-[13.5px] text-sub whitespace-nowrap" }, React.createElement("span", { role: "button", tabIndex: 0, onClick: (e) => {
       e.stopPropagation();
@@ -2486,11 +2714,61 @@ try {
       });
       if (loi.size) setTimeout(() => showToast(`⚠️ Caption ${[...loi].join(", ")} chưa lưu lên được (dài quá?)`, "error"), 3300);
     };
-    const openLightbox = (dKey, raws, i) => {
-      setLightboxMeta({ dateKey: dKey, raws });
+    const markOldScriptWarnedRef = useRef(false);
+    const applySaveMarkResult = (res, statsPayload) => {
+      const sent = statsPayload.filter((x) => x.musicMarkNote !== void 0);
+      if (!sent.length) return;
+      if ((Number(res.v) || 0) < 148) {
+        if (!markOldScriptWarnedRef.current) {
+          markOldScriptWarnedRef.current = true;
+          setTimeout(() => showToast("⚠️ Apps Script chưa lên bản 148: mốc cao trào chưa lưu lên Sheets được", "error"), 3400);
+        }
+        return;
+      }
+      setStatsByDate((prev) => {
+        let next = prev;
+        sent.forEach((x) => {
+          const sd = next[x.date];
+          if (sd && sd.musicMarkDirty && String(sd.musicMarkNote || "") === x.musicMarkNote) next = { ...next, [x.date]: { ...sd, musicMarkDirty: false } };
+        });
+        return next;
+      });
+    };
+    const openLightbox = (dKey, raws, i, variant) => {
+      setLightboxMeta({ dateKey: dKey, raws, variant: variant || "" });
       setLightboxCapEdit(null);
       setLightboxImages(raws.map((u) => formatDriveImgUrl(u, 1600)));
       setLightboxIndex(i);
+    };
+    const mealSwipeRef = useRef(null);
+    useEffect(() => {
+      const el = mealSwipeRef.current;
+      if (el && lightboxMeta && lightboxMeta.variant === "meal") el.scrollLeft = lightboxIndex * el.clientWidth;
+    }, [lightboxMeta]);
+    const renderLbCaption = (idx = lightboxIndex) => {
+      if (!lightboxMeta) return null;
+      const dk = lightboxMeta.dateKey;
+      const id = imgIdOf(lightboxMeta.raws[idx]);
+      if (!id) return null;
+      const note = String((statsByDate[dk] || {}).captionNote || "");
+      const cap = capGet(note, id);
+      if (idx !== lightboxIndex) return cap ? React.createElement("div", { className: "w-full max-w-[640px] mt-3" }, React.createElement("p", { className: "text-[14.5px] leading-relaxed text-ink whitespace-pre-wrap break-words" }, cap)) : null;
+      const limit = capSafeLimit(captionLimit);
+      const save = () => {
+        const text = String(lightboxCapEdit || "");
+        if (text === cap) {
+          setLightboxCapEdit(null);
+          return;
+        }
+        const n2 = capSet(note, id, text);
+        if (n2.length > limit) {
+          showToast(`Caption ngày này dài quá, tối đa ${limit.toLocaleString("vi-VN")} ký tự`, "error");
+          return;
+        }
+        updateDayStat(dk, { captionNote: n2, captionDirty: true });
+        setLightboxCapEdit(null);
+      };
+      return React.createElement("div", { className: "w-full max-w-[640px] mt-3", "data-lightbox-caption": id }, lightboxCapEdit !== null ? React.createElement("div", null, React.createElement("textarea", { autoFocus: true, value: lightboxCapEdit, onChange: (e) => setLightboxCapEdit(e.target.value), rows: 4, className: "w-full bg-groove/80 border border-line focus:border-accent rounded-[2px] p-2.5 text-[14.5px] leading-relaxed text-ink outline-none resize-y", "data-caption-input": true }), React.createElement("div", { className: "flex justify-end gap-2 mt-2" }, React.createElement("button", { type: "button", onClick: () => setLightboxCapEdit(null), className: "h-9 px-4 rounded-[2px] border border-line text-sub text-[13.5px]" }, "Hủy"), React.createElement("button", { type: "button", onClick: save, className: "h-9 px-4 rounded-[2px] bg-accent text-onaccent text-[13.5px] font-semibold cls-glow", "data-caption-save": true }, "Lưu"))) : React.createElement("div", { className: "flex items-start gap-3" }, cap && React.createElement("p", { className: "flex-1 min-w-0 text-[14.5px] leading-relaxed text-ink whitespace-pre-wrap break-words", "data-caption-text": true }, cap), React.createElement("button", { type: "button", "aria-label": "Sửa caption", onClick: () => setLightboxCapEdit(cap), className: "ml-auto w-8 h-8 shrink-0 flex items-center justify-center text-sub hover:text-ink" }, React.createElement(PencilIcon, { size: 15 }))));
     };
     const applySaveImageResult = (res, sentPending) => {
       const moi = Array.isArray(res.anhMoi) ? res.anhMoi.filter((x) => x && x.date && x.tam && x.url) : [];
@@ -2541,8 +2819,22 @@ try {
     const updateDayStat = (dKey, patch) => setStatsByDate((prev) => {
       const base = prev[dKey] || EMPTY_STAT;
       const extra = typeof patch === "function" ? patch(base) : patch;
-      return { ...prev, [dKey]: { ...base, ...extra } };
+      const mk = extra && extra.musicUrl !== void 0 ? markOnUrlChange(base, extra.musicUrl) : {};
+      return { ...prev, [dKey]: { ...base, ...extra, ...mk } };
     });
+    spMarks.get = (dKey, trackId) => {
+      const sd = statsByDate[dKey];
+      if (!sd || trackId && getSpotifyTrackId(sd.musicUrl) !== trackId) return null;
+      return markGet(sd.musicMarkNote);
+    };
+    const barDay = spState.srcDate ? statsByDate[spState.srcDate] : null;
+    const barCanPin = !!(barDay && spState.srcTrack && spState.playingTrack === spState.srcTrack && getSpotifyTrackId(barDay.musicUrl) === spState.srcTrack);
+    const barMarkMs = barCanPin ? markGet(barDay.musicMarkNote) : null;
+    const pinBarMark = (ms) => {
+      const dk = spState.srcDate;
+      if (!dk) return;
+      updateDayStat(dk, (base) => ({ musicMarkNote: markSet(base.musicMarkNote || "", ms), musicMarkDirty: true }));
+    };
     const commitDayEdit = (pe) => {
       if (!pe) return;
       const v = String(pe.text || "").trim();
@@ -3468,6 +3760,30 @@ try {
       });
       setShowWorkTaskModal(true);
     };
+    const BASKET_KEEP_RE = /#(Study|Growth|Life|Reward)(?=\s|$)|~\d+m(?=\s|$)|\[REQ:.*?\]/gi;
+    const openBasketTaskModal = (gid, item) => {
+      const meta = item ? parseTaskText(item.name) : null;
+      const defWeight = gid === "must" ? 3 : gid === "should" ? 2 : 1;
+      const how = item ? hwCleanItems(hwItemsFromText(item.howto)) : [];
+      setWorkTaskForm({
+        editId: null,
+        originPriority: gid,
+        name: meta ? meta.cleanText : "",
+        priority: gid,
+        weight: meta && meta.weight || defWeight,
+        category: "Study",
+        timeSlots: meta ? meta.timeSlots : [],
+        blocks: meta && meta.blocks ? String(meta.blocks) : "",
+        doneBlocks: 0,
+        duration: "",
+        deadline: meta && meta.deadline || "",
+        isLate: false,
+        howtoItems: how,
+        howtoOrig: JSON.stringify(how),
+        basket: { oldName: item ? item.name : null, keep: item ? (String(item.name).match(BASKET_KEEP_RE) || []).join(" ") : "" }
+      });
+      setShowWorkTaskModal(true);
+    };
     const openEditWorkTaskModal = (cat, task) => {
       const hwStartItems = hwCleanItems((hwMapToday.get(task.id) || { items: [] }).items);
       const meta = parseTaskText(task.text);
@@ -3515,6 +3831,14 @@ try {
         parts.push("!Late");
       }
       const fullText = parts.join(" ");
+      if (workTaskForm.basket) {
+        const bk = workTaskForm.basket;
+        const bName = basketTaskText([fullText, bk.keep].filter(Boolean).join(" "));
+        const tpl = hwCleanItems(workTaskForm.howtoItems || []).map(hwItemLine).join("\n");
+        sendBasketOps([bk.oldName ? { op: "update", oldName: bk.oldName, name: bName, group: workTaskForm.priority, howto: tpl } : { op: "add", name: bName, group: workTaskForm.priority, howto: tpl }]);
+        setShowWorkTaskModal(false);
+        return;
+      }
       const dKey = formatDate(selectedDate);
       if (!workTaskForm.editId) {
         handleAddTodo(workTaskForm.priority, fullText);
@@ -4130,7 +4454,9 @@ try {
             productivity: muc15(st.productivity) || "",
             noteProductivity: String(st.noteProductivity || "").trim(),
             // bản 161: caption (ghi chú ô J) chỉ gửi khi có sửa
-            ...st.captionDirty ? { captionNote: String(st.captionNote || "") } : {}
+            ...st.captionDirty ? { captionNote: String(st.captionNote || "") } : {},
+            // bản 162: mốc cao trào (ghi chú ô K) chỉ gửi khi vừa ghim
+            ...st.musicMarkDirty ? { musicMarkNote: String(st.musicMarkNote || "") } : {}
           };
         });
         let formattedWorkouts = [];
@@ -4165,6 +4491,7 @@ try {
         const res = await response.json();
         if (res && res.status === "success") applySaveImageResult(res, statsPayload.some((x) => (x.images || []).some(imgIsPending)));
         if (res && res.status === "success") applySaveCaptionResult(res, statsPayload);
+        if (res && res.status === "success") applySaveMarkResult(res, statsPayload);
         const needV = statsPayload.some((x) => PRODUCTIVITY_FIELDS.some((k) => x[k])) ? 145 : statsPayload.some((x) => DAY_PART_FIELDS.some((k) => x[k])) ? 144 : 0;
         if (res.status === "success" && needV && (Number(res.v) || 0) < needV && !oldScriptWarnedRef.current) {
           oldScriptWarnedRef.current = true;
@@ -4394,6 +4721,8 @@ try {
                 noteProductivity: String(sn[13] || "").trim(),
                 captionNote: sn[9] === void 0 || sn[9] === null ? "" : String(sn[9]),
                 // bản 161: caption, y chang từng ký tự
+                musicMarkNote: sn[10] === void 0 || sn[10] === null ? "" : String(sn[10]),
+                // bản 162: mốc cao trào, y chang từng ký tự
                 songName: String(r[12] || "").trim()
               };
             }
@@ -4408,6 +4737,10 @@ try {
               Object.keys(prev).forEach((d) => {
                 const p = prev[d];
                 if (p && p.captionDirty && nS[d]) nS[d] = { ...nS[d], captionNote: p.captionNote, captionDirty: true };
+              });
+              Object.keys(prev).forEach((d) => {
+                const p = prev[d];
+                if (p && p.musicMarkDirty && nS[d]) nS[d] = { ...nS[d], musicMarkNote: p.musicMarkNote, musicMarkDirty: true };
               });
               Object.keys(prev).forEach((d) => {
                 const pend = ((prev[d] || {}).images || []).filter(imgIsPending);
@@ -4864,7 +5197,9 @@ try {
                 [dKey]: {
                   ...existing,
                   musicUrl: (musicNoteBubble.musicUrl || "").trim(),
-                  musicNote: (musicNoteBubble.note || "").trim()
+                  musicNote: (musicNoteBubble.note || "").trim(),
+                  ...markOnUrlChange(existing, (musicNoteBubble.musicUrl || "").trim())
+                  // bản 162
                 }
               };
             });
@@ -5376,7 +5711,7 @@ try {
             setWorkPickFocus(false);
           } else setWorkPickFocus((p) => !p);
         }, className: `w-7 h-7 -ml-1 flex items-center justify-center ${focusTaskId || workPickFocus ? "text-accent cls-glow-svg" : "text-sub hover:text-ink"}`, "data-wk-focus-btn": true }, React.createElement(CheckCircleIcon, { size: 18 })), React.createElement("button", { type: "button", "aria-label": "Thêm chú ý", title: "Chú ý", onClick: () => setIsUrgentExpanded((p) => !p), className: `w-7 h-7 -ml-2 flex items-center justify-center ${isUrgentExpanded ? "text-bad" : "text-sub hover:text-ink"}` }, React.createElement(AlertIcon, { size: 17 })), React.createElement("button", { type: "button", onClick: handleCarryOverYesterday, className: "inline-flex items-center gap-1.5" }, React.createElement(CopyIcon, { size: 15 }), " Việc hôm qua"), React.createElement("button", { type: "button", onClick: () => setShowBasket(true), "aria-pressed": showBasket ? "true" : "false", className: "inline-flex items-center gap-1.5" }, React.createElement(BasketIcon, { size: 15 }), " Giỏ"), showBasket && ReactDOM.createPortal(
-          React.createElement("div", { className: "dark" }, React.createElement(BasketSheet, { basket: workBasket, todoCache, parseTask: parseTaskText, matches: basketMatches, onToggleItem: handleBasketToggle, onToggleGroup: handleBasketGroup, onSaveOps: sendBasketOps, onClose: () => setShowBasket(false) })),
+          React.createElement("div", { className: "dark" }, React.createElement(BasketSheet, { basket: workBasket, todoCache, parseTask: parseTaskText, matches: basketMatches, onToggleItem: handleBasketToggle, onToggleGroup: handleBasketGroup, onSaveOps: sendBasketOps, onAddTask: (gid) => openBasketTaskModal(gid), onEditTask: (item) => openBasketTaskModal(item.group, item), onClose: () => setShowBasket(false) })),
           document.body
         ), React.createElement("button", { type: "button", "aria-label": "Thêm việc", onClick: () => openAddWorkTaskModal("must"), className: "ml-auto w-9 h-8 flex items-center justify-center bg-accent text-onaccent cls-glow active:scale-90" }, React.createElement(PlusIcon, { size: 19 })));
         const listMode = React.createElement("span", { className: "flex gap-[2px] text-[13px]", "data-wk-mode": true }, [["nhom", "Nhóm"], ["buoi", "Theo buổi"]].map(([k, lab]) => React.createElement("button", { key: k, type: "button", "aria-pressed": workListMode === k ? "true" : "false", onClick: () => setWorkListMode(k), className: `px-2.5 py-1 ${workListMode === k ? "bg-accent/15 text-ink font-semibold" : "text-sub hover:text-ink"}` }, lab)));
@@ -5429,7 +5764,7 @@ try {
           }, className: "w-8 h-8 -mr-1.5 flex items-center justify-center text-sub hover:text-ink" }, React.createElement(XIcon, { size: 18 })))), React.createElement("textarea", { autoFocus: true, value: scratchpad || "", onChange: (e) => handleUpdateScratchpad(e.target.value), placeholder: "Ghi nhanh ý tưởng, việc chợt nhớ...", className: "flex-1 w-full bg-transparent outline-none px-4 py-3 text-[14.5px] text-ink placeholder:text-dim resize-none leading-[30px] planner-ruled-bg" })))),
           document.body
         ), showWorkTaskModal && ReactDOM.createPortal(
-          React.createElement("div", { className: "dark" }, React.createElement("div", { className: "fixed inset-0 z-[210] flex justify-center items-end sm:items-center p-0 sm:p-4" }, React.createElement("div", { className: "absolute inset-0 bg-bg/65 backdrop-blur-sm modal-overlay", onClick: () => setShowWorkTaskModal(false) }), React.createElement("div", { className: "w-full max-w-md bg-card rounded-t-[2px] sm:rounded-[2px] p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-line z-10" }, React.createElement("div", { className: "w-12 h-1.5 bg-groove rounded-full mx-auto mb-5 sm:hidden shrink-0" }), React.createElement("div", { className: "flex justify-between items-center mb-5 shrink-0" }, React.createElement("h2", { className: "text-xl font-bold text-ink tracking-tight" }, workTaskForm.editId ? "Cập nhật công việc" : "Thêm công việc"), React.createElement("button", { type: "button", onClick: () => setShowWorkTaskModal(false), className: "text-sub bg-groove p-2 rounded-[2px] hover:bg-line active:scale-90 transition-all" }, React.createElement(XIcon, { size: 18 }))), React.createElement("form", { onSubmit: handleSaveWorkTaskModal, className: "overflow-y-auto no-scrollbar space-y-4 flex-1 pr-0.5" }, React.createElement("div", null, React.createElement("label", { className: "block text-[10px] font-bold text-sub mb-1.5 ml-1" }, "Tên công việc"), React.createElement(
+          React.createElement("div", { className: "dark" }, React.createElement("div", { className: `fixed inset-0 ${workTaskForm.basket ? "z-[225]" : "z-[210]"} flex justify-center items-end sm:items-center p-0 sm:p-4`, "data-task-form": workTaskForm.basket ? "gio" : "viec" }, React.createElement("div", { className: "absolute inset-0 bg-bg/65 backdrop-blur-sm modal-overlay", onClick: () => setShowWorkTaskModal(false) }), React.createElement("div", { className: "w-full max-w-md bg-card rounded-t-[2px] sm:rounded-[2px] p-6 relative bottom-sheet max-h-[90dvh] flex flex-col border-t border-line z-10" }, React.createElement("div", { className: "w-12 h-1.5 bg-groove rounded-full mx-auto mb-5 sm:hidden shrink-0" }), React.createElement("div", { className: "flex justify-between items-center mb-5 shrink-0" }, React.createElement("h2", { className: "text-xl font-bold text-ink tracking-tight" }, workTaskForm.basket ? workTaskForm.basket.oldName ? "Sửa việc trong giỏ" : "Thêm vào giỏ" : workTaskForm.editId ? "Cập nhật công việc" : "Thêm công việc"), React.createElement("button", { type: "button", onClick: () => setShowWorkTaskModal(false), className: "text-sub bg-groove p-2 rounded-[2px] hover:bg-line active:scale-90 transition-all" }, React.createElement(XIcon, { size: 18 }))), React.createElement("form", { onSubmit: handleSaveWorkTaskModal, className: "overflow-y-auto no-scrollbar space-y-4 flex-1 pr-0.5" }, React.createElement("div", null, React.createElement("label", { className: "block text-[10px] font-bold text-sub mb-1.5 ml-1" }, "Tên công việc"), React.createElement(
             "input",
             {
               type: "text",
@@ -5520,14 +5855,18 @@ try {
               onChange: (e) => setWorkTaskForm((p) => ({ ...p, deadline: e.target.value })),
               className: "relative w-full bg-bg border border-line focus:border-accent/40 rounded-[2px] px-3.5 py-2.5 outline-none font-bold text-sm text-ink"
             }
-          ), workTaskForm.deadline && React.createElement("p", { className: "text-[10px] font-bold text-accent mt-1.5 ml-1" }, "Hiển thị: ", formatDeadlineAmPm(workTaskForm.deadline)))), React.createElement("div", null, React.createElement("label", { className: "block text-[10px] font-bold text-sub mb-1.5 ml-1" }, "Cách làm"), React.createElement(HowtoEditor, { items: workTaskForm.howtoItems || [], onChange: (items) => setWorkTaskForm((p) => ({ ...p, howtoItems: items })) })), React.createElement("div", { className: "pt-2" }, React.createElement(
+          ), workTaskForm.deadline && React.createElement("p", { className: "text-[10px] font-bold text-accent mt-1.5 ml-1" }, "Hiển thị: ", formatDeadlineAmPm(workTaskForm.deadline)))), React.createElement("div", null, React.createElement("label", { className: "block text-[10px] font-bold text-sub mb-1.5 ml-1" }, "Cách làm"), React.createElement(HowtoEditor, { items: workTaskForm.howtoItems || [], onChange: (items) => setWorkTaskForm((p) => ({ ...p, howtoItems: items })) })), React.createElement("div", { className: "pt-2 flex gap-2" }, workTaskForm.basket && workTaskForm.basket.oldName && React.createElement("button", { type: "button", "aria-label": "Xóa khỏi giỏ", onClick: () => {
+            sendBasketOps([{ op: "delete", name: workTaskForm.basket.oldName }]);
+            setShowWorkTaskModal(false);
+          }, className: "w-12 rounded-[2px] bg-groove text-sub hover:text-bad flex items-center justify-center active:scale-95 transition-all" }, React.createElement(Trash2Icon, { size: 16 })), React.createElement(
             "button",
             {
               type: "submit",
-              className: "w-full py-3.5 text-onaccent rounded-[2px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all bg-accent"
+              className: "flex-1 py-3.5 text-onaccent rounded-[2px] font-bold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all bg-accent"
             },
             React.createElement(CheckCircleIcon, { size: 18 }),
-            " Lưu công việc"
+            " ",
+            workTaskForm.basket ? "Lưu vào giỏ" : "Lưu công việc"
           )))))),
           document.body
         ), blockSelectModal && ReactDOM.createPortal(
@@ -5690,7 +6029,7 @@ try {
           return React.createElement("div", { key: meal, className: "border-t border-line pt-2 mt-1.5", "data-meal": meal }, React.createElement("div", { className: "flex items-center gap-2 mb-1" }, React.createElement("span", { className: "font-semibold text-ink" }, meal), React.createElement("button", { type: "button", title: "Ghi chú bữa ăn", "aria-label": `Ghi chú bữa ${meal.toLowerCase()}`, onClick: () => setEditingMealNote(editingNote ? null : { meal, text: note }), className: `w-6 h-6 flex items-center justify-center ${note ? "text-accent" : "text-dim hover:text-sub"}` }, React.createElement(PencilIcon, { size: 13 })), React.createElement("button", { type: "button", "aria-label": `Ảnh bữa ${meal.toLowerCase()}`, onClick: () => setMealPhotoPick(meal), className: `w-6 h-6 flex items-center justify-center ${mealRaws(meal).length ? "text-accent" : "text-dim hover:text-sub"}`, "data-meal-photo-btn": meal }, React.createElement(ImageIcon, { size: 13 })), React.createElement("button", { type: "button", "aria-label": `Thêm món bữa ${meal.toLowerCase()}`, onClick: () => openAdd(meal), className: "ml-auto w-8 h-8 -mr-1.5 flex items-center justify-center text-accent active:scale-90" }, React.createElement(PlusIcon, { size: 18 }))), editingNote ? React.createElement("div", { className: "flex items-center gap-2 mb-1.5" }, React.createElement("input", { autoFocus: true, type: "text", value: editingMealNote.text, onChange: (e) => setEditingMealNote((prev) => ({ ...prev, text: e.target.value })), onKeyDown: (e) => {
             if (e.key === "Enter") saveMealNote(meal);
             if (e.key === "Escape") setEditingMealNote(null);
-          }, placeholder: `Nhận xét bữa ${meal.toLowerCase()}...`, className: "flex-1 min-w-0 h-9 bg-groove/70 border border-line focus:border-accent rounded-[2px] px-3 text-[13.5px] text-ink placeholder:text-dim outline-none" }), React.createElement("button", { type: "button", onClick: () => saveMealNote(meal), className: "h-9 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95" }, "Lưu")) : note && React.createElement("p", { onClick: () => setEditingMealNote({ meal, text: note }), className: "text-[12.5px] italic text-sub -mt-0.5 mb-1 cursor-pointer break-words", "data-meal-note": true }, note), mealRaws(meal).length > 0 && React.createElement("div", { className: "flex gap-1.5 pb-1.5 overflow-x-auto no-scrollbar", "data-meal-photos": meal }, mealRaws(meal).map((raw, i, arr) => React.createElement("button", { key: imgIdOf(raw) || i, type: "button", onClick: () => openLightbox(dateKey, arr, i), className: "w-[54px] h-[54px] shrink-0 bg-groove overflow-hidden", "data-meal-photo": imgIdOf(raw) }, React.createElement("img", { src: formatDriveImgUrl(raw, 200), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: "w-full h-full object-cover", onError: (e) => handleDriveImgError(e, raw) })))), mealFoods.map((food) => React.createElement("div", { key: food.id }, React.createElement("button", { type: "button", onClick: () => editingFoodId === food.id ? setEditingFoodId(null) : handleStartEditFood(food), className: "w-full grid items-baseline text-right pt-[3px] pb-[5px] hover:bg-ink/[0.03] active:bg-ink/5", style: { gridTemplateColumns: cols, gap }, "data-food-row": food.id }, React.createElement("span", { className: "text-left text-ink break-words" }, food.name), num(fmtK(foodKcalOf(food)), true), num(cleanNum(food.protein || 0), true), num(cleanNum(food.carbs || 0), false), num(cleanNum(food.fat || 0), false)), editingFoodId === food.id && editor(food))));
+          }, placeholder: `Nhận xét bữa ${meal.toLowerCase()}...`, className: "flex-1 min-w-0 h-9 bg-groove/70 border border-line focus:border-accent rounded-[2px] px-3 text-[13.5px] text-ink placeholder:text-dim outline-none" }), React.createElement("button", { type: "button", onClick: () => saveMealNote(meal), className: "h-9 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95" }, "Lưu")) : note && React.createElement("p", { onClick: () => setEditingMealNote({ meal, text: note }), className: "text-[12.5px] italic text-sub -mt-0.5 mb-1 cursor-pointer break-words", "data-meal-note": true }, note), mealRaws(meal).length > 0 && React.createElement("div", { className: "flex gap-1.5 pb-1.5 overflow-x-auto no-scrollbar", "data-meal-photos": meal }, mealRaws(meal).map((raw, i, arr) => React.createElement("button", { key: imgIdOf(raw) || i, type: "button", onClick: () => openLightbox(dateKey, arr, i, "meal"), className: "w-[108px] h-[108px] shrink-0 bg-groove overflow-hidden", "data-meal-photo": imgIdOf(raw) }, React.createElement("img", { src: formatDriveImgUrl(raw, 400), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: "w-full h-full object-cover", onError: (e) => handleDriveImgError(e, raw) })))), mealFoods.map((food) => React.createElement("div", { key: food.id }, React.createElement("button", { type: "button", onClick: () => editingFoodId === food.id ? setEditingFoodId(null) : handleStartEditFood(food), className: "w-full grid items-baseline text-right pt-[3px] pb-[5px] hover:bg-ink/[0.03] active:bg-ink/5", style: { gridTemplateColumns: cols, gap }, "data-food-row": food.id }, React.createElement("span", { className: "text-left text-ink break-words" }, food.name), num(fmtK(foodKcalOf(food)), true), num(cleanNum(food.protein || 0), true), num(cleanNum(food.carbs || 0), false), num(cleanNum(food.fat || 0), false)), editingFoodId === food.id && editor(food))));
         }), React.createElement("div", { className: "grid text-right border-t border-line mt-1.5 pt-2.5 font-semibold", style: { gridTemplateColumns: cols, gap }, "data-food-total": true }, React.createElement("span", { className: "text-left text-ink" }, "Tổng"), num(fmtK(totalKcal), true), num(cleanNum(pro), true, pro < PROTEIN_GOAL), num(cleanNum(currentTotals.carbs), false), num(cleanNum(currentTotals.fat), false)))), isWide && React.createElement("div", { className: "pl-8 pt-3", "data-food-panel": true }, React.createElement("div", { className: "flex items-baseline gap-2 mb-1" }, React.createElement("h3", { className: "text-[16px] font-semibold text-ink" }, "Món cũ"), React.createElement("span", { className: "text-[13.5px] text-sub" }, "thêm vào bữa"), React.createElement("span", { className: "relative inline-flex items-center" }, React.createElement("select", { value: panelMeal, onChange: (e) => {
           setFoodPanelMeal(e.target.value);
           setAddingMeal(e.target.value);
@@ -6056,7 +6395,7 @@ try {
           journalReturnRef.current = new Date(selectedDate);
           setAppMode(it.id);
           setCurrentView("day");
-        }, "aria-label": `Mở ${it.label} ngày này`, "data-empty": it.val ? "false" : "true", className: `min-w-0 text-left pl-4 pr-2 py-2.5 flex flex-col gap-[3px] active:bg-ink/5 transition-colors ${i ? "border-l border-line" : ""}` }, React.createElement("span", { className: "flex items-center gap-[5px] text-[12px] text-sub whitespace-nowrap" }, React.createElement(it.Icon, { size: 14 }), it.label), it.val ? React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight whitespace-nowrap truncate text-ink" }, it.val, it.unit && React.createElement("small", { className: "font-sans font-normal text-[11px] text-sub" }, " ", it.unit)) : React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight text-dim" }, "–")))), React.createElement("div", { className: "mt-4" }, embedUrl ? React.createElement(DaySongStrip, { musicUrl: st.musicUrl, songName: st.songName, gasUrl, gasKey, actions: musicActions }) : React.createElement("div", { className: "flex items-center gap-2 px-4 py-3", style: { background: "linear-gradient(100deg, rgb(var(--c-accent) / 0.22), transparent 72%)" } }, React.createElement("span", { className: "flex items-center gap-1.5 text-[12px] text-sub" }, React.createElement(MusicIcon, { size: 13 }), " Bài hát ngày"), React.createElement("div", { className: "ml-auto flex gap-1.5" }, musicActions)), (editing("musicUrl") || !embedUrl && st.musicUrl) && React.createElement("div", { className: "px-4 pt-2" }, editBox("musicUrl", { placeholder: "Dán link bài hát Spotify..." }), !embedUrl && !editing("musicUrl") && st.musicUrl && emptyBtn("Link này không phải bài Spotify, bấm để sửa", () => openEdit("musicUrl", st.musicUrl)))), React.createElement("div", { className: "px-4 pt-3 pb-1.5" }, secHead("Tâm trạng", null, React.createElement("button", { type: "button", onClick: () => setOutingPickerKey(outingPickerKey === dateKey ? null : dateKey), title: "Hôm nay ở nhà hay ra ngoài", className: "h-7 px-2.5 rounded-[2px] border border-line text-[13px] text-sub flex items-center gap-1.5 active:scale-95 transition-all hover:text-ink" }, React.createElement(out.Icon, { size: 14 }), " ", out.label)), outingPickerKey === dateKey && React.createElement("div", { className: "grid grid-cols-4 border border-line mb-2" }, OUTINGS.map((o, i) => React.createElement("button", { key: o.val, type: "button", onClick: () => {
+        }, "aria-label": `Mở ${it.label} ngày này`, "data-empty": it.val ? "false" : "true", className: `min-w-0 text-left pl-4 pr-2 py-2.5 flex flex-col gap-[3px] active:bg-ink/5 transition-colors ${i ? "border-l border-line" : ""}` }, React.createElement("span", { className: "flex items-center gap-[5px] text-[12px] text-sub whitespace-nowrap" }, React.createElement(it.Icon, { size: 14 }), it.label), it.val ? React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight whitespace-nowrap truncate text-ink" }, it.val, it.unit && React.createElement("small", { className: "font-sans font-normal text-[11px] text-sub" }, " ", it.unit)) : React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight text-dim" }, "–")))), React.createElement("div", { className: "mt-4" }, embedUrl ? React.createElement(DaySongStrip, { musicUrl: st.musicUrl, songName: st.songName, gasUrl, gasKey, actions: musicActions, dateKey }) : React.createElement("div", { className: "flex items-center gap-2 px-4 py-3", style: { background: "linear-gradient(100deg, rgb(var(--c-accent) / 0.22), transparent 72%)" } }, React.createElement("span", { className: "flex items-center gap-1.5 text-[12px] text-sub" }, React.createElement(MusicIcon, { size: 13 }), " Bài hát ngày"), React.createElement("div", { className: "ml-auto flex gap-1.5" }, musicActions)), (editing("musicUrl") || !embedUrl && st.musicUrl) && React.createElement("div", { className: "px-4 pt-2" }, editBox("musicUrl", { placeholder: "Dán link bài hát Spotify..." }), !embedUrl && !editing("musicUrl") && st.musicUrl && emptyBtn("Link này không phải bài Spotify, bấm để sửa", () => openEdit("musicUrl", st.musicUrl)))), React.createElement("div", { className: "px-4 pt-3 pb-1.5" }, secHead("Tâm trạng", null, React.createElement("button", { type: "button", onClick: () => setOutingPickerKey(outingPickerKey === dateKey ? null : dateKey), title: "Hôm nay ở nhà hay ra ngoài", className: "h-7 px-2.5 rounded-[2px] border border-line text-[13px] text-sub flex items-center gap-1.5 active:scale-95 transition-all hover:text-ink" }, React.createElement(out.Icon, { size: 14 }), " ", out.label)), outingPickerKey === dateKey && React.createElement("div", { className: "grid grid-cols-4 border border-line mb-2" }, OUTINGS.map((o, i) => React.createElement("button", { key: o.val, type: "button", onClick: () => {
           updateDayStat(dateKey, { outing: o.val });
           setOutingPickerKey(null);
         }, className: `py-2.5 px-1 text-[11.5px] flex flex-col items-center gap-1 transition-all active:scale-95 ${i ? "border-l border-line" : ""} ${st.outing === o.val ? "text-accent bg-accent/10" : "text-sub hover:text-ink"}` }, React.createElement(o.Icon, { size: 16 }), " ", o.label))), dm.kind === "old" && React.createElement("div", { className: "text-[12px] text-sub flex items-center gap-1.5 flex-wrap mb-1" }, React.createElement("span", null, "Thang cũ:"), React.createElement("span", { className: "font-semibold", style: { color: MOOD5[(OLD_MOOD_TO_5[dm.old.val] || 3) - 1].hex } }, dm.old.label), React.createElement("span", null, "· chọn theo buổi để chuyển sang kiểu mới")), MOOD_PARTS.map((p) => {
@@ -6071,7 +6410,10 @@ try {
           if (!diaryVeiled) openEdit("detail", st.detail);
         }, "data-diary-wide": diaryVeiled ? "che" : "hien", className: `text-[15px] text-ink whitespace-pre-wrap break-words leading-[1.9] transition-[filter] duration-300 ${diaryVeiled ? "select-none" : "cursor-text"}`, style: diaryVeiled ? { filter: "blur(7px)" } : void 0 }, detailText), !isWide && detailText && diaryOpen && !editing("detail") && React.createElement("div", { className: "flex gap-2 items-start" }, React.createElement("div", { onClick: () => setDiaryOpenKey(null), "data-diary": "open", className: "flex-1 min-w-0 text-[14.5px] text-ink whitespace-pre-wrap break-words leading-relaxed cursor-pointer" }, detailText), penBtn("detail", st.detail, false, "Viết nhật ký chi tiết"))), React.createElement("div", { className: sec }, secHead("Tóm tắt", null, penBtn("summary", st.summary, false, "Sửa tóm tắt")), editBox("summary", { multiline: true, rows: 3, placeholder: "Cook sương sương..." }), !editing("summary") && summaryText && React.createElement("p", { className: "text-[15px] text-ink break-words whitespace-pre-wrap leading-relaxed" }, summaryText)), React.createElement("div", { className: `${sec} pb-4` }, secHead("Ảnh", React.createElement(ImageIcon, { size: 16, className: "text-sub" }), React.createElement(React.Fragment, null, dayImages.length > 0 && React.createElement("button", { type: "button", onClick: () => setDayImageEditKey(imgEditMode ? null : dateKey), className: `h-7 px-2.5 rounded-[2px] border text-[12.5px] flex items-center gap-1 active:scale-95 transition-all ${imgEditMode ? "border-bad/60 text-bad" : "border-line text-sub hover:text-ink"}` }, imgEditMode ? "Xong" : "Bớt ảnh"), React.createElement("label", { className: "h-7 px-2.5 rounded-[2px] border border-line text-sub hover:text-ink text-[12.5px] flex items-center gap-1 cursor-pointer active:scale-95 transition-all" }, React.createElement(PlusIcon, { size: 13 }), " Thêm", React.createElement("input", { type: "file", accept: "image/*", multiple: true, className: "hidden", onChange: (e) => handleDayImageAdd(e, dateKey) })))), imgEditMode ? React.createElement("div", { className: "grid grid-cols-3 gap-1" }, dayImages.map((img, i) => React.createElement("div", { key: i, className: "relative aspect-square rounded-[2px] overflow-hidden bg-groove" }, React.createElement("img", { src: formatDriveImgUrl(img, 400), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: "w-full h-full object-cover", onError: (e) => handleDriveImgError(e, img) }), React.createElement("button", { type: "button", onClick: () => updateDayStat(dateKey, (base) => ({ images: getValidStatImages(dateKey, base.images).filter((_, idx) => idx !== i) })), title: "Bỏ ảnh này", "aria-label": "Bỏ ảnh này", className: "absolute top-1 right-1 bg-bad text-ink rounded-[2px] p-1.5 active:scale-90 transition-transform" }, React.createElement(XIcon, { size: 12 }))))) : dayImages.length > 0 && React.createElement("div", { className: `grid gap-1 ${dayImages.length === 1 ? "grid-cols-1" : "grid-cols-2"}` }, dayImages.slice(0, 4).map((img, i) => {
           const tall = dayImages.length <= 2 || dayImages.length === 3 && i === 0;
-          return React.createElement("div", { key: i, className: `relative cursor-pointer overflow-hidden rounded-[2px] bg-groove ${dayImages.length === 3 && i === 0 ? "col-span-2" : ""}`, onClick: () => openLightbox(dateKey, dayImages, i) }, React.createElement("img", { src: formatDriveImgUrl(img, 800), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: `w-full ${tall ? "h-60" : "h-40"} object-cover hover:opacity-95 transition-opacity`, onError: (e) => handleDriveImgError(e, img) }), i === 3 && dayImages.length > 4 && React.createElement("div", { className: "absolute inset-0 bg-bg/60 flex items-center justify-center text-ink font-num font-semibold text-2xl" }, "+", dayImages.length - 4));
+          return React.createElement("div", { key: i, className: `relative cursor-pointer overflow-hidden rounded-[2px] bg-groove ${dayImages.length === 3 && i === 0 ? "col-span-2" : ""}`, onClick: () => {
+            openLightbox(dateKey, dayImages, i);
+            playDayPhoto(getSpotifyTrackId(st.musicUrl), dateKey);
+          }, "data-day-photo": i }, React.createElement("img", { src: formatDriveImgUrl(img, 800), loading: "lazy", decoding: "async", referrerPolicy: "no-referrer", className: `w-full ${tall ? "h-60" : "h-40"} object-cover hover:opacity-95 transition-opacity`, onError: (e) => handleDriveImgError(e, img) }), i === 3 && dayImages.length > 4 && React.createElement("div", { className: "absolute inset-0 bg-bg/60 flex items-center justify-center text-ink font-num font-semibold text-2xl" }, "+", dayImages.length - 4));
         })))));
       })()), (appMode === "journal" || appMode === "stat") && currentView === "week" && React.createElement("div", { className: "animate-[fadeScale_0.25s_ease-out] flex-1 flex flex-col -mb-4", "data-week-view": "152" }, isFiltering && React.createElement("div", { className: "border-y border-line px-1 py-2 mb-3 flex justify-between items-center shrink-0" }, React.createElement("span", { className: "text-[13px] text-accent flex items-center gap-2" }, React.createElement(FilterIcon, { size: 14 }), " Đang áp dụng bộ lọc"), React.createElement("button", { onClick: () => setJournalFilters({ query: "", moods: [], outings: [], workouts: [], foodQuery: "", foodType: "all", proType: "all", sleepStart: "all", sleepEnd: "all" }), className: "text-[12px] border border-line px-3 py-1 rounded-[2px] text-sub hover:text-ink active:scale-95" }, "Xóa Lọc")), React.createElement(
         "div",
@@ -6233,7 +6575,7 @@ try {
           return null;
         })());
       })))))
-    ), spState.invite && React.createElement("div", { className: "fixed z-[260] flex items-center gap-3 pl-3.5 pr-1.5 py-2 bg-card border border-line", style: { left: "50%", transform: "translateX(-50%)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 78px)", width: "min(440px, calc(100vw - 24px))" }, "data-spotify-invite": true }, React.createElement(MusicIcon, { size: 16, className: "text-accent shrink-0" }), React.createElement("span", { className: "flex-1 min-w-0 text-[13.5px] text-ink truncate" }, "Đăng nhập Spotify để phát"), React.createElement("button", { type: "button", onClick: () => Spotify.login(), className: "h-8 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95 shrink-0" }, "Đăng nhập"), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => Spotify.dismissInvite(), className: "w-8 h-8 flex items-center justify-center text-sub hover:text-ink shrink-0" }, React.createElement(XIcon, { size: 16 }))), React.createElement("nav", { className: "shrink-0 z-40 bg-bg border-t border-line pb-[env(safe-area-inset-bottom,1rem)] relative" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto h-16 grid grid-cols-5 relative" }, [
+    ), React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark }), spState.invite && React.createElement("div", { className: "fixed z-[260] flex items-center gap-3 pl-3.5 pr-1.5 py-2 bg-card border border-line", style: { left: "50%", transform: "translateX(-50%)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 78px)", width: "min(440px, calc(100vw - 24px))" }, "data-spotify-invite": true }, React.createElement(MusicIcon, { size: 16, className: "text-accent shrink-0" }), React.createElement("span", { className: "flex-1 min-w-0 text-[13.5px] text-ink truncate" }, "Đăng nhập Spotify để phát"), React.createElement("button", { type: "button", onClick: () => Spotify.login(), className: "h-8 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95 shrink-0" }, "Đăng nhập"), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => Spotify.dismissInvite(), className: "w-8 h-8 flex items-center justify-center text-sub hover:text-ink shrink-0" }, React.createElement(XIcon, { size: 16 }))), React.createElement("nav", { className: "shrink-0 z-40 bg-bg border-t border-line pb-[env(safe-area-inset-bottom,1rem)] relative" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto h-16 grid grid-cols-5 relative" }, [
       { id: "work", icon: BrainIcon, label: "Working" },
       { id: "macro", icon: UtensilsIcon, label: "Ăn uống" },
       { id: "journal", icon: BookIcon, label: "Nhật ký" },
@@ -6575,38 +6917,42 @@ try {
     }, disabled: isSyncing, className: "py-4 bg-accent hover:bg-accent text-onaccent rounded-[2px] font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95" }, React.createElement(UploadIcon, { size: 24, className: "mb-1" }), React.createElement("span", { className: "text-xs" }, "Đẩy lên Sheet")), React.createElement("button", { onClick: () => {
       setHasUnsavedChanges(false);
       handleSyncPull();
-    }, disabled: isSyncing, className: "py-4 bg-accent hover:bg-accent text-onaccent rounded-[2px] font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95" }, React.createElement(DownloadIcon, { size: 24, className: "mb-1" }), React.createElement("span", { className: "text-xs" }, "Tải từ Sheet"))), isSyncing && React.createElement("div", { className: "bg-accent/10 border-accent/20 p-4 rounded-[2px] flex items-center justify-center gap-3" }, React.createElement(LoaderIcon, { className: "animate-spin text-accent", size: 20 }), React.createElement("p", { className: "text-accent font-bold" }, "Đang xử lý đồng bộ..."))))), lightboxImages && lightboxImages.length > 0 && React.createElement("div", { className: "fixed inset-0 z-[200] bg-bg/95 flex flex-col justify-center items-center backdrop-blur-md animate-[fadeIn_0.2s_ease-out]", onClick: () => window.history.back() }, React.createElement("div", { className: "absolute top-6 right-6 flex gap-4 z-50" }, React.createElement("span", { className: "text-ink font-bold bg-ink/10 px-4 py-2 rounded-[2px] backdrop-blur text-sm border border-line" }, lightboxIndex + 1, " / ", lightboxImages.length), React.createElement("button", { onClick: (e) => {
+    }, disabled: isSyncing, className: "py-4 bg-accent hover:bg-accent text-onaccent rounded-[2px] font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95" }, React.createElement(DownloadIcon, { size: 24, className: "mb-1" }), React.createElement("span", { className: "text-xs" }, "Tải từ Sheet"))), isSyncing && React.createElement("div", { className: "bg-accent/10 border-accent/20 p-4 rounded-[2px] flex items-center justify-center gap-3" }, React.createElement(LoaderIcon, { className: "animate-spin text-accent", size: 20 }), React.createElement("p", { className: "text-accent font-bold" }, "Đang xử lý đồng bộ..."))))), lightboxImages && lightboxImages.length > 0 && lightboxMeta && lightboxMeta.variant === "meal" && React.createElement("div", { className: "fixed inset-0 z-[200] bg-bg/95 backdrop-blur-md flex flex-col animate-[fadeIn_0.2s_ease-out]", onClick: () => window.history.back(), "data-meal-viewer": true }, React.createElement("div", { className: "shrink-0 flex justify-end px-3 pb-1", style: { paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" } }, React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: (e) => {
+      e.stopPropagation();
+      window.history.back();
+    }, className: "w-10 h-10 flex items-center justify-center text-ink active:scale-90 transition-transform" }, React.createElement(XIcon, { size: 22 }))), React.createElement("div", { className: "flex-1 min-h-0 overflow-y-auto no-scrollbar" }, React.createElement("div", { className: "w-full max-w-[640px] mx-auto pb-6", onClick: (e) => e.stopPropagation() }, React.createElement("div", { className: "relative" }, React.createElement(
+      "div",
+      {
+        ref: mealSwipeRef,
+        className: "flex overflow-x-auto snap-x snap-mandatory no-scrollbar",
+        style: { overscrollBehaviorX: "contain" },
+        "data-meal-swipe": true,
+        onScroll: (e) => {
+          const el = e.currentTarget;
+          const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+          if (i !== lightboxIndex && i >= 0 && i < lightboxImages.length) {
+            setLightboxIndex(i);
+            setLightboxCapEdit(null);
+          }
+        }
+      },
+      lightboxImages.map((src, i) => React.createElement("div", { key: i, className: "w-full shrink-0 snap-center", "data-meal-slide": i }, React.createElement("div", { className: "flex justify-center" }, React.createElement("div", { className: "relative max-w-full" }, React.createElement("img", { src, alt: "", draggable: "false", referrerPolicy: "no-referrer", className: "block w-auto h-auto max-w-full max-h-[70dvh]", onError: (e) => handleDriveImgError(e, lightboxMeta.raws[i]) }), lightboxImages.length > 1 && React.createElement("span", { className: "absolute top-2 right-2 px-2 py-0.5 bg-bg/75 text-ink font-num text-[12px] tabular-nums pointer-events-none", ...i === lightboxIndex ? { "data-meal-count": "" } : {} }, i + 1, "/", lightboxImages.length))), React.createElement("div", { className: "px-4" }, renderLbCaption(i))))
+    ), lightboxImages.length > 1 && lightboxIndex > 0 && React.createElement("button", { type: "button", "aria-label": "Ảnh trước", onClick: () => {
+      const el = mealSwipeRef.current;
+      if (el) el.scrollBy({ left: -el.clientWidth, behavior: "smooth" });
+    }, className: "hidden min-[900px]:flex absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 items-center justify-center bg-bg/60 text-ink" }, React.createElement(ChevronLeftIcon, { size: 22 })), lightboxImages.length > 1 && lightboxIndex < lightboxImages.length - 1 && React.createElement("button", { type: "button", "aria-label": "Ảnh sau", onClick: () => {
+      const el = mealSwipeRef.current;
+      if (el) el.scrollBy({ left: el.clientWidth, behavior: "smooth" });
+    }, className: "hidden min-[900px]:flex absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 items-center justify-center bg-bg/60 text-ink" }, React.createElement(ChevronRightIcon, { size: 22 }))))), React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark })), lightboxImages && lightboxImages.length > 0 && !(lightboxMeta && lightboxMeta.variant === "meal") && React.createElement("div", { className: "fixed inset-0 z-[200] bg-bg/95 flex flex-col justify-center items-center backdrop-blur-md animate-[fadeIn_0.2s_ease-out]", onClick: () => window.history.back() }, React.createElement("div", { className: "absolute top-6 right-6 flex gap-4 z-50" }, React.createElement("span", { className: "text-ink font-bold bg-ink/10 px-4 py-2 rounded-[2px] backdrop-blur text-sm border border-line" }, lightboxIndex + 1, " / ", lightboxImages.length), React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       window.history.back();
     }, className: "text-ink bg-ink/10 p-2.5 rounded-[2px] hover:bg-ink/20 backdrop-blur border border-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "relative w-full max-w-4xl flex flex-col justify-center items-center h-full px-4 pb-24", onClick: (e) => e.stopPropagation() }, lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       setLightboxIndex((prev) => prev === 0 ? lightboxImages.length - 1 : prev - 1);
-    }, className: "absolute left-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronLeftIcon, { size: 32 })), React.createElement("img", { src: lightboxImages[lightboxIndex], className: `max-w-full ${lightboxMeta ? "max-h-[62vh]" : "max-h-[75vh]"} object-contain rounded-[2px] transition-transform duration-300` }), lightboxMeta && (() => {
-      const dk = lightboxMeta.dateKey;
-      const id = imgIdOf(lightboxMeta.raws[lightboxIndex]);
-      if (!id) return null;
-      const note = String((statsByDate[dk] || {}).captionNote || "");
-      const cap = capGet(note, id);
-      const limit = capSafeLimit(captionLimit);
-      const save = () => {
-        const text = String(lightboxCapEdit || "");
-        if (text === cap) {
-          setLightboxCapEdit(null);
-          return;
-        }
-        const n2 = capSet(note, id, text);
-        if (n2.length > limit) {
-          showToast(`Caption ngày này dài quá, tối đa ${limit.toLocaleString("vi-VN")} ký tự`, "error");
-          return;
-        }
-        updateDayStat(dk, { captionNote: n2, captionDirty: true });
-        setLightboxCapEdit(null);
-      };
-      return React.createElement("div", { className: "w-full max-w-[640px] mt-3", "data-lightbox-caption": id }, lightboxCapEdit !== null ? React.createElement("div", null, React.createElement("textarea", { autoFocus: true, value: lightboxCapEdit, onChange: (e) => setLightboxCapEdit(e.target.value), rows: 4, className: "w-full bg-groove/80 border border-line focus:border-accent rounded-[2px] p-2.5 text-[14.5px] leading-relaxed text-ink outline-none resize-y", "data-caption-input": true }), React.createElement("div", { className: "flex justify-end gap-2 mt-2" }, React.createElement("button", { type: "button", onClick: () => setLightboxCapEdit(null), className: "h-9 px-4 rounded-[2px] border border-line text-sub text-[13.5px]" }, "Hủy"), React.createElement("button", { type: "button", onClick: save, className: "h-9 px-4 rounded-[2px] bg-accent text-onaccent text-[13.5px] font-semibold cls-glow", "data-caption-save": true }, "Lưu"))) : React.createElement("div", { className: "flex items-start gap-3" }, cap && React.createElement("p", { className: "flex-1 min-w-0 text-[14.5px] leading-relaxed text-ink whitespace-pre-wrap break-words", "data-caption-text": true }, cap), React.createElement("button", { type: "button", "aria-label": "Sửa caption", onClick: () => setLightboxCapEdit(cap), className: "ml-auto w-8 h-8 shrink-0 flex items-center justify-center text-sub hover:text-ink" }, React.createElement(PencilIcon, { size: 15 }))));
-    })(), lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
+    }, className: "absolute left-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronLeftIcon, { size: 32 })), React.createElement("img", { src: lightboxImages[lightboxIndex], className: `max-w-full ${lightboxMeta ? "max-h-[62vh]" : "max-h-[75vh]"} object-contain rounded-[2px] transition-transform duration-300` }), renderLbCaption(), lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       setLightboxIndex((prev) => prev === lightboxImages.length - 1 ? 0 : prev + 1);
-    }, className: "absolute right-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronRightIcon, { size: 32 }))), React.createElement("div", { className: "absolute bottom-8 flex gap-3 overflow-x-auto max-w-full px-6 no-scrollbar", onClick: (e) => e.stopPropagation() }, lightboxImages.map((img, i) => React.createElement("button", { key: i, onClick: () => setLightboxIndex(i), className: `relative shrink-0 rounded-[2px] overflow-hidden transition-all ${i === lightboxIndex ? "ring-2 ring-line scale-110" : "opacity-50 hover:opacity-100"}` }, React.createElement("img", { src: img, className: "w-16 h-16 object-cover" })))))));
+    }, className: "absolute right-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronRightIcon, { size: 32 }))), React.createElement("div", { className: `absolute ${spBarOn(spState) ? "bottom-[76px]" : "bottom-8"} flex gap-3 overflow-x-auto max-w-full px-6 no-scrollbar`, onClick: (e) => e.stopPropagation() }, lightboxImages.map((img, i) => React.createElement("button", { key: i, onClick: () => setLightboxIndex(i), className: `relative shrink-0 rounded-[2px] overflow-hidden transition-all ${i === lightboxIndex ? "ring-2 ring-line scale-110" : "opacity-50 hover:opacity-100"}` }, React.createElement("img", { src: img, className: "w-16 h-16 object-cover" })))), React.createElement("div", { className: "absolute inset-x-0 bottom-0" }, React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark })))));
   };
   const root = ReactDOM.createRoot(document.getElementById("root"));
   root.render(React.createElement(App, null));
