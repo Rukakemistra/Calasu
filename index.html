@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="e33bfc7da8">
+    <meta name="cls-build" content="20474bd490">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -1433,7 +1433,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const PlayerBar = ({ sp, markMs, canPin, onPin }) => {
+  const PlayerBar = ({ sp, markMs, canPin, onPin, place }) => {
     const [, setTick] = useState(0);
     const [drag, setDrag] = useState(null);
     const dragRef = useRef(null);
@@ -1463,7 +1463,7 @@ try {
       setDrag(null);
       Spotify.seek(v);
     };
-    return React.createElement("div", { className: "shrink-0 bg-card border-t border-line", onClick: (e) => e.stopPropagation(), "data-player-bar": sp.paused ? "dung" : "dang-phat" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto flex items-center gap-2.5 pl-3 pr-2 py-2" }, React.createElement("div", { className: "w-10 h-10 shrink-0 overflow-hidden", style: { background: COVER_FALLBACK } }, it.thumb && !imgFailed && React.createElement("img", { src: it.thumb, alt: "", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" })), React.createElement("div", { className: "flex-1 min-w-0" }, React.createElement("div", { className: "text-[13px] leading-tight text-ink truncate", "data-player-title": true }, React.createElement("span", { className: "font-semibold" }, it.title || "Spotify"), it.artist ? React.createElement("span", { className: "text-sub" }, " · ", it.artist) : null), React.createElement("div", { className: "flex items-center gap-2 mt-1 font-num text-[11px] text-sub tabular-nums" }, React.createElement("span", { className: "w-8 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-4 flex items-center" }, React.createElement(
+    return React.createElement("div", { className: `shrink-0 bg-card ${place === "top" ? "border-b" : "border-t"} border-line`, onClick: (e) => e.stopPropagation(), "data-player-bar": sp.paused ? "dung" : "dang-phat", "data-player-place": place === "top" ? "tren" : "duoi" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto flex items-center gap-2.5 pl-3 pr-2 py-2" }, React.createElement("div", { className: "w-10 h-10 shrink-0 overflow-hidden", style: { background: COVER_FALLBACK } }, it.thumb && !imgFailed && React.createElement("img", { src: it.thumb, alt: "", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" })), React.createElement("div", { className: "flex-1 min-w-0" }, React.createElement("div", { className: "text-[13px] leading-tight text-ink truncate", "data-player-title": true }, React.createElement("span", { className: "font-semibold" }, it.title || "Spotify"), it.artist ? React.createElement("span", { className: "text-sub" }, " · ", it.artist) : null), React.createElement("div", { className: "flex items-center gap-2 mt-1 font-num text-[11px] text-sub tabular-nums" }, React.createElement("span", { className: "w-8 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-4 flex items-center" }, React.createElement(
       "input",
       {
         type: "range",
@@ -2118,7 +2118,7 @@ try {
   const CLIP_LEFT = "polygon(12px 0,100% 0,calc(100% - 16px) 100%,0 100%,0 12px)";
   const CLIP_RIGHT = "polygon(16px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%)";
   const CLIP_ONE = "polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)";
-  const WeekPhotos = ({ imgs, coverThumb, onOpen, onPlay }) => {
+  const WeekPhotos = ({ imgs, coverThumb, onOpen, onPlay, onPhotoPlay }) => {
     const [ratios, setRatios] = useState({});
     const shown = imgs.slice(0, 4).map((raw, i) => ({ raw, i, src: formatDriveImgUrl(raw, 800) }));
     const extraCount = imgs.length > 4 ? imgs.length - 4 : 0;
@@ -2134,14 +2134,13 @@ try {
         label,
         extra,
         onClick: (e) => {
-          if (onPlay) {
-            e.stopPropagation();
-            onPlay();
+          e.stopPropagation();
+          if (x.i < 0) {
+            if (onPlay) onPlay();
             return;
           }
-          if (x.i < 0) return;
-          e.stopPropagation();
           onOpen(x.i);
+          if (onPhotoPlay) onPhotoPlay();
         },
         onLoad: (e) => {
           const im = e.currentTarget;
@@ -2194,7 +2193,7 @@ try {
     return React.createElement(React.Fragment, null, React.createElement("div", { className: "flex items-center gap-3.5 shrink-0", "data-week-head": true }, hasMusic && !embedOpen && React.createElement(WeekCover, { thumb: t.thumb, onPlay: doPlay, isPlaying }), React.createElement("div", { className: "min-w-0 flex-1" }, React.createElement("div", { className: "flex items-baseline gap-2" }, React.createElement("span", { className: "font-num font-bold text-[22px] leading-[1.05] text-ink" }, VN_DAYS[day.getDay()]), React.createElement("span", { className: `font-num font-medium text-[13px] leading-[1.05] ${isToday ? "text-accent" : "text-dim"}` }, String(day.getDate()).padStart(2, "0"), "/", String(day.getMonth() + 1).padStart(2, "0")), React.createElement("span", { className: "ml-auto flex items-center gap-3 text-[13.5px] text-sub whitespace-nowrap" }, React.createElement("span", { role: "button", tabIndex: 0, onClick: (e) => {
       e.stopPropagation();
       onMood();
-    }, title: "Bấm để mở Bong bóng hồi tưởng", "data-week-mood": true, className: moodLabel ? "text-ink font-semibold" : "text-dim" }, moodLabel || "Trống"), outIcon && React.createElement("span", { className: "flex items-center gap-[5px]" }, React.createElement(outIcon.Icon, { size: 13 }), outIcon.label))), hasMusic && !embedOpen && React.createElement("div", { className: "text-[13px] text-sub whitespace-nowrap overflow-hidden text-ellipsis mt-[3px]", "data-week-song": true }, React.createElement(MusicIcon, { size: 12, className: "inline -mt-0.5" }), " ", React.createElement("span", { className: "font-num font-semibold text-ink" }, t.title), t.artist ? ` · ${t.artist}` : ""))), embedOpen && React.createElement("div", { className: "shrink-0", onClick: (e) => e.stopPropagation(), "data-week-embed": true }, React.createElement("iframe", { src: t.embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", title: "Spotify", className: "block rounded-[2px]" })), body, React.createElement(WeekPhotos, { imgs, coverThumb: hasMusic ? t.thumb : "", onOpen: onOpenPhotos, onPlay: hasMusic ? doPlay : void 0 }));
+    }, title: "Bấm để mở Bong bóng hồi tưởng", "data-week-mood": true, className: moodLabel ? "text-ink font-semibold" : "text-dim" }, moodLabel || "Trống"), outIcon && React.createElement("span", { className: "flex items-center gap-[5px]" }, React.createElement(outIcon.Icon, { size: 13 }), outIcon.label))), hasMusic && !embedOpen && React.createElement("div", { className: "text-[13px] text-sub whitespace-nowrap overflow-hidden text-ellipsis mt-[3px]", "data-week-song": true }, React.createElement(MusicIcon, { size: 12, className: "inline -mt-0.5" }), " ", React.createElement("span", { className: "font-num font-semibold text-ink" }, t.title), t.artist ? ` · ${t.artist}` : ""))), embedOpen && React.createElement("div", { className: "shrink-0", onClick: (e) => e.stopPropagation(), "data-week-embed": true }, React.createElement("iframe", { src: t.embed, width: "100%", height: "80", frameBorder: "0", allow: "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture", loading: "lazy", title: "Spotify", className: "block rounded-[2px]" })), body, React.createElement(WeekPhotos, { imgs, coverThumb: hasMusic ? t.thumb : "", onOpen: onOpenPhotos, onPlay: hasMusic ? doPlay : void 0, onPhotoPlay: hasMusic ? () => playDayPhoto(t.trackId, formatDate(day)) : void 0 }));
   };
   const artistFromSongName = (s) => {
     const t = String(s || "");
@@ -2741,6 +2740,23 @@ try {
       setLightboxIndex(i);
     };
     const mealSwipeRef = useRef(null);
+    const lbTouchRef = useRef(null);
+    const lbTouchStart = (e) => {
+      const t = e.touches && e.touches[0];
+      lbTouchRef.current = t && e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null;
+    };
+    const lbTouchEnd = (e) => {
+      const st0 = lbTouchRef.current;
+      lbTouchRef.current = null;
+      const n = (lightboxImages || []).length;
+      if (!st0 || n < 2 || lightboxCapEdit !== null) return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - st0.x, dy = t.clientY - st0.y;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      setLightboxCapEdit(null);
+      setLightboxIndex((prev) => dx < 0 ? (prev + 1) % n : (prev - 1 + n) % n);
+    };
     useEffect(() => {
       const el = mealSwipeRef.current;
       if (el && lightboxMeta && lightboxMeta.variant === "meal") el.scrollLeft = lightboxIndex * el.clientWidth;
@@ -5471,7 +5487,7 @@ try {
         title: "Ẩn tạm"
       },
       React.createElement(XIcon, { size: 14 })
-    )))), React.createElement(
+    )))), React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark, place: "top" }), React.createElement(
       "main",
       {
         className: "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col",
@@ -6575,7 +6591,7 @@ try {
           return null;
         })());
       })))))
-    ), React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark }), spState.invite && React.createElement("div", { className: "fixed z-[260] flex items-center gap-3 pl-3.5 pr-1.5 py-2 bg-card border border-line", style: { left: "50%", transform: "translateX(-50%)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 78px)", width: "min(440px, calc(100vw - 24px))" }, "data-spotify-invite": true }, React.createElement(MusicIcon, { size: 16, className: "text-accent shrink-0" }), React.createElement("span", { className: "flex-1 min-w-0 text-[13.5px] text-ink truncate" }, "Đăng nhập Spotify để phát"), React.createElement("button", { type: "button", onClick: () => Spotify.login(), className: "h-8 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95 shrink-0" }, "Đăng nhập"), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => Spotify.dismissInvite(), className: "w-8 h-8 flex items-center justify-center text-sub hover:text-ink shrink-0" }, React.createElement(XIcon, { size: 16 }))), React.createElement("nav", { className: "shrink-0 z-40 bg-bg border-t border-line pb-[env(safe-area-inset-bottom,1rem)] relative" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto h-16 grid grid-cols-5 relative" }, [
+    ), spState.invite && React.createElement("div", { className: "fixed z-[260] flex items-center gap-3 pl-3.5 pr-1.5 py-2 bg-card border border-line", style: { left: "50%", transform: "translateX(-50%)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 78px)", width: "min(440px, calc(100vw - 24px))" }, "data-spotify-invite": true }, React.createElement(MusicIcon, { size: 16, className: "text-accent shrink-0" }), React.createElement("span", { className: "flex-1 min-w-0 text-[13.5px] text-ink truncate" }, "Đăng nhập Spotify để phát"), React.createElement("button", { type: "button", onClick: () => Spotify.login(), className: "h-8 px-3.5 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95 shrink-0" }, "Đăng nhập"), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => Spotify.dismissInvite(), className: "w-8 h-8 flex items-center justify-center text-sub hover:text-ink shrink-0" }, React.createElement(XIcon, { size: 16 }))), React.createElement("nav", { className: "shrink-0 z-40 bg-bg border-t border-line pb-[env(safe-area-inset-bottom,1rem)] relative" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto h-16 grid grid-cols-5 relative" }, [
       { id: "work", icon: BrainIcon, label: "Working" },
       { id: "macro", icon: UtensilsIcon, label: "Ăn uống" },
       { id: "journal", icon: BookIcon, label: "Nhật ký" },
@@ -6946,10 +6962,10 @@ try {
     }, className: "hidden min-[900px]:flex absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 items-center justify-center bg-bg/60 text-ink" }, React.createElement(ChevronRightIcon, { size: 22 }))))), React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark })), lightboxImages && lightboxImages.length > 0 && !(lightboxMeta && lightboxMeta.variant === "meal") && React.createElement("div", { className: "fixed inset-0 z-[200] bg-bg/95 flex flex-col justify-center items-center backdrop-blur-md animate-[fadeIn_0.2s_ease-out]", onClick: () => window.history.back() }, React.createElement("div", { className: "absolute top-6 right-6 flex gap-4 z-50" }, React.createElement("span", { className: "text-ink font-bold bg-ink/10 px-4 py-2 rounded-[2px] backdrop-blur text-sm border border-line" }, lightboxIndex + 1, " / ", lightboxImages.length), React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       window.history.back();
-    }, className: "text-ink bg-ink/10 p-2.5 rounded-[2px] hover:bg-ink/20 backdrop-blur border border-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "relative w-full max-w-4xl flex flex-col justify-center items-center h-full px-4 pb-24", onClick: (e) => e.stopPropagation() }, lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
+    }, className: "text-ink bg-ink/10 p-2.5 rounded-[2px] hover:bg-ink/20 backdrop-blur border border-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "relative w-full max-w-4xl flex flex-col justify-center items-center h-full px-4 pb-24", onClick: (e) => e.stopPropagation(), onTouchStart: lbTouchStart, onTouchEnd: lbTouchEnd, "data-lightbox-swipe": true }, lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       setLightboxIndex((prev) => prev === 0 ? lightboxImages.length - 1 : prev - 1);
-    }, className: "absolute left-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronLeftIcon, { size: 32 })), React.createElement("img", { src: lightboxImages[lightboxIndex], className: `max-w-full ${lightboxMeta ? "max-h-[62vh]" : "max-h-[75vh]"} object-contain rounded-[2px] transition-transform duration-300` }), renderLbCaption(), lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
+    }, className: "absolute left-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronLeftIcon, { size: 32 })), React.createElement("img", { src: lightboxImages[lightboxIndex], draggable: "false", "data-lightbox-img": lightboxIndex, className: `max-w-full ${lightboxMeta ? "max-h-[62vh]" : "max-h-[75vh]"} object-contain rounded-[2px] transition-transform duration-300` }), renderLbCaption(), lightboxImages.length > 1 && React.createElement("button", { onClick: (e) => {
       e.stopPropagation();
       setLightboxIndex((prev) => prev === lightboxImages.length - 1 ? 0 : prev + 1);
     }, className: "absolute right-4 top-1/2 -translate-y-1/2 text-ink bg-ink/10 p-4 rounded-[2px] hover:bg-ink/20 backdrop-blur z-50 border border-line transition-all active:scale-90" }, React.createElement(ChevronRightIcon, { size: 32 }))), React.createElement("div", { className: `absolute ${spBarOn(spState) ? "bottom-[76px]" : "bottom-8"} flex gap-3 overflow-x-auto max-w-full px-6 no-scrollbar`, onClick: (e) => e.stopPropagation() }, lightboxImages.map((img, i) => React.createElement("button", { key: i, onClick: () => setLightboxIndex(i), className: `relative shrink-0 rounded-[2px] overflow-hidden transition-all ${i === lightboxIndex ? "ring-2 ring-line scale-110" : "opacity-50 hover:opacity-100"}` }, React.createElement("img", { src: img, className: "w-16 h-16 object-cover" })))), React.createElement("div", { className: "absolute inset-x-0 bottom-0" }, React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark })))));
