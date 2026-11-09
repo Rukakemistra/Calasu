@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="e3d0de0448">
+    <meta name="cls-build" content="7ec89d1003">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -397,6 +397,9 @@
         .mem-title .s{color:#A2A6C4;font-size:13.5px;margin-top:4px}
         .mem-again{all:unset;cursor:pointer;position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);font-size:13px;color:#A2A6C4;padding:8px 12px;opacity:0;pointer-events:none;transition:opacity .4s}
         .mem-again.on{opacity:1;pointer-events:auto}
+        .sty-light .sty-vhead{color:#121520;text-shadow:none}.sty-light .sty-vhead span{color:#4A4F68}
+        .sty-light .sty-bars span{background:rgba(18,21,32,.18)}.sty-light .sty-bars span i{background:#121520}
+        .sty-light .sty-vbtns{filter:none}.sty-light .sty-vbtns button,.sty-light .sty-paused{color:#121520;text-shadow:none}
         .sty-paused{position:absolute;left:0;right:0;bottom:4cqw;text-align:center;font-size:3.2cqw;color:#fff;z-index:9000;pointer-events:none;text-shadow:0 1px 6px #000}
     </style>
 </head>
@@ -1992,7 +1995,7 @@ try {
       }
       go(dir);
     };
-    return React.createElement("div", { className: "fixed inset-0 z-[300] bg-black/95 flex items-center justify-center", "data-story-viewer": true, onContextMenu: (e) => e.preventDefault() }, React.createElement(StoryFrame, { story, day, kho, style: { height: "min(100dvh, calc(100vw * 16 / 9))", maxHeight: "100dvh" } }, React.createElement("div", { className: "sty-bars", ref: barsRef }, keys.map((k, i) => React.createElement("span", { key: k }, React.createElement("i", { style: { width: i < vi ? "100%" : "0%" } })))), React.createElement("div", { className: "sty-vhead" }, React.createElement("b", null, day.wd), React.createElement("span", null, day.dm)), React.createElement("div", { className: "sty-tap l", onPointerDown: down, onPointerUp: () => up(-1), onPointerLeave: () => {
+    return React.createElement("div", { className: "fixed inset-0 z-[300] bg-black/95 flex items-center justify-center", "data-story-viewer": true, onContextMenu: (e) => e.preventDefault() }, React.createElement(StoryFrame, { story, day, kho, className: styIsLight(story.bg) ? "sty-light" : "", style: { height: "min(100dvh, calc(100vw * 16 / 9))", maxHeight: "100dvh" } }, React.createElement("div", { className: "sty-bars", ref: barsRef }, keys.map((k, i) => React.createElement("span", { key: k }, React.createElement("i", { style: { width: i < vi ? "100%" : "0%" } })))), React.createElement("div", { className: "sty-vhead" }, React.createElement("b", null, day.wd), React.createElement("span", null, day.dm)), React.createElement("div", { className: "sty-tap l", onPointerDown: down, onPointerUp: () => up(-1), onPointerLeave: () => {
       if (S.current.held) up(0);
     }, "data-story-tap": "trai" }), React.createElement("div", { className: "sty-tap r", onPointerDown: down, onPointerUp: () => up(1), onPointerLeave: () => {
       if (S.current.held) up(0);
@@ -3447,6 +3450,348 @@ try {
       };
     }, []);
     return React.createElement("div", { className: "fixed inset-0 z-[300] flex justify-center", style: { background: "#020308" }, "data-memory-book": mode }, React.createElement("div", { ref: ph, className: "relative overflow-hidden", style: { width: "min(100vw, 480px)", height: "100dvh", background: "#000004", touchAction: "none", userSelect: "none", WebkitUserSelect: "none" } }, React.createElement("canvas", { ref: gl, className: "mem-gl", "aria-label": "Sổ ký ức: chạm một khung để chọn", style: { display: mode === "2d" ? "none" : "block" } }), React.createElement("div", { ref: months, className: "mem-months" }), React.createElement("div", { ref: title, className: "mem-title" }, React.createElement("div", { className: "h" }, "Ký ức của bồ"), React.createElement("div", { className: "s", ref: tsub })), React.createElement("button", { ref: again, type: "button", className: "mem-again" }, "Chọn lại"), mode === "2d" && React.createElement(MemoryGrid2D, { days, today, coverOf, onOpen }), mode === "tai" && React.createElement("div", { className: "absolute inset-0 flex items-center justify-center pointer-events-none" }, React.createElement("span", { className: "w-2 h-2 rounded-full bg-accent cls-glow animate-pulse" })), React.createElement("button", { type: "button", "aria-label": "Đóng sổ ký ức", onClick: onClose, className: "absolute right-2 w-10 h-10 flex items-center justify-center text-[#A2A6C4] hover:text-white active:scale-90 transition-transform", style: { position: "absolute", right: 8, top: "calc(8px + env(safe-area-inset-top, 0px))", zIndex: 5 } }, React.createElement(XIcon, { size: 20 }))));
+  };
+  const STORY_MEO_ID = "meo-khuya";
+  const STORY_MEO_SRC = "data:image/webp;base64,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";
+  const stySvgUri = (s) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s);
+  const STORY_KHO_SAN = [
+    { id: STORY_MEO_ID, src: STORY_MEO_SRC },
+    { id: "k1", src: stySvgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><polygon points="8,0 120,0 112,60 0,60" fill="#F5C451"/><text x="60" y="41" font-family="Arial Black,Arial" font-weight="900" font-size="30" text-anchor="middle" fill="#1a1206">NGON!</text></svg>') },
+    { id: "k2", src: stySvgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M10 72h80L84 30l-18 16L50 14 34 46 16 30z" fill="#6EA8FF" stroke="#ECE8DF" stroke-width="4" stroke-linejoin="round"/><rect x="10" y="78" width="80" height="10" fill="#ECE8DF"/></svg>') },
+    { id: "k3", src: stySvgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 70"><rect x="3" y="3" width="134" height="64" fill="#ECE8DF" stroke="#111" stroke-width="5"/><text x="70" y="47" font-family="Arial Black,Arial" font-weight="900" font-size="30" text-anchor="middle" fill="#111">+1 PR</text></svg>') },
+    { id: "e1", t: "✨" },
+    { id: "e2", t: "🔥" },
+    { id: "e3", t: "💪" },
+    { id: "e4", t: "🍜" },
+    { id: "e5", t: "😴" },
+    { id: "e6", t: "🌧️" }
+  ];
+  const styKhoAll = (server) => (Array.isArray(server) ? server : []).filter((x) => x && x.id && x.url && !STORY_KHO_SAN.some((b) => b.id === x.id)).map((x) => ({ id: String(x.id), src: String(x.url) })).reverse().concat(STORY_KHO_SAN);
+  const styIsLight = (bg) => {
+    if (bg === "giay") return true;
+    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(bg || ""));
+    if (!m) return false;
+    let h = m[1];
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const n = parseInt(h, 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b > 165;
+  };
+  const STORY_TX_COLORS = ["#ffffff", "#111111", "#6ea8ff", "#f5c451", "#f08fb0"];
+  const STORY_FONTS = [["bold", "Đậm"], ["hand", "Viết tay"], ["box", "Nền"]];
+  const STORY_EL_NAME = { photo: "Ảnh", text: "Chữ", sticker: "Sticker", music: "Nhạc", data: "Số liệu", badge: "Chuỗi" };
+  const styClamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const styGetSz = (e) => e.type === "photo" ? e.w : e.s;
+  const stySetSz = (e, v) => {
+    if (e.type === "photo") e.w = styClamp(v, 10, 130);
+    else if (e.type === "text" || e.type === "sticker") e.s = styClamp(v, 2, 60);
+    else e.s = styClamp(v, 0.4, 3);
+  };
+  const styNormR = (r) => ((Number(r) || 0) % 360 + 540) % 360 - 180;
+  const stySnapR = (r) => {
+    const n = styNormR(r);
+    for (const t of [-180, -90, 0, 90, 180]) if (Math.abs(n - t) < 5) return t === -180 ? 180 : t;
+    return Math.round(n);
+  };
+  const styPaint = (n, e) => {
+    if (!n) return;
+    n.style.left = e.x + "%";
+    n.style.top = e.y + "%";
+    n.style.setProperty("--r", (e.r || 0) + "deg");
+    if (e.type === "photo") n.style.width = e.w + "%";
+    else if (e.type === "text") n.style.fontSize = e.s + "cqw";
+    else if (e.type === "sticker") {
+      if (n.querySelector("img")) n.style.width = e.s * 2 + "cqw";
+      else n.style.fontSize = e.s + "cqw";
+    } else n.style.transform = `translate(-50%,-50%) rotate(${e.r || 0}deg) scale(${e.s || 1})`;
+  };
+  const styMauOf = (s, n) => {
+    const p = styPack(s);
+    p.els.forEach((o) => {
+      if (o.t === "photo") delete o.id;
+    });
+    return { id: "m" + Date.now().toString(36), n, bg: p.bg, tpl: p.tpl, els: p.els };
+  };
+  const styFromMau = (m, day) => {
+    const u = styUnpack({ bg: m.bg, tpl: m.tpl, els: m.els || [] });
+    if (!u) return null;
+    const ids = (day.imgs || []).map((x) => x.id);
+    let i = 0;
+    u.els = u.els.filter((e) => {
+      if (e.type === "photo") {
+        if (i >= ids.length) return false;
+        e.img = ids[i++];
+        return true;
+      }
+      if (e.type === "music") return !!day.song;
+      if (e.type === "badge") return !!(day.sv || {})[e.k];
+      return true;
+    });
+    return u;
+  };
+  const styStickerData = (file) => new Promise((resolve) => {
+    const rd = new FileReader();
+    rd.onerror = () => resolve(null);
+    rd.onload = () => {
+      const im = new Image();
+      im.onerror = () => resolve(null);
+      im.onload = () => {
+        const k = Math.min(1, 512 / Math.max(im.width || 1, im.height || 1));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(im.width * k));
+        c.height = Math.max(1, Math.round(im.height * k));
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+        let d = c.toDataURL("image/png");
+        if (d.length > 7e5) {
+          const w = c.toDataURL("image/webp", 0.9);
+          if (w.indexOf("data:image/webp") === 0) d = w;
+        }
+        resolve(d);
+      };
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+  const StoryChip = ({ on, children, className, ...p }) => React.createElement("button", { type: "button", "aria-pressed": on ? "true" : "false", className: `h-[38px] px-[13px] inline-flex items-center gap-[7px] text-[14px] transition-colors active:scale-[0.97] ${on ? "bg-accent text-onaccent font-semibold" : "bg-card text-ink"} ${className || ""}`, ...p }, children);
+  const StoryGrp = ({ t, children, ...p }) => React.createElement("div", { ...p }, React.createElement("div", { className: "mb-2 text-[12.5px] font-semibold tracking-[.06em] uppercase text-sub" }, t), children);
+  const StoryEditor = ({ day, init, kho, mau, busy, onSave, onClose, onAddSticker, onMau }) => {
+    const [s, setS] = useState(() => styUnpack(styPack(init || styAuto(day, 0))) || styAuto(day, 0));
+    const [sel, setSel] = useState(null);
+    const [ver, setVer] = useState(0);
+    const [khoBusy, setKhoBusy] = useState(false);
+    const [mauDel, setMauDel] = useState(null);
+    const bump = () => setVer((v) => v + 1);
+    const frameRef = useRef(null);
+    const R = useRef({ P: /* @__PURE__ */ new Map(), G: null, moved: false, wt: 0, hold: 0 });
+    R.current.s = s;
+    R.current.sel = sel;
+    const selEl = s.els.find((x) => x.id === sel) || null;
+    useEffect(() => {
+      const fr = frameRef.current;
+      if (!fr) return;
+      const st = R.current;
+      const nodeOf = (id) => fr.querySelector(`[data-id="${id}"]`);
+      const center = (e, B) => ({ x: B.left + e.x / 100 * B.width, y: B.top + e.y / 100 * B.height });
+      const start = () => {
+        const e = st.s.els.find((x) => x.id === st.sel);
+        const pts = [...st.P.values()];
+        if (!e || !pts.length) {
+          st.G = null;
+          return;
+        }
+        const n = nodeOf(e.id), B = fr.getBoundingClientRect();
+        if (pts.length >= 2) {
+          const a = pts[0], b = pts[1];
+          st.G = { k: "pinch", e, n, B, d0: Math.hypot(b.x - a.x, b.y - a.y) || 1, a0: Math.atan2(b.y - a.y, b.x - a.x), s0: styGetSz(e), r0: e.r || 0, m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, x0: e.x, y0: e.y };
+        } else {
+          const p = pts[0], c = center(e, B);
+          st.G = p.h ? { k: "handle", e, n, B, c, d0: Math.hypot(p.x - c.x, p.y - c.y) || 1, a0: Math.atan2(p.y - c.y, p.x - c.x), s0: styGetSz(e), r0: e.r || 0 } : { k: "move", e, n, B, dx: p.x - c.x, dy: p.y - c.y };
+        }
+      };
+      const down = (ev) => {
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;
+        const isH = !!(ev.target.closest && ev.target.closest("[data-h]"));
+        const n = ev.target.closest && ev.target.closest(".sty-el");
+        if (st.P.size === 0) {
+          if (!n) {
+            if (st.sel !== null) {
+              st.sel = null;
+              setSel(null);
+            }
+            return;
+          }
+          const id = Number(n.dataset.id);
+          if (st.sel !== id) {
+            st.sel = id;
+            setSel(id);
+          }
+        }
+        if (st.sel === null) return;
+        st.P.set(ev.pointerId, { x: ev.clientX, y: ev.clientY, h: isH });
+        try {
+          fr.setPointerCapture(ev.pointerId);
+        } catch (e) {
+        }
+        start();
+        ev.preventDefault();
+      };
+      const move = (ev) => {
+        const p = st.P.get(ev.pointerId);
+        if (!p || !st.G) return;
+        p.x = ev.clientX;
+        p.y = ev.clientY;
+        const G = st.G, e = G.e, B = G.B;
+        if (G.k === "move") {
+          e.x = styClamp((p.x - G.dx - B.left) / B.width * 100, 0, 100);
+          e.y = styClamp((p.y - G.dy - B.top) / B.height * 100, 0, 100);
+        } else if (G.k === "handle") {
+          stySetSz(e, G.s0 * Math.hypot(p.x - G.c.x, p.y - G.c.y) / G.d0);
+          e.r = stySnapR(G.r0 + (Math.atan2(p.y - G.c.y, p.x - G.c.x) - G.a0) * 180 / Math.PI);
+        } else {
+          const [a, b] = [...st.P.values()];
+          stySetSz(e, G.s0 * Math.hypot(b.x - a.x, b.y - a.y) / G.d0);
+          e.r = stySnapR(G.r0 + (Math.atan2(b.y - a.y, b.x - a.x) - G.a0) * 180 / Math.PI);
+          e.x = styClamp(G.x0 + ((a.x + b.x) / 2 - G.m0.x) / B.width * 100, 0, 100);
+          e.y = styClamp(G.y0 + ((a.y + b.y) / 2 - G.m0.y) / B.height * 100, 0, 100);
+        }
+        st.moved = true;
+        styPaint(G.n, e);
+      };
+      const end = (ev) => {
+        if (!st.P.has(ev.pointerId)) return;
+        st.P.delete(ev.pointerId);
+        start();
+        if (!st.P.size && st.moved) {
+          st.moved = false;
+          bump();
+        }
+      };
+      const wheel = (ev) => {
+        const e = st.s.els.find((x) => x.id === st.sel);
+        if (!e) return;
+        ev.preventDefault();
+        if (ev.shiftKey) e.r = stySnapR((e.r || 0) + ((ev.deltaY || ev.deltaX) > 0 ? 6 : -6));
+        else stySetSz(e, styGetSz(e) * (ev.deltaY > 0 ? 0.94 : 1.06));
+        styPaint(nodeOf(e.id), e);
+        clearTimeout(st.wt);
+        st.wt = setTimeout(bump, 250);
+      };
+      fr.addEventListener("pointerdown", down);
+      fr.addEventListener("pointermove", move);
+      fr.addEventListener("pointerup", end);
+      fr.addEventListener("pointercancel", end);
+      fr.addEventListener("wheel", wheel, { passive: false });
+      return () => {
+        fr.removeEventListener("pointerdown", down);
+        fr.removeEventListener("pointermove", move);
+        fr.removeEventListener("pointerup", end);
+        fr.removeEventListener("pointercancel", end);
+        fr.removeEventListener("wheel", wheel);
+        clearTimeout(st.wt);
+      };
+    }, []);
+    const del = () => {
+      if (!selEl) return;
+      s.els = s.els.filter((x) => x !== selEl);
+      setSel(null);
+      bump();
+    };
+    const close = () => {
+      if (ver > 0 && !window.confirm("Bỏ những gì vừa sửa?")) return;
+      onClose();
+    };
+    useEffect(() => {
+      const k = (ev) => {
+        const tg = ev.target && ev.target.tagName;
+        if (tg === "TEXTAREA" || tg === "INPUT") return;
+        if ((ev.key === "Delete" || ev.key === "Backspace") && selEl) {
+          ev.preventDefault();
+          del();
+        } else if (ev.key === "Escape") {
+          if (selEl) setSel(null);
+          else close();
+        }
+      };
+      window.addEventListener("keydown", k);
+      return () => window.removeEventListener("keydown", k);
+    });
+    const add = (n) => {
+      s.els.push(n);
+      setSel(n.id);
+      bump();
+    };
+    const setTpl = (k) => {
+      s.tpl = k;
+      const ph = s.els.filter((x) => x.type === "photo");
+      const np = styTplPhotos(k, ph.map((p) => p.img), false);
+      ph.forEach((p, i) => Object.assign(p, np[i]));
+      bump();
+    };
+    const isW = (c) => /^#(fff|ffffff)$/i.test(String(c || "")), isB = (c) => /^#(111|111111)$/i.test(String(c || ""));
+    const setBg = (bg) => {
+      const wasLight = s.bg === "giay";
+      s.bg = bg;
+      if (bg === "giay" !== wasLight) s.els.forEach((e) => {
+        if (e.type === "text" && e.f !== "box" && (isW(e.c) || isB(e.c))) e.c = bg === "giay" ? "#111111" : "#ffffff";
+      });
+      bump();
+    };
+    const unused = (day.imgs || []).filter((im) => !s.els.some((e) => e.type === "photo" && e.img === im.id));
+    const txC = s.bg === "giay" ? "#111111" : "#ffffff";
+    const custBg = !STORY_BG[s.bg];
+    const addSticker = async (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = "";
+      if (!f || !onAddSticker) return;
+      setKhoBusy(true);
+      try {
+        await onAddSticker(f);
+      } finally {
+        setKhoBusy(false);
+      }
+    };
+    const mauList = Array.isArray(mau) ? mau : [];
+    const saveMau = () => {
+      const nums = mauList.map((m) => Number((String(m.n || "").match(/(\d+)$/) || [])[1]) || 0);
+      onMau(mauList.concat([styMauOf(s, "Mẫu " + (Math.max(0, ...nums) + 1))]).slice(-12));
+    };
+    const mauDown = (m) => {
+      clearTimeout(R.current.hold);
+      R.current.hold = setTimeout(() => {
+        R.current.hold = -1;
+        setMauDel(m.id);
+      }, 550);
+    };
+    const mauUp = (m) => {
+      const h = R.current.hold;
+      clearTimeout(h);
+      R.current.hold = 0;
+      if (h === -1) return;
+      if (mauDel === m.id) {
+        onMau(mauList.filter((x) => x.id !== m.id));
+        setMauDel(null);
+        return;
+      }
+      setMauDel(null);
+      const u = styFromMau(m, day);
+      if (u) {
+        setS(u);
+        setSel(null);
+        bump();
+      }
+    };
+    const ta = selEl && selEl.type === "text";
+    const setFont = (f) => {
+      selEl.f = f;
+      if (f === "box") selEl.c = "#111111";
+      else if (isB(selEl.c) && s.bg !== "giay") selEl.c = "#ffffff";
+      bump();
+    };
+    const setColor = (c) => {
+      selEl.c = c;
+      bump();
+    };
+    return React.createElement("div", { className: "fixed inset-0 z-[300] bg-bg overflow-y-auto", "data-story-editor": day.dKey }, React.createElement("div", { className: "min-h-full max-w-[1000px] mx-auto px-4 pt-3 pb-8 min-[760px]:grid min-[760px]:grid-cols-[minmax(0,380px)_minmax(0,1fr)] min-[760px]:gap-7 min-[760px]:items-start" }, React.createElement("div", { className: "min-[760px]:sticky min-[760px]:top-3" }, React.createElement("div", { className: "flex items-center h-11" }, React.createElement("span", { className: "font-num font-bold text-[17px] text-ink" }, day.wd, " ", React.createElement("span", { className: "text-sub font-medium text-[14px]" }, day.dm)), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: close, className: "ml-auto w-10 h-10 -mr-2 flex items-center justify-center text-sub hover:text-ink active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "mx-auto", style: { width: "min(100%, 380px, calc((100dvh - 110px) * 9 / 16))", minWidth: 220 } }, React.createElement(StoryFrame, { ref: frameRef, story: s, day, kho, selId: sel, edit: true }))), React.createElement("div", { className: "flex flex-col gap-5 mt-5 min-[760px]:mt-11 min-w-0" }, React.createElement(StoryGrp, { t: "Mẫu xếp ảnh", "data-story-tpls": true }, React.createElement("div", { className: "flex flex-wrap gap-2" }, STORY_TPLS.map(([k, n]) => React.createElement(StoryChip, { key: k, on: s.tpl === k, onClick: () => setTpl(k) }, n)))), mauList.length > 0 && React.createElement(StoryGrp, { t: "Mẫu riêng", "data-story-mau": true }, React.createElement("div", { className: "flex flex-wrap gap-2" }, mauList.map((m) => React.createElement(
+      StoryChip,
+      {
+        key: m.id,
+        on: mauDel === m.id,
+        onPointerDown: () => mauDown(m),
+        onPointerUp: () => mauUp(m),
+        onPointerLeave: () => {
+          if (R.current.hold > 0) clearTimeout(R.current.hold);
+        },
+        onContextMenu: (e) => e.preventDefault(),
+        "data-mau": m.id,
+        style: mauDel === m.id ? { background: "rgb(var(--c-bad))" } : void 0
+      },
+      mauDel === m.id ? "Xóa " + m.n : m.n
+    )))), React.createElement(StoryGrp, { t: "Nền", "data-story-bgs": true }, React.createElement("div", { className: "flex flex-wrap gap-2" }, Object.keys(STORY_BG).map((k) => React.createElement(StoryChip, { key: k, on: s.bg === k, onClick: () => setBg(k) }, React.createElement("span", { className: "w-4 h-4 shrink-0", style: { background: STORY_BG[k] } }), STORY_BG_NAME[k])), React.createElement("label", { className: `h-[38px] px-[13px] inline-flex items-center gap-[7px] text-[14px] cursor-pointer ${custBg ? "bg-accent text-onaccent font-semibold" : "bg-card text-ink"}` }, React.createElement("input", { type: "color", "aria-label": "Màu nền khác", value: custBg ? s.bg : "#3a2a5c", onInput: (e) => setBg(e.target.value), onChange: (e) => setBg(e.target.value), className: "w-[18px] h-[18px] p-0 border-0 bg-transparent" }), "Màu khác"))), React.createElement(StoryGrp, { t: "Thêm vào", "data-story-add": true }, React.createElement("div", { className: "flex flex-wrap gap-2" }, React.createElement(StoryChip, { onClick: () => add(styE("text", { t: "Viết gì đó", x: 50, y: 20, s: 7, f: "bold", c: txC })) }, "Chữ"), unused.length > 0 && React.createElement(StoryChip, { onClick: () => add(styE("photo", { img: unused[0].id, x: 50, y: 45, w: 50, a: s.tpl === "phim" ? "16/10" : "4/5", pola: s.tpl === "pola" })) }, "Ảnh"), Object.keys(STORY_DATA).map((k) => React.createElement(StoryChip, { key: k, onClick: () => add(styE("data", { k, x: 50, y: 22, s: 1 })) }, k === "kcal" ? "Kcal" : STORY_DATA[k][0])), day.song && !s.els.some((x) => x.type === "music") && React.createElement(StoryChip, { onClick: () => add(styE("music", { x: 50, y: 90, s: 1 })) }, "Nhạc"), (day.chuoi || []).map((c) => React.createElement(StoryChip, { key: c.k, onClick: () => add(styE("badge", { k: c.k, x: 50, y: 30, s: 0.9 })) }, "Chuỗi: ", c.n, " ", c.l)))), React.createElement(StoryGrp, { t: "Kho sticker", "data-story-kho": true }, React.createElement("div", { className: "grid gap-1.5", style: { gridTemplateColumns: "repeat(auto-fill, 52px)" } }, React.createElement("label", { "aria-label": "Thêm sticker vào kho", className: `w-[52px] h-[52px] flex items-center justify-center border-[1.5px] border-dashed border-line text-sub text-[24px] cursor-pointer ${khoBusy ? "opacity-50 pointer-events-none" : ""}` }, khoBusy ? React.createElement(LoaderIcon, { size: 18, className: "animate-spin" }) : "+", React.createElement("input", { type: "file", accept: "image/*", hidden: true, onChange: addSticker, "data-story-kho-add": true })), (kho || []).map((k) => React.createElement("button", { key: k.id, type: "button", "aria-label": "Dán sticker", "data-sk": k.id, onClick: () => add(styE("sticker", { sk: k.id, x: 50, y: 24, s: k.src ? 14 : 12 })), className: "w-[52px] h-[52px] bg-card flex items-center justify-center text-[26px] active:scale-95 transition-transform" }, k.src ? React.createElement("img", { src: k.src, alt: "", draggable: "false", className: "max-w-[40px] max-h-[40px]" }) : k.t)))), selEl && React.createElement(StoryGrp, { t: "Đang chọn", "data-story-sel": true }, React.createElement("div", { className: "flex flex-wrap gap-2 items-center" }, React.createElement("span", { className: "text-[14px] text-sub mr-1" }, STORY_EL_NAME[selEl.type] || ""), React.createElement(StoryChip, { onClick: () => {
+      selEl.z = styUid++;
+      bump();
+    } }, "Lên trên"), React.createElement(StoryChip, { onClick: del }, "Xóa")), ta && React.createElement(React.Fragment, null, React.createElement("div", { className: "flex flex-wrap gap-2 mt-2", "data-story-fonts": true }, STORY_FONTS.map(([f, n]) => React.createElement(StoryChip, { key: f, on: selEl.f === f, onClick: () => setFont(f) }, n))), React.createElement("div", { className: "flex flex-wrap gap-2 mt-2 items-center", "data-story-colors": true }, STORY_TX_COLORS.map((c) => React.createElement("button", { key: c, type: "button", "aria-label": "Màu chữ " + c, onClick: () => setColor(c), className: "w-[38px] h-[38px] bg-card flex items-center justify-center" }, React.createElement("span", { className: "w-5 h-5", style: { background: c, boxShadow: String(selEl.c).toLowerCase() === c || c === "#ffffff" && isW(selEl.c) || c === "#111111" && isB(selEl.c) ? "0 0 0 2px rgb(var(--c-card)), 0 0 0 4px rgb(var(--c-accent))" : "inset 0 0 0 1px rgba(255,255,255,.25)" } }))), React.createElement("label", { className: "h-[38px] px-[11px] bg-card inline-flex items-center cursor-pointer" }, React.createElement("input", { type: "color", "aria-label": "Màu chữ khác", value: /^#[0-9a-f]{6}$/i.test(selEl.c) ? selEl.c : "#ffffff", onInput: (e) => setColor(e.target.value), onChange: (e) => setColor(e.target.value), className: "w-[18px] h-[18px] p-0 border-0 bg-transparent" }))), React.createElement("textarea", { rows: 2, "aria-label": "Nội dung chữ", value: selEl.t, onChange: (e) => {
+      selEl.t = e.target.value;
+      bump();
+    }, className: "mt-2 w-full bg-card text-ink border border-line px-[11px] py-[9px] text-[14px] outline-none focus:border-accent", "data-story-text": true }))), React.createElement("div", { className: "flex gap-2.5" }, React.createElement("button", { type: "button", disabled: busy, onClick: () => onSave(s), className: "flex-1 h-12 bg-accent text-onaccent font-semibold text-[15px] active:scale-[0.98] transition-transform disabled:opacity-60", "data-story-save": true }, "Lưu story"), React.createElement("button", { type: "button", onClick: saveMau, className: "flex-1 h-12 bg-card text-ink font-semibold text-[15px] active:scale-[0.98] transition-transform", "data-story-save-mau": true }, "Lưu làm mẫu")))));
   };
   const BasketIcon = IconLib.ShoppingBasket || iconFallback("🧺");
   const ListChecksIcon = IconLib.ListChecks || iconFallback("☑");
@@ -5465,6 +5810,100 @@ try {
       setStoryQuick(null);
       if (sq && sq.back) setStoryView({ keys: sq.back.keys, idx: Math.max(0, sq.back.keys.indexOf(dKey)) });
     };
+    const loadArr = (key) => {
+      try {
+        const v = JSON.parse(localStorage.getItem(key) || "[]");
+        return Array.isArray(v) ? v : [];
+      } catch (e) {
+        return [];
+      }
+    };
+    const [storyKho, setStoryKho] = useState(() => loadArr("story_kho"));
+    const [storyMau, setStoryMau] = useState(() => loadArr("story_mau"));
+    useEffect(() => {
+      try {
+        localStorage.setItem("story_kho", JSON.stringify(storyKho));
+      } catch (e) {
+      }
+    }, [storyKho]);
+    useEffect(() => {
+      try {
+        localStorage.setItem("story_mau", JSON.stringify(storyMau));
+      } catch (e) {
+      }
+    }, [storyMau]);
+    const storyKhoAll = React.useMemo(() => styKhoAll(storyKho), [storyKho]);
+    const [storyEdit, setStoryEdit] = useState(null);
+    const storyGas = async (body) => {
+      const r = await fetch(withGasKey(gasUrl), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) });
+      return r.json();
+    };
+    const addStorySticker = async (id, image, quiet) => {
+      if (!gasUrl) {
+        if (!quiet) showToast("⚠️ Chưa có link Script: chưa thêm được sticker", "error");
+        return null;
+      }
+      try {
+        const res = await storyGas({ type: "STICKER", id, image });
+        if (res && res.status === "success" && (Number(res.v) || 0) >= 149) {
+          if (Array.isArray(res.kho)) setStoryKho(res.kho.filter((x) => x && x.id && x.url));
+          return res;
+        }
+        if (res && res.status === "unauthorized") {
+          notifyKeyProblem(true);
+          return null;
+        }
+        if (!quiet) showToast(res && res.status === "success" ? "⚠️ Apps Script chưa lên bản 149: chưa thêm được sticker" : "❌ Lỗi: " + (res && res.error || "chưa thêm được sticker"), "error");
+      } catch (e) {
+        if (!quiet) showToast("❌ Lỗi: " + e.message, "error");
+      }
+      return null;
+    };
+    const uploadStorySticker = async (file) => {
+      const img = await styStickerData(file);
+      if (!img) {
+        showToast("❌ Ảnh này không đọc được", "error");
+        return;
+      }
+      if (await addStorySticker("u" + Date.now().toString(36), img)) showToast("✅ Đã thêm sticker", "success");
+    };
+    const saveStoryMau = async (list) => {
+      setStoryMau(list);
+      try {
+        localStorage.setItem("story_mau_dirty", "1");
+      } catch (e) {
+      }
+      if (!gasUrl) {
+        showToast("⚠️ Chưa có link Script: mẫu mới lưu trong máy", "error");
+        return;
+      }
+      try {
+        const res = await storyGas({ type: "STORY_MAU", mau: list });
+        if (res && res.status === "success" && (Number(res.v) || 0) >= 149) {
+          try {
+            localStorage.removeItem("story_mau_dirty");
+          } catch (e) {
+          }
+          showToast("✅ Đã lưu mẫu riêng", "success");
+          return;
+        }
+        if (res && res.status === "unauthorized") {
+          notifyKeyProblem(true);
+          return;
+        }
+        showToast(res && res.status === "success" ? "⚠️ Apps Script chưa lên bản 149: mẫu mới lưu trong máy" : "❌ Lỗi: " + (res && res.error || "chưa lưu được mẫu"), "error");
+      } catch (e) {
+        showToast("❌ Lỗi: " + e.message, "error");
+      }
+    };
+    const saveEditedStory = async (dKey, story) => {
+      if (gasUrl && story.els.some((e) => e.type === "sticker" && e.sk === STORY_MEO_ID) && !storyKho.some((k) => k && k.id === STORY_MEO_ID)) await addStorySticker(STORY_MEO_ID, STORY_MEO_SRC, true);
+      return postStory(dKey, story);
+    };
+    const storyEditBack = (se) => {
+      setStoryEdit(null);
+      if (se && se.back) setStoryView({ keys: se.back.keys, idx: Math.max(0, se.back.keys.indexOf(se.dKey)) });
+    };
     const woSameType = (dKey, n) => {
       const w = workoutsByDate[dKey];
       if (!w) return [];
@@ -6934,6 +7373,20 @@ try {
               });
               return nSt;
             });
+            const rowOf = (key) => data.data.story.find((r, i) => i && r && String(r[0] || "").trim() === key);
+            const parseArr = (r) => {
+              try {
+                const l = JSON.parse(String(r[1] || "[]"));
+                return Array.isArray(l) ? l : null;
+              } catch (e) {
+                return null;
+              }
+            };
+            const khoR = rowOf(STORY_KHO_KEY), mauR = rowOf(STORY_MAU_KEY);
+            const khoL = khoR ? parseArr(khoR) : null;
+            if (khoL) setStoryKho(khoL.filter((x) => x && x.id && x.url));
+            const mauL = mauR ? parseArr(mauR) : null;
+            if (mauL && localStorage.getItem("story_mau_dirty") !== "1") setStoryMau(mauL.filter((x) => x && x.id && Array.isArray(x.els)));
           }
           if (data.data.note && Array.isArray(data.data.note)) {
             let nUrg = [];
@@ -7541,11 +7994,13 @@ try {
           dayOf: storyDayOf,
           storyOf,
           onDay: storyMusic,
+          kho: storyKhoAll,
           onClose: () => setStoryView(null),
           onEdit: (dKey) => {
             const back = { keys: storyView.keys };
             setStoryView(null);
-            setStoryQuick({ dKey, back });
+            if (stories[dKey]) setStoryEdit({ dKey, init: storyOf(dKey), back });
+            else setStoryQuick({ dKey, back });
           }
         }
       )),
@@ -7556,12 +8011,39 @@ try {
         {
           day: storyDayOf(storyQuick.dKey),
           busy: storyBusy,
+          kho: storyKhoAll,
           onClose: () => storyBack(storyQuick, storyQuick.dKey),
           onPost: async (story) => {
             const sq = storyQuick;
             await postStory(sq.dKey, story);
             storyBack(sq, sq.dKey);
+          },
+          onEdit: (story) => {
+            const sq = storyQuick;
+            setStoryQuick(null);
+            setStoryEdit({ dKey: sq.dKey, init: story, back: sq.back });
           }
+        }
+      )),
+      document.body
+    ), storyEdit && ReactDOM.createPortal(
+      React.createElement("div", { className: "dark" }, React.createElement(
+        StoryEditor,
+        {
+          key: storyEdit.dKey,
+          day: storyDayOf(storyEdit.dKey),
+          init: storyEdit.init,
+          kho: storyKhoAll,
+          mau: storyMau,
+          busy: storyBusy,
+          onClose: () => storyEditBack(storyEdit),
+          onSave: async (story) => {
+            const se = storyEdit;
+            await saveEditedStory(se.dKey, story);
+            storyEditBack(se);
+          },
+          onAddSticker: uploadStorySticker,
+          onMau: saveStoryMau
         }
       )),
       document.body
