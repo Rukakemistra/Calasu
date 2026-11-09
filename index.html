@@ -5,10 +5,157 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="1b8d5699bf">
+    <meta name="cls-build" content="400bee513e">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
+    <!-- Bản 167: MÀN MỞ. Khung hình lia từ bầu trời đúng giờ xuống, sao rơi thành lời chào, khoảng 1 giây.
+         Chạy bằng JS thuần ngay đầu trang (không chờ React, app vẫn tải song song bên dưới), không đọc mạng, không Pull.
+         Chạm lần đầu: nhanh gấp 3. Chạm lần nữa: bỏ qua. Khung Trưa chỉ có sao lấp lánh, không có gì rơi. -->
+    <style>
+        #cls-intro{position:fixed;inset:0;z-index:2147483000;overflow:hidden;background:#0B0D16;font-family:'Be Vietnam Pro',system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;touch-action:manipulation;--k:min(calc(100vw / 360),1.6px);animation:clsIntroOut .26s ease-in 1s forwards}
+        #cls-intro .sky{position:absolute;left:0;right:0;top:0;height:205vh;animation:clsIntroPan .5s cubic-bezier(.6,0,.2,1) forwards}
+        #cls-intro .sky>*{position:absolute}
+        #cls-intro .cl{border-radius:50%;filter:blur(6px)}
+        #cls-intro .st{border-radius:50%;background:#fff}
+        #cls-intro .col{position:absolute;top:0;bottom:0;left:max(22px,calc(50vw - 260px));width:min(calc(100vw - 44px),520px)}
+        #cls-intro .fl{position:absolute;top:-20px;opacity:0;animation:clsIntroFall .3s cubic-bezier(.5,0,.8,.6) forwards}
+        #cls-intro .tw{position:absolute;opacity:0;width:calc(13 * var(--k));height:calc(13 * var(--k));animation:clsIntroTw .42s ease-out forwards}
+        #cls-intro .tw svg{display:block;width:100%;height:100%;filter:drop-shadow(0 0 4px #fff)}
+        #cls-intro .dt{position:absolute;right:max(22px,calc(50vw - 260px));top:calc(24px + env(safe-area-inset-top,0px));font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-size:13px;font-weight:500;opacity:0;animation:clsIntroIn .16s ease-out .56s forwards}
+        #cls-intro .gr{position:absolute;top:calc(16vh + env(safe-area-inset-top,0px));left:0;right:0;opacity:0;animation:clsIntroIn .16s ease-out .56s forwards}
+        #cls-intro .gr b{display:block;font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-weight:700;font-size:30px;line-height:1.15}
+        #cls-intro .gr span{display:block;margin-top:8px;font-size:15px;opacity:.78}
+        @keyframes clsIntroPan{to{transform:translateY(-105vh)}}
+        @keyframes clsIntroFall{0%{transform:translateY(-40px) rotate(0);opacity:0}15%{opacity:1}70%{transform:translateY(var(--y)) rotate(var(--r));opacity:1}100%{transform:translateY(var(--y)) rotate(var(--r));opacity:0}}
+        @keyframes clsIntroTw{0%{opacity:0;transform:scale(0) rotate(0)}55%{opacity:1;transform:scale(1.15) rotate(20deg)}100%{opacity:.75;transform:scale(.8) rotate(45deg)}}
+        @keyframes clsIntroIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+        @keyframes clsIntroOut{to{opacity:0;visibility:hidden}}
+        @media (prefers-reduced-motion:reduce){#cls-intro .sky{animation:none;transform:translateY(-105vh)}#cls-intro .fl,#cls-intro .tw{display:none}#cls-intro .dt,#cls-intro .gr{animation:none;opacity:1}#cls-intro{animation-delay:.7s}}
+    </style>
+    <script>
+        // === BẢN 167: MÀN MỞ ===
+        (function () {
+            try {
+                var LS = function (k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+                // máy chạy thử tự động thì bỏ qua (trừ khi bài thử bật cls_intro_force)
+                var force = false; try { force = !!localStorage.getItem('cls_intro_force'); } catch (e) {}
+                if (navigator.webdriver && !force) return;
+                var now = new Date(), h = now.getHours(), mi = now.getMinutes();
+                // 5 khung giờ: Sáng 05:00–10:59, Trưa 11:00–13:59, Chiều 14:00–17:59, Tối 18:00–22:59, Khuya 23:00–04:59
+                var khung = h >= 5 && h < 11 ? 'sang' : h >= 11 && h < 14 ? 'trua' : h >= 14 && h < 18 ? 'chieu' : h >= 18 && h < 23 ? 'toi' : 'khuya';
+                var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+                var keyOf = function (d) { return p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '/' + d.getFullYear(); };
+                var cday = new Date(now.getTime() - 4 * 3600 * 1000); // ngày Calasu tính từ 4 giờ sáng
+                var today = keyOf(cday);
+                var back = function (n) { var d = new Date(cday.getFullYear(), cday.getMonth(), cday.getDate() - n, 12); return keyOf(d); };
+                // ---- dữ liệu cho lời chào (chỉ đọc bộ nhớ máy, không gọi mạng) ----
+                var sleeps = LS('macro_sleeps') || {};
+                var mins = function (t) { var m = /^(\d{1,2}):(\d{2})/.exec(String(t || '').trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+                var lastSleep = function (k) { var l = sleeps[k] || []; return l.length ? l[l.length - 1] : null; };
+                var onBeat = function (e) { // ngủ trước 23:00 (tính cả 23:00), dậy 05:30 tới 06:30, như luật của app
+                    if (!e || !e.sleepTime || !e.wakeTime) return false;
+                    var b = mins(e.sleepTime), w = mins(e.wakeTime); if (b === null || w === null) return false;
+                    if (b < 12 * 60) b += 1440;
+                    return b <= 23 * 60 && Math.abs(w - 6 * 60) <= 30;
+                };
+                var streak = 0; while (streak < 3660 && onBeat(lastSleep(back(streak)))) streak++;
+                var tdy = lastSleep(today);
+                var dur = function (e) { var m = Number(e && e.duration) || 0; var hh = Math.floor(m / 60), mm = m % 60; return hh ? hh + ' tiếng' + (mm ? ' ' + mm : '') : mm + ' phút'; };
+                var td = (LS('work_todos') || {})[today] || {};
+                var tasks = [].concat(td.must || [], td.should || [], td.can || []).filter(function (t) { return t && String(t.text || '').trim(); });
+                var undone = tasks.filter(function (t) { return !t.done; }).length;
+                var left = 23 * 60 - (h * 60 + mi);
+                // ---- lời chào tạm: các câu đã chốt (kho câu đầy đủ làm sau, cùng màn chào) ----
+                // mỗi câu: khung giờ, điều kiện, chữ to (t) và dòng dưới (s); câu có điều kiện cụ thể được ưu tiên
+                var CHAO = [
+                    { id: 'sang', k: 'sang', t: 'Chào buổi sáng, Calasu.' },
+                    { id: 'sang-nhip', k: 'sang', uu: 1, when: function () { return onBeat(tdy) && streak >= 1; }, t: 'Chào buổi sáng, Calasu.', s: function () { return 'Đêm qua ngủ ' + dur(tdy) + ', đúng nhịp ngày thứ ' + streak + '.'; } },
+                    { id: 'trua', k: 'trua', t: 'Trưa rồi, Calasu.' },
+                    { id: 'chieu', k: 'chieu', t: 'Chiều rồi, Calasu.' },
+                    { id: 'toi', k: 'toi', t: 'Tối rồi, Calasu.', s: 'Gom lại ngày hôm nay rồi đi ngủ nha.' },
+                    { id: 'toi-con-viec', k: 'toi', uu: 2, when: function () { return h >= 21 && undone > 0 && left > 0; }, t: 'Tối rồi, Calasu.', s: function () { return 'Cô còn ' + left + ' phút để hoàn thành 💢'; } },
+                    { id: 'toi-xong', k: 'toi', uu: 1, when: function () { return tasks.length > 0 && undone === 0; }, t: 'Tối rồi, Calasu.', s: 'Xong hết rồi, đi ngủ được rồi đó' },
+                    { id: 'khuya', k: 'khuya', t: 'Sáng tạo đêm muộn à Calasu?' },
+                    { id: 'khuya-dut', k: 'khuya', uu: 1, when: function () { return streak >= 1; }, t: 'Sáng tạo đêm muộn à Calasu?', s: 'Chuỗi ngủ đúng nhịp đứt rồi. Ghi nốt rồi ngủ, mai làm lại từ đầu.' }
+                ];
+                var hop = CHAO.filter(function (c) { return c.k === khung && (!c.when || c.when()); });
+                var top = Math.max.apply(null, hop.map(function (c) { return c.uu || 0; }));
+                hop = hop.filter(function (c) { return (c.uu || 0) === top; });
+                // nhiều câu cùng hợp thì chọn ngẫu nhiên, không lặp lại câu hôm qua
+                var hom = LS('cls_loi_chao') || {};
+                var homQua = hom.ngay === today ? hom.truoc : hom.id;
+                if (hop.length > 1) { var khac = hop.filter(function (c) { return c.id !== homQua; }); if (khac.length) hop = khac; }
+                var cau = hop[Math.floor(Math.random() * hop.length)] || CHAO[0];
+                try { localStorage.setItem('cls_loi_chao', JSON.stringify({ ngay: today, id: cau.id, truoc: homQua || '' })); } catch (e) {}
+                var sub = typeof cau.s === 'function' ? cau.s() : (cau.s || '');
+                // ---- bầu trời 5 khung giờ (theo bản mẫu troi-theo-gio: khung 360 x 740, trời cao 1500) ----
+                var F = {
+                    sang: { sky: 'linear-gradient(180deg,#9fc6ee 0%,#bfd8f0 30%,#f6d3b0 52%,#f2b48c 62%,#e9e2d4 100%)', ink: '#17142a', cl: '#ffffff', clo: .85,
+                        clouds: [[164, 699, 152, 55], [279, 697, 163, 59], [-50, 483, 165, 59], [174, 823, 90, 32], [109, 312, 129, 46], [147, 130, 100, 36], [41, 835, 149, 54]],
+                        sun: [60, 1010, 90, 'radial-gradient(#fff8e6,#ffe0a3 55%,transparent 72%)', '#ffd28a'], fl: [3, 46, 'linear-gradient(180deg,transparent,#FFE7A8)', '', .6] },
+                    trua: { sky: 'linear-gradient(180deg,#2f7fd6 0%,#4f9be6 40%,#8cc2f2 75%,#d9ecfa 100%)', ink: '#0f1a33', cl: '#ffffff', clo: .95,
+                        clouds: [[-3, 1157, 92, 33], [162, 352, 80, 29], [254, 451, 99, 36], [294, 1247, 106, 38], [286, 847, 141, 51], [14, 1329, 142, 51], [288, 1272, 107, 38], [70, 399, 93, 34], [-37, 562, 134, 48]],
+                        sun: [220, 780, 110, 'radial-gradient(#ffffff,#fff3c4 45%,transparent 70%)', '#fff6d0'], tw: 1 },
+                    chieu: { sky: 'linear-gradient(180deg,#4a6aa8 0%,#c98aa0 38%,#f3a66a 62%,#f7c98a 78%,#3b2b4a 100%)', ink: '#ffffff', cl: '#f7c4a8', clo: .7,
+                        clouds: [[-59, 842, 110, 40], [52, 955, 123, 44], [54, 685, 143, 52], [-39, 1080, 82, 30], [210, 976, 82, 29]],
+                        birds: [[80, 900], [106, 910], [132, 900], [158, 910]],
+                        sun: [150, 1090, 100, 'radial-gradient(#fff1d6,#ffb26b 55%,transparent 72%)', '#ff9f5a'], fl: [9, 6, '#E7A24A', '0 70%', 0] },
+                    toi: { sky: 'linear-gradient(180deg,#02030a 0%,#0a1030 35%,#1b2350 60%,#2a2a5c 78%,#0B0D16 100%)', ink: '#ECE8DF', stars: 90,
+                        moon: [230, 170, 70, '#F4EBD0', -16, 8], fl: [2, 40, 'linear-gradient(180deg,transparent,#fff)', '', 0] },
+                    khuya: { sky: 'linear-gradient(180deg,#000000 0%,#03040c 40%,#080b1e 75%,#0B0D16 100%)', ink: '#C9CEE6', stars: 110, starO: .7,
+                        moon: [250, 120, 46, '#E7DEC0', -9, 5], shoot: [40, 420, 120], fl: [2, 60, 'linear-gradient(180deg,transparent,#CFE0FF)', '', 0] }
+                }[khung];
+                var seed = 7; var rnd = function () { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+                var X = function (px) { return (px / 360 * 100).toFixed(2) + 'vw'; };
+                var Y = function (px) { return (px / 1500 * 100).toFixed(3) + '%'; };
+                var S = function (px) { return 'calc(' + px + ' * var(--k))'; };
+                var sky = '';
+                (F.clouds || []).forEach(function (c) {
+                    sky += '<i class="cl" style="left:' + X(c[0]) + ';top:' + Y(c[1]) + ';width:' + S(c[2]) + ';height:' + S(c[3]) + ';background:' + F.cl + ';opacity:' + F.clo + ';box-shadow:' + S(Math.round(c[2] * .3)) + ' ' + S(-Math.round(c[3] * .33)) + ' 0 ' + S(c[2] > 120 ? 3 : 2) + ' ' + F.cl + '"></i>';
+                });
+                (F.birds || []).forEach(function (b) { sky += '<i style="left:' + X(b[0]) + ';top:' + Y(b[1]) + ';width:' + S(10) + ';height:' + S(5) + ';border-top:2px solid #3b2b4a;border-radius:50% 50% 0 0"></i>'; });
+                for (var i = 0; i < (F.stars || 0); i++) { var w = 1 + rnd() * 2, hh = 1 + rnd() * 2; sky += '<i class="st" style="left:' + (rnd() * 100).toFixed(1) + '%;top:' + (rnd() * 82).toFixed(1) + '%;width:' + w.toFixed(1) + 'px;height:' + hh.toFixed(1) + 'px;opacity:' + ((.33 + rnd() * .67) * (F.starO || 1)).toFixed(2) + '"></i>'; }
+                if (F.sun) sky += '<i style="left:' + X(F.sun[0]) + ';top:' + Y(F.sun[1]) + ';width:' + S(F.sun[2]) + ';height:' + S(F.sun[2]) + ';border-radius:50%;background:' + F.sun[3] + ';filter:drop-shadow(0 0 30px ' + F.sun[4] + ')"></i>';
+                if (F.moon) sky += '<i style="left:' + X(F.moon[0]) + ';top:' + Y(F.moon[1]) + ';width:' + S(F.moon[2]) + ';height:' + S(F.moon[2]) + ';border-radius:50%;box-shadow:inset ' + S(F.moon[4]) + ' ' + S(F.moon[5]) + ' 0 0 ' + F.moon[3] + ';filter:drop-shadow(0 0 12px ' + F.moon[3] + '88)"></i>';
+                if (F.shoot) sky += '<i style="left:' + X(F.shoot[0]) + ';top:' + Y(F.shoot[1]) + ';width:' + S(F.shoot[2]) + ';height:2px;background:linear-gradient(90deg,transparent,#fff);transform:rotate(-24deg);filter:drop-shadow(0 0 4px #fff)"></i>';
+                // sao rơi (Trưa thì sao lấp lánh tại chỗ, không có gì rơi)
+                var col = '';
+                for (var j = 0; j < 9; j++) {
+                    var x = ((36 + 34 * j) / 360 * 100).toFixed(2) + '%';
+                    if (F.tw) {
+                        col += '<i class="tw" style="left:' + x + ';top:calc(' + (11 + rnd() * 14).toFixed(1) + 'vh + env(safe-area-inset-top,0px));animation-delay:' + (380 + j * 22) + 'ms"><svg viewBox="0 0 24 24"><path d="M12 0C12.6 7.2 16.8 11.4 24 12 16.8 12.6 12.6 16.8 12 24 11.4 16.8 7.2 12.6 0 12 7.2 11.4 11.4 7.2 12 0Z" fill="#fff"/></svg></i>';
+                    } else {
+                        var fl = F.fl;
+                        col += '<i class="fl" style="left:' + x + ';width:' + fl[0] + 'px;height:' + fl[1] + 'px;background:' + fl[2] + ';' + (fl[3] ? 'border-radius:' + fl[3] + ';' : '') + (fl[4] ? 'filter:blur(' + fl[4] + 'px);' : '') + '--y:calc(' + (19 + rnd() * 3).toFixed(1) + 'vh + 20px);--r:' + Math.round((rnd() - .5) * 400) + 'deg;animation-delay:' + (380 + j * 8) + 'ms"></i>';
+                    }
+                }
+                var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+                var WD = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+                var el = document.createElement('div');
+                el.id = 'cls-intro';
+                el.setAttribute('data-khung', khung);
+                el.setAttribute('aria-hidden', 'true');
+                el.style.color = F.ink;
+                el.innerHTML = '<div class="sky" style="background:' + F.sky + '">' + sky + '</div>'
+                    + '<div class="col">' + col + '<div class="gr"><b>' + esc(cau.t) + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</div></div>'
+                    + '<div class="dt">' + WD[cday.getDay()] + ' ' + today.slice(0, 5) + '</div>';
+                el.setAttribute('data-cau', cau.id);
+                var gone = false;
+                var done = function () { if (gone) return; gone = true; if (el.parentNode) el.parentNode.removeChild(el); };
+                var taps = 0;
+                el.addEventListener('pointerdown', function (e) {
+                    e.preventDefault();
+                    taps++;
+                    if (taps === 1 && el.getAnimations) { el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = 3; }); el.setAttribute('data-nhanh', '3'); }
+                    else { el.style.transition = 'opacity .12s'; el.style.opacity = '0'; setTimeout(done, 130); }
+                });
+                el.addEventListener('animationend', function (e) { if (e.target === el) done(); });
+                setTimeout(done, 4000); // chốt chặn: không bao giờ che app lâu
+                document.documentElement.appendChild(el);
+            } catch (err) { var x = document.getElementById('cls-intro'); if (x && x.parentNode) x.parentNode.removeChild(x); }
+        })();
+    </script>
     <script>
         // === CÀI THÀNH APP: đăng ký file nhớ sẵn (sw.js) và báo khi trên GitHub có bản mới ===
         // Chỉ chạy trên web thật; mở file trên máy để thử thì phần này tự bỏ qua.
