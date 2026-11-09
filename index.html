@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="65e6668241">
+    <meta name="cls-build" content="8e24bbe8a7">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -1484,6 +1484,62 @@ try {
       }
     ), hasMark && dur > 0 && React.createElement("span", { className: "absolute pointer-events-none", style: { left: `calc(${Math.min(100, markMs / dur * 100)}% - 1px)`, top: 1, bottom: 1, width: 2, background: "rgb(var(--c-accent))" }, "data-player-mark": markFmt(markMs) })), React.createElement("span", { className: "w-8 shrink-0 text-right", "data-player-dur": true }, dur ? markFmt(dur) : ""))), canPin && React.createElement("button", { type: "button", "aria-label": "Ghim cao trào", "aria-pressed": hasMark ? "true" : "false", onClick: () => onPin(Spotify.position()), className: `w-9 h-9 shrink-0 flex items-center justify-center active:scale-90 transition-transform ${hasMark ? "text-accent" : "text-sub"}`, "data-player-pin": true }, React.createElement(PinIcon, { size: 18 })), React.createElement("button", { type: "button", "aria-label": sp.paused ? "Phát" : "Dừng", onClick: () => Spotify.playPause(), className: "w-9 h-9 shrink-0 flex items-center justify-center bg-ink text-bg active:scale-90 transition-transform", "data-player-toggle": true }, sp.paused ? React.createElement("svg", { viewBox: "0 0 24 24", width: "16", height: "16", fill: "currentColor", className: "ml-0.5", "aria-hidden": "true" }, React.createElement("path", { d: "M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z" })) : React.createElement("svg", { viewBox: "0 0 24 24", width: "16", height: "16", fill: "currentColor", "aria-hidden": "true" }, React.createElement("rect", { x: "6", y: "4", width: "4.5", height: "16", rx: "1" }), React.createElement("rect", { x: "13.5", y: "4", width: "4.5", height: "16", rx: "1" }))), sp.paused && React.createElement("button", { type: "button", "aria-label": "Tắt thanh phát", onClick: () => Spotify.close(), className: "w-7 h-9 shrink-0 flex items-center justify-center text-sub hover:text-ink", "data-player-close": true }, React.createElement(XIcon, { size: 16 }))));
   };
+  const stkShift = (dKey, n) => {
+    const p = String(dKey).split("/").map(Number);
+    return formatDate(new Date(p[2], p[1] - 1, p[0] + n, 12));
+  };
+  const stkSleepState = (sleepByDate, dKey) => {
+    const l = (sleepByDate || {})[dKey] || [];
+    const r = slRhythm(l.length ? l[l.length - 1] : null);
+    return r ? r.onBeat ? 1 : 0 : -1;
+  };
+  const stkSleep = (sleepByDate, dKey) => {
+    let n = 0, k = dKey;
+    while (n < 3660 && stkSleepState(sleepByDate, k) === 1) {
+      n++;
+      k = stkShift(k, -1);
+    }
+    return n;
+  };
+  const stkHasWo = (w) => !!(w && w.type && (w.exercises || []).some((ex) => woIsRaw(ex) || (ex.sets || []).some(woValid)));
+  const stkWoDay = (workoutsByDate, cardioByDate, k) => stkHasWo((workoutsByDate || {})[k]) || hasCardioOf((cardioByDate || {})[k]);
+  const stkWoWeek = (workoutsByDate, cardioByDate, dKey) => {
+    const p = String(dKey).split("/").map(Number), end = new Date(p[2], p[1] - 1, p[0], 12), t = getStartOfWeek(end);
+    t.setHours(12, 0, 0, 0);
+    let n = 0;
+    for (let i = 0; i < 7 && t <= end; i++, t.setDate(t.getDate() + 1)) if (stkWoDay(workoutsByDate, cardioByDate, formatDate(t))) n++;
+    return n;
+  };
+  const stkLenTa = (workoutsByDate, lenTaOf, dKey) => {
+    const c = parseDateToNumber(dKey);
+    const keys = Object.keys(workoutsByDate || {}).filter((k) => parseDateToNumber(k) <= c && stkHasWo(workoutsByDate[k])).sort((a, b) => parseDateToNumber(b) - parseDateToNumber(a));
+    if (!keys.length || keys[0] !== dKey) return 0;
+    let n = 0;
+    for (const k of keys) {
+      if (lenTaOf(k).length) n++;
+      else break;
+    }
+    return n;
+  };
+  const STREAK_MIN = { ngu: 3, lenTa: 2 };
+  const streaksOf = ({ sleepByDate, workoutsByDate, cardioByDate, lenTaOf }, dKey) => {
+    const out = [];
+    const ngu = stkSleep(sleepByDate, dKey);
+    if (ngu >= STREAK_MIN.ngu) out.push({ k: "ngu", n: String(ngu), l: "ngày ngủ đúng nhịp" });
+    if (stkWoDay(workoutsByDate, cardioByDate, dKey)) out.push({ k: "wo", n: `${stkWoWeek(workoutsByDate, cardioByDate, dKey)}/7`, l: "W.O tuần này" });
+    const up = lenTaOf ? stkLenTa(workoutsByDate, lenTaOf, dKey) : 0;
+    if (up >= STREAK_MIN.lenTa) out.push({ k: "bp", n: String(up), l: "buổi lên tạ liền" });
+    return out;
+  };
+  const STREAK_ICON = {
+    ngu: ({ size = 15 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "#9CC2FF", style: { filter: "drop-shadow(0 0 4px #6EA8FF)" } }, React.createElement("path", { d: "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" })),
+    wo: ({ size = 15 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "#5FD39A", strokeWidth: "2.4", strokeLinecap: "round", style: { filter: "drop-shadow(0 0 4px #5FD39A)" } }, React.createElement("path", { d: "m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7" })),
+    bp: ({ size = 15 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "#F5C451", style: { filter: "drop-shadow(0 0 4px #F5C451)" } }, React.createElement("path", { d: "M12 2l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 16.8 6.2 19.9l1.1-6.5L2.6 8.8l6.5-.9z" }))
+  };
+  const StreakChips = ({ items }) => React.createElement("div", { className: "flex flex-wrap gap-x-4 gap-y-1.5 px-4 py-2.5 border-b border-line", "data-day-streaks": "165" }, items.map((c) => {
+    const Ic = STREAK_ICON[c.k];
+    return React.createElement("span", { key: c.k, "data-streak": c.k, className: "inline-flex items-center gap-1.5 whitespace-nowrap" }, React.createElement(Ic, null), React.createElement("span", { className: "font-num font-semibold text-[15px] text-ink leading-none" }, c.n), " ", React.createElement("span", { className: "text-[12px] text-sub leading-none" }, c.l));
+  }));
   const BasketIcon = IconLib.ShoppingBasket || iconFallback("🧺");
   const ListChecksIcon = IconLib.ListChecks || iconFallback("☑");
   const LightbulbIcon = IconLib.Lightbulb || iconFallback("💡");
@@ -3391,6 +3447,7 @@ try {
       }));
       return Object.values(m);
     };
+    const dayStreaks = (dKey) => streaksOf({ sleepByDate, workoutsByDate, cardioByDate, lenTaOf: woLenTa }, dKey);
     const woSameType = (dKey, n) => {
       const w = workoutsByDate[dKey];
       if (!w) return [];
@@ -6412,7 +6469,10 @@ try {
           journalReturnRef.current = new Date(selectedDate);
           setAppMode(it.id);
           setCurrentView("day");
-        }, "aria-label": `Mở ${it.label} ngày này`, "data-empty": it.val ? "false" : "true", className: `min-w-0 text-left pl-4 pr-2 py-2.5 flex flex-col gap-[3px] active:bg-ink/5 transition-colors ${i ? "border-l border-line" : ""}` }, React.createElement("span", { className: "flex items-center gap-[5px] text-[12px] text-sub whitespace-nowrap" }, React.createElement(it.Icon, { size: 14 }), it.label), it.val ? React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight whitespace-nowrap truncate text-ink" }, it.val, it.unit && React.createElement("small", { className: "font-sans font-normal text-[11px] text-sub" }, " ", it.unit)) : React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight text-dim" }, "–")))), React.createElement("div", { className: "mt-4" }, embedUrl ? React.createElement(DaySongStrip, { musicUrl: st.musicUrl, songName: st.songName, gasUrl, gasKey, actions: musicActions, dateKey }) : React.createElement("div", { className: "flex items-center gap-2 px-4 py-3", style: { background: "linear-gradient(100deg, rgb(var(--c-accent) / 0.22), transparent 72%)" } }, React.createElement("span", { className: "flex items-center gap-1.5 text-[12px] text-sub" }, React.createElement(MusicIcon, { size: 13 }), " Bài hát ngày"), React.createElement("div", { className: "ml-auto flex gap-1.5" }, musicActions)), (editing("musicUrl") || !embedUrl && st.musicUrl) && React.createElement("div", { className: "px-4 pt-2" }, editBox("musicUrl", { placeholder: "Dán link bài hát Spotify..." }), !embedUrl && !editing("musicUrl") && st.musicUrl && emptyBtn("Link này không phải bài Spotify, bấm để sửa", () => openEdit("musicUrl", st.musicUrl)))), React.createElement("div", { className: "px-4 pt-3 pb-1.5" }, secHead("Tâm trạng", null, React.createElement("button", { type: "button", onClick: () => setOutingPickerKey(outingPickerKey === dateKey ? null : dateKey), title: "Hôm nay ở nhà hay ra ngoài", className: "h-7 px-2.5 rounded-[2px] border border-line text-[13px] text-sub flex items-center gap-1.5 active:scale-95 transition-all hover:text-ink" }, React.createElement(out.Icon, { size: 14 }), " ", out.label)), outingPickerKey === dateKey && React.createElement("div", { className: "grid grid-cols-4 border border-line mb-2" }, OUTINGS.map((o, i) => React.createElement("button", { key: o.val, type: "button", onClick: () => {
+        }, "aria-label": `Mở ${it.label} ngày này`, "data-empty": it.val ? "false" : "true", className: `min-w-0 text-left pl-4 pr-2 py-2.5 flex flex-col gap-[3px] active:bg-ink/5 transition-colors ${i ? "border-l border-line" : ""}` }, React.createElement("span", { className: "flex items-center gap-[5px] text-[12px] text-sub whitespace-nowrap" }, React.createElement(it.Icon, { size: 14 }), it.label), it.val ? React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight whitespace-nowrap truncate text-ink" }, it.val, it.unit && React.createElement("small", { className: "font-sans font-normal text-[11px] text-sub" }, " ", it.unit)) : React.createElement("span", { className: "font-num font-semibold text-[16px] leading-tight text-dim" }, "–")))), (() => {
+          const sk = dayStreaks(dateKey);
+          return sk.length ? React.createElement(StreakChips, { items: sk }) : null;
+        })(), React.createElement("div", { className: "mt-4" }, embedUrl ? React.createElement(DaySongStrip, { musicUrl: st.musicUrl, songName: st.songName, gasUrl, gasKey, actions: musicActions, dateKey }) : React.createElement("div", { className: "flex items-center gap-2 px-4 py-3", style: { background: "linear-gradient(100deg, rgb(var(--c-accent) / 0.22), transparent 72%)" } }, React.createElement("span", { className: "flex items-center gap-1.5 text-[12px] text-sub" }, React.createElement(MusicIcon, { size: 13 }), " Bài hát ngày"), React.createElement("div", { className: "ml-auto flex gap-1.5" }, musicActions)), (editing("musicUrl") || !embedUrl && st.musicUrl) && React.createElement("div", { className: "px-4 pt-2" }, editBox("musicUrl", { placeholder: "Dán link bài hát Spotify..." }), !embedUrl && !editing("musicUrl") && st.musicUrl && emptyBtn("Link này không phải bài Spotify, bấm để sửa", () => openEdit("musicUrl", st.musicUrl)))), React.createElement("div", { className: "px-4 pt-3 pb-1.5" }, secHead("Tâm trạng", null, React.createElement("button", { type: "button", onClick: () => setOutingPickerKey(outingPickerKey === dateKey ? null : dateKey), title: "Hôm nay ở nhà hay ra ngoài", className: "h-7 px-2.5 rounded-[2px] border border-line text-[13px] text-sub flex items-center gap-1.5 active:scale-95 transition-all hover:text-ink" }, React.createElement(out.Icon, { size: 14 }), " ", out.label)), outingPickerKey === dateKey && React.createElement("div", { className: "grid grid-cols-4 border border-line mb-2" }, OUTINGS.map((o, i) => React.createElement("button", { key: o.val, type: "button", onClick: () => {
           updateDayStat(dateKey, { outing: o.val });
           setOutingPickerKey(null);
         }, className: `py-2.5 px-1 text-[11.5px] flex flex-col items-center gap-1 transition-all active:scale-95 ${i ? "border-l border-line" : ""} ${st.outing === o.val ? "text-accent bg-accent/10" : "text-sub hover:text-ink"}` }, React.createElement(o.Icon, { size: 16 }), " ", o.label))), dm.kind === "old" && React.createElement("div", { className: "text-[12px] text-sub flex items-center gap-1.5 flex-wrap mb-1" }, React.createElement("span", null, "Thang cũ:"), React.createElement("span", { className: "font-semibold", style: { color: MOOD5[(OLD_MOOD_TO_5[dm.old.val] || 3) - 1].hex } }, dm.old.label), React.createElement("span", null, "· chọn theo buổi để chuyển sang kiểu mới")), MOOD_PARTS.map((p) => {
