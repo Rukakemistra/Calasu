@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="8e24bbe8a7">
+    <meta name="cls-build" content="1b8d5699bf">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -93,7 +93,7 @@
     <script>if (window.lucide && !window.lucideReact) window.lucideReact = window.lucide;</script>
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Chakra+Petch:wght@500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Chakra+Petch:wght@500;600;700&family=Patrick+Hand&family=Caveat:wght@600&display=swap" rel="stylesheet">
 
     <style>
         body { 
@@ -202,6 +202,44 @@
                 rgba(255, 255, 255, 0.028) 36px
             );
         }
+        /* bản 166: story 9:16, đơn vị cqw theo bề ngang khung */
+        .sty-frame{position:relative;aspect-ratio:9/16;overflow:hidden;container-type:inline-size;background:#10131f;touch-action:none;user-select:none;-webkit-user-select:none;font-family:'Be Vietnam Pro',system-ui,sans-serif;color:#ECE8DF;line-height:1.45}
+        .sty-el{position:absolute;transform:translate(-50%,-50%) rotate(var(--r,0deg))}
+        .sty-edit .sty-el{cursor:grab}
+        .sty-el.sel{outline:1.5px dashed #6EA8FF;outline-offset:3px}
+        .sty-ph{background-size:cover;background-position:center;background-color:#232a40;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+        .sty-ph.pola{background-color:#F4F1E8;padding:3cqw 3cqw 9cqw}
+        .sty-ph.pola .in{width:100%;background-size:cover;background-position:center;background-color:#232a40}
+        .sty-tx{font-weight:700;white-space:pre;text-align:center;line-height:1.15;text-shadow:0 2px 10px rgba(0,0,0,.55)}
+        .sty-tx.hand{font-family:'Caveat','Patrick Hand',cursive;font-weight:600}
+        .sty-tx.box{background:#ECE8DF;padding:.15em .45em;text-shadow:none}
+        .sty-st{line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.4))}
+        .sty-st img{display:block;width:100%;height:auto;pointer-events:none}
+        .sty-hd{position:absolute;right:-14px;bottom:-14px;width:26px;height:26px;background:#6EA8FF;box-shadow:0 0 0 3px rgba(11,13,22,.7),0 0 12px #6EA8FF;display:flex;cursor:nwse-resize;touch-action:none;align-items:center;justify-content:center}
+        .sty-hd svg{pointer-events:none}
+        .sty-mu{display:flex;align-items:center;gap:2.6cqw;background:rgba(10,12,22,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:2.2cqw 3.4cqw 2.2cqw 2.2cqw;white-space:nowrap;max-width:92cqw}
+        .sty-mu .cv{width:10cqw;height:10cqw;flex-shrink:0}
+        .sty-mu b{display:block;font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-size:3.6cqw;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+        .sty-mu i{display:block;font-style:normal;font-size:2.9cqw;color:#B7BBD3;overflow:hidden;text-overflow:ellipsis}
+        .sty-mu>span:not(.cv){min-width:0}
+        .sty-da{background:rgba(236,232,223,.94);color:#121520;padding:2.2cqw 3.4cqw;white-space:nowrap;font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;line-height:1.3}
+        .sty-da .k{font-size:2.6cqw;letter-spacing:.06em;text-transform:uppercase;color:#4A4F68;display:block}
+        .sty-da .v{font-size:5.4cqw;font-weight:700;line-height:1.1;display:block}
+        .sty-da .v small{font-size:3.2cqw;font-weight:600;color:#4A4F68}
+        .sty-bd{display:flex;align-items:center;gap:2.4cqw;padding:2.2cqw 4cqw 2.2cqw 2.8cqw;background:linear-gradient(135deg,#1d2650,#0e1226);color:#fff;white-space:nowrap;clip-path:polygon(3cqw 0,100% 0,100% calc(100% - 3cqw),calc(100% - 3cqw) 100%,0 100%,0 3cqw);box-shadow:inset 0 0 0 .4cqw #6EA8FF}
+        .sty-bd svg{width:7cqw;height:7cqw;flex-shrink:0;filter:drop-shadow(0 0 1.6cqw #6EA8FF)}
+        .sty-bd .n{font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-weight:700;font-size:6.2cqw;line-height:1;display:block}
+        .sty-bd .l{font-size:2.8cqw;color:#C9CEE6;line-height:1.2;display:block}
+        .sty-bd.gold{background:linear-gradient(135deg,#4a3410,#1a1206);box-shadow:inset 0 0 0 .4cqw #F5C451}.sty-bd.gold svg{filter:drop-shadow(0 0 1.6cqw #F5C451)}
+        .sty-bd.green{background:linear-gradient(135deg,#123a2c,#08150f);box-shadow:inset 0 0 0 .4cqw #5FD39A}.sty-bd.green svg{filter:drop-shadow(0 0 1.6cqw #5FD39A)}
+        .sty-bars{position:absolute;left:3cqw;right:3cqw;top:2.6cqw;display:flex;gap:1.2cqw;z-index:9000;pointer-events:none}
+        .sty-bars span{flex:1;height:.8cqw;background:rgba(255,255,255,.3);overflow:hidden}
+        .sty-bars span i{display:block;height:100%;width:0;background:#fff}
+        .sty-vhead{position:absolute;left:3.4cqw;right:24cqw;top:5.6cqw;z-index:9000;display:flex;align-items:baseline;gap:2cqw;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+        .sty-vhead b{font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-size:5.4cqw}.sty-vhead span{font-size:3.4cqw;color:#D4D6E4}
+        .sty-vbtns{position:absolute;right:1.6cqw;top:4cqw;z-index:9100;display:flex;filter:drop-shadow(0 1px 4px rgba(0,0,0,.6))}
+        .sty-tap{position:absolute;top:0;bottom:0;z-index:8000}.sty-tap.l{left:0;width:33%}.sty-tap.r{right:0;width:67%}
+        .sty-paused{position:absolute;left:0;right:0;bottom:4cqw;text-align:center;font-size:3.2cqw;color:#fff;z-index:9000;pointer-events:none;text-shadow:0 1px 6px #000}
     </style>
 </head>
 <body>
@@ -991,7 +1029,7 @@ try {
     return { loggedIn, login: () => {
       st.invite = false;
       return login();
-    }, handleRedirect, toggle, ensure, pause, resume, playPause, seek, position, refresh, close, logout, invite, dismissInvite, get: snap, subscribe: (f) => {
+    }, handleRedirect, play, toggle, ensure, pause, resume, playPause, seek, position, refresh, close, logout, invite, dismissInvite, get: snap, subscribe: (f) => {
       subs.add(f);
       return () => subs.delete(f);
     } };
@@ -1540,6 +1578,275 @@ try {
     const Ic = STREAK_ICON[c.k];
     return React.createElement("span", { key: c.k, "data-streak": c.k, className: "inline-flex items-center gap-1.5 whitespace-nowrap" }, React.createElement(Ic, null), React.createElement("span", { className: "font-num font-semibold text-[15px] text-ink leading-none" }, c.n), " ", React.createElement("span", { className: "text-[12px] text-sub leading-none" }, c.l));
   }));
+  const STORY_KHO_KEY = "KHO STICKER";
+  const STORY_MAU_KEY = "MẪU RIÊNG";
+  const STORY_DUR = 8e3;
+  const STORY_BG = { dem: "linear-gradient(170deg,#1b2340,#0b0d16)", hoang: "linear-gradient(170deg,#7a3b4f,#21162c)", reu: "linear-gradient(170deg,#2f5240,#0f1a16)", giay: "#E9E4D8" };
+  const STORY_BG_NAME = { dem: "Đêm", hoang: "Hoàng hôn", reu: "Rêu", giay: "Giấy" };
+  const styBg = (bg) => STORY_BG[bg] || (/^#[0-9a-f]{3,8}$/i.test(String(bg || "")) ? bg : STORY_BG.dem);
+  const STORY_TPLS = [["tudo", "Rải tự do"], ["luoi", "Lưới"], ["mot", "Một to"], ["pola", "Polaroid"], ["phim", "Cuộn phim"]];
+  const STORY_TPL_POS = {
+    tudo: [[34, 32, 54, -6], [68, 50, 50, 5], [40, 66, 46, 3]],
+    luoi: [[28, 30, 44, 0], [72, 30, 44, 0], [28, 56, 44, 0], [72, 56, 44, 0]],
+    mot: [[50, 36, 92, 0], [24, 68, 34, -4], [62, 70, 34, 3]],
+    pola: [[38, 32, 56, -5], [64, 58, 52, 4], [40, 74, 40, -2]],
+    phim: [[50, 22, 70, 0], [50, 44, 70, 0], [50, 66, 70, 0]]
+  };
+  const STORY_QUICK = ["Một to", "Polaroid", "Lưới"];
+  const styTplPhotos = (tpl, ids, limit) => {
+    const P = STORY_TPL_POS[tpl] || STORY_TPL_POS.mot;
+    return (limit ? ids.slice(0, P.length) : ids).map((id, i) => {
+      const p = P[i % P.length];
+      return { img: id, x: p[0], y: p[1], w: p[2], r: p[3], a: tpl === "phim" ? "16/10" : "4/5", pola: tpl === "pola" };
+    });
+  };
+  let styUid = 1;
+  const styE = (type, o) => ({ id: styUid++, type, x: 50, y: 50, r: 0, ...o });
+  const styWrap = (text, n) => {
+    const words = String(text || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+    const lines = [];
+    let cur = "";
+    words.forEach((w) => {
+      if (!cur) cur = w;
+      else if ((cur + " " + w).length <= n) cur += " " + w;
+      else {
+        lines.push(cur);
+        cur = w;
+      }
+    });
+    if (cur) lines.push(cur);
+    if (lines.length > 3) {
+      lines.length = 3;
+      lines[2] = lines[2].replace(/\s*\S*$/, "") + "…";
+    }
+    return lines.join("\n");
+  };
+  const styAuto = (day, v, on) => {
+    const vv = ((v || 0) % 3 + 3) % 3;
+    const tpl = ["mot", "pola", "luoi"][vv];
+    const ch = (day.chuoi || []).filter((c, i) => !on || on[i] !== false);
+    const ids = (day.imgs || []).map((x) => x.id);
+    const els = styTplPhotos(tpl, ids, true).map((p) => styE("photo", p));
+    const noPh = !ids.length;
+    const tom = String(day.summary || "").trim();
+    if (tom) {
+      if (vv === 0) els.push(styE("text", { t: styWrap(tom, noPh ? 18 : 24), x: 50, y: noPh ? 40 : 83, s: noPh ? 8 : 6.4, f: "box", c: "#111" }));
+      if (vv === 1) els.push(styE("text", { t: styWrap(tom, 20), x: 50, y: noPh ? 38 : 13, s: 9, f: "hand", c: "#fff", r: -3 }));
+      if (vv === 2) els.push(styE("text", { t: styWrap(tom, 22), x: 50, y: noPh ? 30 : 7, s: 7, f: "bold", c: "#fff" }));
+    }
+    if (vv === 2) {
+      els.push(styE("data", { k: "kcal", x: 30, y: 82, s: 1, r: -3 }));
+      els.push(styE("data", { k: "pro", x: 70, y: 82, s: 1, r: 3 }));
+    }
+    const st = [[30, 14, 7], [72, 64, 7.4], [72, 46, 6.6]][vv];
+    ch.forEach((c, i) => els.push(styE("badge", { k: c.k, x: st[0], y: st[1] + i * st[2], s: 0.82, r: i % 2 ? 2 : -2 })));
+    if (day.song) els.push(styE("music", { x: 50, y: 94, s: 1 }));
+    return { bg: ["dem", "hoang", "reu"][vv], tpl, els };
+  };
+  const styR = (v) => Math.round((Number(v) || 0) * 10) / 10;
+  const styPack = (s) => ({
+    v: 1,
+    bg: s.bg,
+    tpl: s.tpl,
+    els: (s.els || []).map((x) => {
+      const o = { t: x.type, x: styR(x.x), y: styR(x.y) };
+      if (x.r) o.r = Math.round(x.r);
+      if (x.z) o.z = x.z;
+      if (x.type === "photo") {
+        o.id = x.img;
+        o.w = styR(x.w);
+        if (x.a && x.a !== "4/5") o.a = x.a;
+        if (x.pola) o.pola = 1;
+      }
+      if (x.type === "text") {
+        o.tx = x.t;
+        o.s = styR(x.s);
+        o.f = x.f;
+        o.c = x.c;
+      }
+      if (x.type === "sticker") {
+        o.sk = x.sk;
+        o.s = styR(x.s);
+      }
+      if (x.type === "data" || x.type === "badge") {
+        o.k = x.k;
+        o.s = styR(x.s);
+      }
+      if (x.type === "music") o.s = styR(x.s);
+      return o;
+    })
+  });
+  const styUnpack = (p) => {
+    let o = p;
+    if (typeof p === "string") {
+      try {
+        o = JSON.parse(p);
+      } catch (e) {
+        return null;
+      }
+    }
+    if (!o || !Array.isArray(o.els)) return null;
+    let zMax = 0;
+    const els = o.els.map((x) => {
+      const e = { id: styUid++, type: x.t, x: Number(x.x) || 0, y: Number(x.y) || 0, r: Number(x.r) || 0 };
+      if (x.z) {
+        e.z = Number(x.z) || 0;
+        zMax = Math.max(zMax, e.z);
+      }
+      if (x.t === "photo") Object.assign(e, { img: x.id, w: Number(x.w) || 40, a: x.a || "4/5", pola: !!x.pola });
+      if (x.t === "text") Object.assign(e, { t: String(x.tx || ""), s: Number(x.s) || 7, f: x.f || "bold", c: x.c || "#fff" });
+      if (x.t === "sticker") Object.assign(e, { sk: x.sk, s: Number(x.s) || 12 });
+      if (x.t === "data" || x.t === "badge") Object.assign(e, { k: x.k, s: Number(x.s) || 1 });
+      if (x.t === "music") e.s = Number(x.s) || 1;
+      return e;
+    }).filter((e) => ["photo", "text", "sticker", "data", "badge", "music"].includes(e.type));
+    if (zMax >= styUid) styUid = zMax + 1;
+    return { bg: o.bg || "dem", tpl: o.tpl || "tudo", els };
+  };
+  const STORY_DATA = {
+    kcal: ["Năng lượng", (d) => d.kcal ? React.createElement(React.Fragment, null, d.kcal, " ", React.createElement("small", null, "kcal")) : "–"],
+    pro: ["Protein", (d) => d.pro ? React.createElement(React.Fragment, null, d.pro, React.createElement("small", null, "g")) : "–"],
+    ngu: ["Ngủ", (d) => d.ngu || "–"],
+    tt: ["Tâm trạng", (d) => d.tt || "–"],
+    tap: ["W.O", (d) => d.tap || "–"]
+  };
+  const STORY_BADGE = {
+    ngu: ["", "ngày ngủ đúng nhịp", React.createElement("svg", { viewBox: "0 0 24 24", fill: "#9CC2FF" }, React.createElement("path", { d: "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" }))],
+    wo: ["green", "W.O tuần này", React.createElement("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "#5FD39A", strokeWidth: "2.4", strokeLinecap: "round" }, React.createElement("path", { d: "m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7" }))],
+    bp: ["gold", "buổi lên tạ liền", React.createElement("svg", { viewBox: "0 0 24 24", fill: "#F5C451" }, React.createElement("path", { d: "M12 2l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 16.8 6.2 19.9l1.1-6.5L2.6 8.8l6.5-.9z" }))]
+  };
+  const StoryHandle = () => React.createElement("span", { className: "sty-hd", "data-h": "1", "aria-hidden": "true" }, React.createElement("svg", { width: "14", height: "14", viewBox: "0 0 24 24", fill: "none", stroke: "#0B1430", strokeWidth: "2.6", strokeLinecap: "round" }, React.createElement("path", { d: "M21 12a9 9 0 1 1-3-6.7" }), React.createElement("path", { d: "M21 3v6h-6" })));
+  const styImgOf = (day, e) => {
+    const l = day.imgs || [];
+    const m = l.find((x) => x.id === e.img);
+    return m ? m.src : "";
+  };
+  const StoryMusicEl = ({ e, day, base, cls, sel }) => {
+    const meta = useTrackMeta(day.musicUrl, day.songName, day.gasUrl, day.gasKey);
+    return React.createElement("div", { className: cls + " sty-mu", "data-id": e.id, "data-story-el": "music", style: { ...base, transform: `translate(-50%,-50%) rotate(${e.r || 0}deg) scale(${e.s || 1})` } }, React.createElement("span", { className: "cv", style: { background: meta.thumb ? `center/cover url("${meta.thumb}")` : COVER_FALLBACK } }), React.createElement("span", null, React.createElement("b", null, meta.title), React.createElement("i", null, [meta.artist, day.mark ? "từ " + day.mark : ""].filter(Boolean).join(" · "))), sel && React.createElement(StoryHandle, null));
+  };
+  const StoryEl = ({ e, day, kho, sel }) => {
+    const base = { left: e.x + "%", top: e.y + "%", "--r": (e.r || 0) + "deg", zIndex: e.z || e.id };
+    const cls = "sty-el" + (sel ? " sel" : "");
+    const hd = sel ? React.createElement(StoryHandle, null) : null;
+    if (e.type === "photo") {
+      const src = styImgOf(day, e);
+      const bgi = src ? `url("${src}")` : "none";
+      if (e.pola) return React.createElement("div", { className: cls + " sty-ph pola", "data-id": e.id, "data-story-el": "photo", style: { ...base, width: e.w + "%" } }, React.createElement("div", { className: "in", style: { backgroundImage: bgi, aspectRatio: e.a || "4/5" } }), hd);
+      return React.createElement("div", { className: cls + " sty-ph", "data-id": e.id, "data-story-el": "photo", style: { ...base, width: e.w + "%", aspectRatio: e.a || "4/5", backgroundImage: bgi } }, hd);
+    }
+    if (e.type === "text") {
+      const f = e.f === "hand" ? " hand" : e.f === "box" ? " box" : "";
+      return React.createElement("div", { className: cls + " sty-tx" + f, "data-id": e.id, "data-story-el": "text", style: { ...base, fontSize: e.s + "cqw", color: e.c } }, e.t, hd);
+    }
+    if (e.type === "sticker") {
+      const k = (kho || []).find((x) => x.id === e.sk);
+      if (k && k.src) return React.createElement("div", { className: cls + " sty-st", "data-id": e.id, "data-story-el": "sticker", style: { ...base, width: e.s * 2 + "cqw" } }, React.createElement("img", { src: k.src, alt: "", draggable: "false" }), hd);
+      return React.createElement("div", { className: cls + " sty-st", "data-id": e.id, "data-story-el": "sticker", style: { ...base, fontSize: e.s + "cqw" } }, k && k.t || "✨", hd);
+    }
+    if (e.type === "music") return React.createElement(StoryMusicEl, { e, day, base, cls, sel });
+    const tf = { transform: `translate(-50%,-50%) rotate(${e.r || 0}deg) scale(${e.s || 1})` };
+    if (e.type === "badge") {
+      const b = STORY_BADGE[e.k] || STORY_BADGE.ngu;
+      const n = (day.sv || {})[e.k];
+      return React.createElement("div", { className: cls + " sty-bd " + b[0], "data-id": e.id, "data-story-el": "badge", style: { ...base, ...tf } }, b[2], React.createElement("span", null, React.createElement("span", { className: "n" }, n === void 0 || n === null || n === "" ? "–" : n), React.createElement("span", { className: "l" }, b[1])), hd);
+    }
+    if (e.type === "data") {
+      const k = STORY_DATA[e.k] || STORY_DATA.kcal;
+      return React.createElement("div", { className: cls + " sty-da", "data-id": e.id, "data-story-el": "data", style: { ...base, ...tf } }, React.createElement("span", { className: "k" }, k[0]), React.createElement("span", { className: "v" }, k[1](day)), hd);
+    }
+    return null;
+  };
+  const StoryFrame = React.forwardRef(({ story, day, kho, selId, edit, style, children, className }, ref) => React.createElement("div", { ref, className: `sty-frame ${edit ? "sty-edit" : ""} ${className || ""}`, style: { background: styBg(story.bg), ...style || {} }, "data-story-frame": day.dKey }, (story.els || []).map((e) => React.createElement(StoryEl, { key: e.id, e, day, kho, sel: edit && selId === e.id })), children));
+  const StoryRingIcon = ({ size = 19 }) => React.createElement("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round" }, React.createElement("path", { d: "M12 2.5a9.5 9.5 0 0 1 9.5 9.5" }), React.createElement("path", { d: "M21.5 12a9.5 9.5 0 0 1-3 6.9", opacity: ".7" }), React.createElement("path", { d: "M15.6 20.8a9.5 9.5 0 0 1-7.2 0", opacity: ".55" }), React.createElement("path", { d: "M5.5 18.9a9.5 9.5 0 0 1-3-6.9", opacity: ".4" }), React.createElement("path", { d: "M2.5 12A9.5 9.5 0 0 1 12 2.5", opacity: ".3" }), React.createElement("path", { d: "M10 8.6v6.8l5.4-3.4z", fill: "currentColor", stroke: "none" }));
+  const StoryViewer = ({ keys, start, dayOf, storyOf, kho, onDay, onClose, onEdit }) => {
+    const [vi, setVi] = useState(Math.max(0, Math.min(keys.length - 1, start || 0)));
+    const [paused, setPaused] = useState(false);
+    const S = useRef({ vt: 0, last: 0, paused: false, hold: 0, held: false });
+    const barsRef = useRef(null);
+    S.current.paused = paused;
+    const go = (dir) => {
+      const n = vi + dir;
+      if (n < 0) {
+        S.current.vt = 0;
+        return;
+      }
+      if (n >= keys.length) {
+        onClose();
+        return;
+      }
+      setVi(n);
+    };
+    useEffect(() => {
+      let raf = 0;
+      S.current.vt = 0;
+      S.current.last = performance.now();
+      const tick = (t) => {
+        const s = S.current;
+        if (!s.paused) s.vt += t - s.last;
+        s.last = t;
+        const bars = barsRef.current ? barsRef.current.querySelectorAll("i") : [];
+        if (bars[vi]) bars[vi].style.width = Math.min(100, s.vt / STORY_DUR * 100) + "%";
+        if (s.vt >= STORY_DUR) {
+          if (vi < keys.length - 1) setVi(vi + 1);
+          else onClose();
+          return;
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+      if (onDay) onDay(keys[vi]);
+      return () => cancelAnimationFrame(raf);
+    }, [vi]);
+    useEffect(() => {
+      const k = (e) => {
+        if (e.key === "Escape") onClose();
+        else if (e.key === "ArrowRight") go(1);
+        else if (e.key === "ArrowLeft") go(-1);
+        else if (e.key === " ") {
+          e.preventDefault();
+          setPaused((p) => !p);
+        }
+      };
+      window.addEventListener("keydown", k);
+      return () => window.removeEventListener("keydown", k);
+    });
+    const dKey = keys[vi];
+    const day = dayOf(dKey);
+    const story = storyOf(dKey);
+    const down = () => {
+      const s = S.current;
+      s.held = false;
+      clearTimeout(s.hold);
+      s.hold = setTimeout(() => {
+        s.held = true;
+        setPaused(true);
+      }, 220);
+    };
+    const up = (dir) => {
+      const s = S.current;
+      clearTimeout(s.hold);
+      if (s.held) {
+        s.held = false;
+        setPaused(false);
+        s.last = performance.now();
+        return;
+      }
+      go(dir);
+    };
+    return React.createElement("div", { className: "fixed inset-0 z-[300] bg-black/95 flex items-center justify-center", "data-story-viewer": true, onContextMenu: (e) => e.preventDefault() }, React.createElement(StoryFrame, { story, day, kho, style: { height: "min(100dvh, calc(100vw * 16 / 9))", maxHeight: "100dvh" } }, React.createElement("div", { className: "sty-bars", ref: barsRef }, keys.map((k, i) => React.createElement("span", { key: k }, React.createElement("i", { style: { width: i < vi ? "100%" : "0%" } })))), React.createElement("div", { className: "sty-vhead" }, React.createElement("b", null, day.wd), React.createElement("span", null, day.dm)), React.createElement("div", { className: "sty-tap l", onPointerDown: down, onPointerUp: () => up(-1), onPointerLeave: () => {
+      if (S.current.held) up(0);
+    }, "data-story-tap": "trai" }), React.createElement("div", { className: "sty-tap r", onPointerDown: down, onPointerUp: () => up(1), onPointerLeave: () => {
+      if (S.current.held) up(0);
+    }, "data-story-tap": "phai" }), React.createElement("div", { className: "sty-vbtns" }, onEdit && React.createElement("button", { type: "button", "aria-label": "Sửa story ngày này", onClick: () => onEdit(dKey), className: "w-10 h-10 flex items-center justify-center text-white active:scale-90 transition-transform" }, React.createElement(PencilIcon, { size: 18 })), React.createElement("button", { type: "button", "aria-label": "Đóng story", onClick: onClose, className: "w-10 h-10 flex items-center justify-center text-white active:scale-90 transition-transform" }, React.createElement(XIcon, { size: 22 }))), paused && React.createElement("div", { className: "sty-paused", "data-story-paused": true }, "Tạm dừng")));
+  };
+  const StoryQuick = ({ day, kho, onPost, onEdit, onClose, busy }) => {
+    const [qv, setQv] = useState(0);
+    const [on, setOn] = useState(() => (day.chuoi || []).map(() => true));
+    const story = React.useMemo(() => styAuto(day, qv, on), [day.dKey, qv, on.join(",")]);
+    const chuoi = day.chuoi || [];
+    return React.createElement("div", { className: "fixed inset-0 z-[300] bg-bg overflow-y-auto", "data-story-quick": day.dKey }, React.createElement("div", { className: "min-h-full max-w-[1000px] mx-auto px-4 pt-3 pb-8 min-[760px]:grid min-[760px]:grid-cols-[minmax(0,380px)_minmax(0,1fr)] min-[760px]:gap-7 min-[760px]:items-start" }, React.createElement("div", null, React.createElement("div", { className: "flex items-center h-11" }, React.createElement("span", { className: "font-num font-bold text-[17px] text-ink" }, day.wd, " ", React.createElement("span", { className: "text-sub font-medium text-[14px]" }, day.dm)), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: onClose, className: "ml-auto w-10 h-10 -mr-2 flex items-center justify-center text-sub hover:text-ink active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "mx-auto", style: { width: "min(100%, calc((100dvh - 250px) * 9 / 16))", minWidth: 200 } }, React.createElement(StoryFrame, { story, day, kho }, React.createElement("div", { className: "sty-tap l", onClick: () => setQv((v) => (v + 2) % 3), "data-story-tap": "trai" }), React.createElement("div", { className: "sty-tap r", onClick: () => setQv((v) => (v + 1) % 3), "data-story-tap": "phai" }))), React.createElement("div", { className: "flex justify-center gap-2 mt-3", "data-story-drafts": true }, STORY_QUICK.map((n, i) => React.createElement("button", { key: n, type: "button", onClick: () => setQv(i), "aria-pressed": qv === i ? "true" : "false", className: `font-num text-[14px] px-2 py-1 transition-colors ${qv === i ? "text-ink" : "text-sub"}`, style: qv === i ? { boxShadow: "0 2px 0 rgb(var(--c-accent))" } : void 0 }, n)))), React.createElement("div", { className: "flex flex-col gap-4 mt-5 min-[760px]:mt-11" }, chuoi.length > 0 && React.createElement("div", { className: "grid gap-1.5", "data-story-chuoi": true }, chuoi.map((c, i) => React.createElement("button", { key: c.k, type: "button", "aria-pressed": on[i] ? "true" : "false", onClick: () => setOn((p) => p.map((x, j) => j === i ? !x : x)), className: "flex items-center gap-2.5 px-3 py-2.5 bg-card text-[14px] text-ink text-left active:scale-[0.99] transition-transform" }, React.createElement("span", { className: `w-[18px] h-[18px] shrink-0 border flex items-center justify-center ${on[i] ? "bg-accent border-accent text-onaccent" : "border-line"}` }, on[i] && React.createElement(CheckIcon, { size: 12 })), c.n, " ", c.l))), React.createElement("div", { className: "flex gap-2.5" }, React.createElement("button", { type: "button", disabled: busy, onClick: () => onPost(story), className: "flex-1 h-12 bg-accent text-onaccent font-semibold text-[15px] active:scale-[0.98] transition-transform disabled:opacity-60", "data-story-post": true }, "Đăng"), onEdit && React.createElement("button", { type: "button", onClick: () => onEdit(story), className: "flex-1 h-12 bg-card text-ink font-semibold text-[15px] active:scale-[0.98] transition-transform", "data-story-selfedit": true }, "Tự sửa")))));
+  };
   const BasketIcon = IconLib.ShoppingBasket || iconFallback("🧺");
   const ListChecksIcon = IconLib.ListChecks || iconFallback("☑");
   const LightbulbIcon = IconLib.Lightbulb || iconFallback("💡");
@@ -3448,6 +3755,115 @@ try {
       return Object.values(m);
     };
     const dayStreaks = (dKey) => streaksOf({ sleepByDate, workoutsByDate, cardioByDate, lenTaOf: woLenTa }, dKey);
+    const [stories, setStories] = useState(() => loadSafeJSON("story_by_date"));
+    useEffect(() => {
+      const t = setTimeout(() => {
+        try {
+          localStorage.setItem("story_by_date", JSON.stringify(stories));
+        } catch (e) {
+        }
+      }, 300);
+      return () => clearTimeout(t);
+    }, [stories]);
+    const [storyView, setStoryView] = useState(null);
+    const [storyQuick, setStoryQuick] = useState(null);
+    const [storyBusy, setStoryBusy] = useState(false);
+    const storyDayOf = (dKey) => {
+      const st = statsByDate[dKey] || {};
+      const pp = String(dKey).split("/").map(Number), dd = new Date(pp[2], pp[1] - 1, pp[0], 12);
+      const imgs = getValidStatImages(dKey, st.images).map((src, i) => ({ id: imgIdOf(src) || "i" + i, src: imgIsPending(src) ? src : formatDriveImgUrl(src, 1e3) }));
+      const trackId = getSpotifyTrackId(st.musicUrl || "");
+      const markMs = trackId ? spMarks.get(dKey, trackId) : null;
+      const fDay = foodsByDate[dKey] || [];
+      const tot = calculateTotals(fDay);
+      const slL = sleepByDate[dKey] || [];
+      const sl = slL.length ? slL[slL.length - 1] : null;
+      const dm = getDayMood(statsByDate[dKey]);
+      const w = workoutsByDate[dKey];
+      const up = stkLenTa(workoutsByDate, woLenTa, dKey);
+      return {
+        dKey,
+        wd: VN_DAYS[dd.getDay()],
+        dm: String(dKey).slice(0, 5),
+        imgs,
+        summary: st.summary || "",
+        musicUrl: st.musicUrl || "",
+        songName: st.songName || "",
+        song: !!trackId,
+        mark: markMs !== null && markMs !== void 0 ? markFmt(markMs) : "",
+        kcal: fDay.length ? fmtK(tot.kcal) : "",
+        pro: fDay.length ? String(Math.round(tot.protein)) : "",
+        ngu: sl ? slDur(Number(sl.duration) || 0) : "",
+        tt: dm.tone ? dm.tone.label : "",
+        tap: stkHasWo(w) ? w.type : hasCardioOf(cardioByDate[dKey]) ? "Cardio" : "",
+        chuoi: dayStreaks(dKey),
+        sv: { ngu: stkSleep(sleepByDate, dKey) || "", wo: stkWoDay(workoutsByDate, cardioByDate, dKey) ? `${stkWoWeek(workoutsByDate, cardioByDate, dKey)}/7` : "", bp: up || "" },
+        gasUrl,
+        gasKey
+      };
+    };
+    const storyOf = (dKey) => {
+      const it = stories[dKey];
+      const u = it && it.p ? styUnpack(it.p) : null;
+      return u || styAuto(storyDayOf(dKey), 0);
+    };
+    const storyHas = (dKey) => {
+      if (stories[dKey]) return true;
+      const st = statsByDate[dKey];
+      return !!(st && ((st.images || []).length || String(st.summary || "").trim() || getSpotifyTrackId(st.musicUrl || ""))) || dayStreaks(dKey).length > 0;
+    };
+    const openStories = (keys, start) => {
+      const k = keys.filter(storyHas);
+      if (!k.length) {
+        showToast("Mấy ngày này chưa có ảnh, bài hát hay tóm tắt nào", "error");
+        return;
+      }
+      setStoryView({ keys: k, idx: Math.max(0, k.indexOf(start)) });
+    };
+    const storyMusic = (dKey) => {
+      if (!Spotify.loggedIn()) return;
+      const t = getSpotifyTrackId((statsByDate[dKey] || {}).musicUrl || "");
+      if (!t) {
+        const sp = Spotify.get();
+        if (sp.mode && !sp.paused) Spotify.pause();
+        return;
+      }
+      Spotify.dismissInvite();
+      Spotify.play(t, spStartOpt(t, dKey)).catch(() => {
+      });
+    };
+    const postStory = async (dKey, story) => {
+      const pack = styPack(story);
+      setStories((prev) => ({ ...prev, [dKey]: { p: pack, dirty: true } }));
+      if (!gasUrl) {
+        showToast("⚠️ Chưa có link Script: story mới lưu trong máy", "error");
+        return false;
+      }
+      setStoryBusy(true);
+      try {
+        const r = await fetch(withGasKey(gasUrl), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ type: "STORY", date: dKey, story: JSON.stringify(pack) }) });
+        const res = await r.json();
+        if (res && res.status === "success" && (Number(res.v) || 0) >= 149) {
+          setStories((prev) => prev[dKey] && prev[dKey].p === pack ? { ...prev, [dKey]: { p: pack } } : prev);
+          showToast("✅ Đã đăng story", "success");
+          return true;
+        }
+        if (res && res.status === "unauthorized") {
+          notifyKeyProblem(true);
+          return false;
+        }
+        showToast(res && res.status === "success" ? "⚠️ Apps Script chưa lên bản 149: story mới lưu trong máy" : "❌ Lỗi: " + (res && res.error || "chưa lưu được story"), "error");
+      } catch (e) {
+        showToast("❌ Lỗi: " + e.message, "error");
+      } finally {
+        setStoryBusy(false);
+      }
+      return false;
+    };
+    const storyBack = (sq, dKey) => {
+      setStoryQuick(null);
+      if (sq && sq.back) setStoryView({ keys: sq.back.keys, idx: Math.max(0, sq.back.keys.indexOf(dKey)) });
+    };
     const woSameType = (dKey, n) => {
       const w = workoutsByDate[dKey];
       if (!w) return [];
@@ -4865,6 +5281,27 @@ try {
             setHwOpenIds([]);
           }
           if ((Number(data.data.v) || 0) >= 146 && Array.isArray(data.data.basket)) setWorkBasket(data.data.basket.map(normBasketItem));
+          if (Array.isArray(data.data.story)) {
+            const nSt = {};
+            data.data.story.forEach((r, i) => {
+              if (!i || !r) return;
+              const a = String(r[0] || "").trim(), b = String(r[1] === void 0 || r[1] === null ? "" : r[1]);
+              if (!a || a === STORY_KHO_KEY || a === STORY_MAU_KEY || !b.trim()) return;
+              const dk = parseRawDate(a);
+              if (!dk) return;
+              try {
+                const o = JSON.parse(b);
+                if (o && Array.isArray(o.els)) nSt[dk] = { p: o };
+              } catch (e) {
+              }
+            });
+            setStories((prev) => {
+              Object.keys(prev || {}).forEach((d) => {
+                if (prev[d] && prev[d].dirty) nSt[d] = prev[d];
+              });
+              return nSt;
+            });
+          }
           if (data.data.note && Array.isArray(data.data.note)) {
             let nUrg = [];
             let nScratch = "";
@@ -5461,6 +5898,39 @@ try {
         className: "w-9 h-9 flex items-center justify-center text-accent cls-glow-svg transition-all active:scale-90"
       },
       React.createElement(SparkleWand, null)
+    ), (appMode === "journal" || appMode === "stat") && currentView === "week" && React.createElement("button", { type: "button", "aria-label": "Xem story tuần", "data-story-open": true, onClick: () => openStories(weekDays.map(formatDate)), className: "w-9 h-9 flex items-center justify-center text-accent cls-glow-svg transition-all active:scale-90" }, React.createElement(StoryRingIcon, null)), storyView && ReactDOM.createPortal(
+      React.createElement("div", { className: "dark" }, React.createElement(
+        StoryViewer,
+        {
+          keys: storyView.keys,
+          start: storyView.idx,
+          dayOf: storyDayOf,
+          storyOf,
+          onDay: storyMusic,
+          onClose: () => setStoryView(null),
+          onEdit: (dKey) => {
+            const back = { keys: storyView.keys };
+            setStoryView(null);
+            setStoryQuick({ dKey, back });
+          }
+        }
+      )),
+      document.body
+    ), storyQuick && ReactDOM.createPortal(
+      React.createElement("div", { className: "dark" }, React.createElement(
+        StoryQuick,
+        {
+          day: storyDayOf(storyQuick.dKey),
+          busy: storyBusy,
+          onClose: () => storyBack(storyQuick, storyQuick.dKey),
+          onPost: async (story) => {
+            const sq = storyQuick;
+            await postStory(sq.dKey, story);
+            storyBack(sq, sq.dKey);
+          }
+        }
+      )),
+      document.body
     ), showMemory && ReactDOM.createPortal(
       React.createElement("div", { className: "dark" }, React.createElement(MemorySheet, { statsByDate, gasUrl, gasKey, onClose: () => setShowMemory(false), onOpenDay: (d) => {
         setShowMemory(false);
