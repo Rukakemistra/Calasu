@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="da1cc1e604">
+    <meta name="cls-build" content="701f431bf0">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -462,7 +462,7 @@
         .sty-light .sty-vbtns{filter:none}.sty-light .sty-vbtns button,.sty-light .sty-paused{color:#121520;text-shadow:none}
         .sty-paused{position:absolute;left:0;right:0;bottom:4cqw;text-align:center;font-size:3.2cqw;color:#fff;z-index:9000;pointer-events:none;text-shadow:0 1px 6px #000}
     </style>
-    <!-- BẢN 175: TAB ĂN UỐNG ỐP NGUYÊN DEMO demo-thu/eat-ngan-ha.html (Shadow DOM, sinh bằng do-nghe/mk_eat_175.py) -->
+    <!-- BẢN 175: TAB ĂN UỐNG ỐP NGUYÊN DEMO demo-thu/eat-ngan-ha.html (Shadow DOM, sinh bằng do-nghe/mk_eat_176.py) -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Lexend:wght@300;400;500;600;700&family=Saira+Semi+Condensed:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Big+Shoulders+Stencil+Display:wght@900&display=swap">
     <script>
         window.CLS_EAT = {
@@ -558,7 +558,7 @@ function openCard(id){const x=F.find(f=>f.id===id);if(!x)return;CURX=x;const src
  <div class="din"><div class="dm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${MI[x.m]}</svg>${MEALS[x.m]}</div><div class="dn">${x.n}</div>${x.sk?`<div class="dsk">${x.sk}</div>`:''}
  <div class="rp"><div class="r2">${mt(a)}<span class="pc">${pct(x.p,x.k)}%</span></div><div class="r2"><div class="ps" id="rt">${[1,2,3,4,5].map(i=>`<button type="button" data-i="${i}" class="${i<=x.r?'on':''}" aria-label="${i} sao">★</button>`).join('')}</div></div><div class="r2" id="av">${fs(avg(x))}</div></div>
  <div class="mg"><div class="hl"><span>P</span><b>${x.p}</b></div><div><span>C</span><b>${x.c}</b></div><div><span>F</span><b>${x.f}</b></div><div><span>KCAL</span><b>${fmt(x.k)}</b></div></div>
- <div class="act"><button type="button" id="ed">Sửa</button><button type="button" class="del" id="dl" aria-label="Xóa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div></div></div></div>`,true);
+ <div class="act"><button type="button" id="ed">Sửa</button><button type="button" class="del" id="pbt" aria-label="Ảnh món"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></button><button type="button" class="del" id="dl" aria-label="Xóa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div></div></div></div>`,true);
  const big=$('.big');if(big&&src){const br=big.getBoundingClientRect();if(br.width)big.animate([{transform:`translate(${src.left-br.left}px,${src.top-br.top}px) scale(${src.width/br.width},${src.height/br.height})`,transformOrigin:'0 0'},{transform:'none',transformOrigin:'0 0'}],{duration:440,easing:'cubic-bezier(.2,1,.3,1)'})}
  [...shc.querySelectorAll('.din>*')].forEach((e,k)=>e.animate([{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:360,delay:80+k*55,easing:'cubic-bezier(.2,1,.3,1)',fill:'backwards'}));
  $('#rt').onclick=e=>{const b=e.target.closest('button');if(!b||G)return;const i=+b.dataset.i;x.r=x.r===i?0:i;B.save(F);
@@ -567,7 +567,7 @@ function openCard(id){const x=F.find(f=>f.id===id);if(!x)return;CURX=x;const src
   if(b2.textContent!==nr){if(nr==='?'){setR();$('.big')?.insertAdjacentHTML('beforeend','<div class="bk2"><span>?</span></div>');render()}else gacha(x.r,nr,()=>{setR();render()})}else render()};
  $('#bim').onclick=()=>B.pickDishPhotos(x.m,x.n);
  $('#dl').onclick=()=>{closeSheet();root.querySelector(`.mc[data-id="${id}"]`)?.classList.add('gone');setTimeout(()=>{F=F.filter(f=>f.id!==id);render();auto()},500)};
- $('#ed').onclick=()=>openAdd(x.m,x)}
+ $('#pbt').onclick=()=>B.pickDishPhotos(x.m,x.n);$('#ed').onclick=()=>openAdd(x.m,x)}
 
 function addList(L){closeSheet();F.push(...L);landIds=L.map(x=>x.id);render();auto()}
 const nb=s=>+String(s||0).replace(',','.')||0;
