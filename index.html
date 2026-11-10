@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="c1df8428c8">
+    <meta name="cls-build" content="da1cc1e604">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -7673,7 +7673,7 @@ try {
           let napStr = "X";
           if (nDay.length > 0) napStr = `${nDay[nDay.length - 1].sleepTime}-${nDay[nDay.length - 1].wakeTime}`;
           const hasAnyMealNote = Object.values(mNotes).some((v) => v && String(v).trim() !== "");
-          return { date: dKey, sang: formatMeal("Sáng"), trua: formatMeal("Trưa"), chieu: formatMeal("Chiều"), ngoai_le: formatMeal("Ngoài lề"), ngu: sleepStr, nguTrua: napStr, sleepNote: sNote, totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein), mealNotes: mNotes, hasAnyMealNote, ...mealPhotosByDate[dKey] !== void 0 || dishPhotosByDate[dKey] !== void 0 ? { mealPhotos: [dpFormat(dishPhotosByDate[dKey]), mpFormat(mealPhotosByDate[dKey])].filter(Boolean).join("\n") } : {}, ...mealDescByDate[dKey] !== void 0 ? { mealDesc: mdFormat(mealDescByDate[dKey]) } : {}, ...mealStarsByDate[dKey] !== void 0 ? { mealStars: msFormat(mealStarsByDate[dKey]) } : {} };
+          return { date: dKey, sang: formatMeal("Sáng"), trua: formatMeal("Trưa"), chieu: formatMeal("Chiều"), ngoai_le: formatMeal("Ngoài lề"), ngu: sleepStr, nguTrua: napStr, sleepNote: sNote, totalKcal: Math.round(tAll.kcal), totalPro: Math.round(tAll.protein), mealNotes: mNotes, hasAnyMealNote, ...dishPhotosByDate[dKey] !== void 0 ? { mealPhotos: dpFormat(dishPhotosByDate[dKey]) } : {}, ...mealDescByDate[dKey] !== void 0 ? { mealDesc: mdFormat(mealDescByDate[dKey]) } : {}, ...mealStarsByDate[dKey] !== void 0 ? { mealStars: msFormat(mealStarsByDate[dKey]) } : {} };
         });
         const finalPayload = syncDataPayload.filter((item) => item.sang !== "X" || item.trua !== "X" || item.chieu !== "X" || item.ngoai_le !== "X" || item.ngu !== "" || item.nguTrua !== "X" || item.sleepNote !== "" || item.hasAnyMealNote || item.mealPhotos !== void 0);
         const tmpMap = /* @__PURE__ */ new Map();
@@ -8428,12 +8428,12 @@ try {
         const day = getValidStatImages(dateKey, (statsByDate[dateKey] || {}).images);
         return ((mealPhotosByDate[dateKey] || {})[MEALS[i]] || []).map((id) => day.find((x) => imgIdOf(x) === id)).filter(Boolean);
       },
-      mealBtns: (i) => `<button type="button" class="gbt" data-note="${i}" aria-label="Ghi chú bữa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="gbt" data-ph="${i}" aria-label="Ảnh bữa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg></button>`,
+      mealBtns: (i) => `<button type="button" class="gbt" data-note="${i}" aria-label="Ghi chú bữa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>`,
       mealExtra: (i) => {
         const note = (mealNotesByDate[dateKey] || {})[MEALS[i]] || "";
         const raws = eatBridge.raws(i);
         const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-        return (note ? `<p class="mnote" data-note="${i}">${esc(note)}</p>` : "") + (raws.length ? `<div class="mph">${raws.map((r, j) => `<button type="button" data-phi="${i}:${j}" aria-label="Xem ảnh bữa" style="background-image:url(&quot;${esc(formatDriveImgUrl(r, 400))}&quot;)"></button>`).join("")}</div>` : "");
+        return note ? `<p class="mnote" data-note="${i}">${esc(note)}</p>` : "";
       },
       pickPhotos: (i) => setMealPhotoPick(MEALS[i]),
       openPhotos: (i, j) => {
