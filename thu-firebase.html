@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thử Firebase</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; background:#0b0e1a; color:#e8ebf5; font:16px/1.5 system-ui, sans-serif; }
+  main { max-width:460px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .muted { color:#8d93ad; font-size:14px; }
+  button { width:100%; padding:14px; margin-top:12px; border:1px solid #2c3355; border-radius:12px;
+           background:#161b31; color:#e8ebf5; font-size:16px; cursor:pointer; }
+  button:active { background:#202848; }
+  button:disabled { opacity:.4; }
+  input { width:100%; box-sizing:border-box; padding:14px; margin-top:12px; border-radius:12px;
+          border:1px solid #2c3355; background:#0f1326; color:#e8ebf5; font-size:16px; }
+  .card { margin-top:16px; padding:14px; border-radius:12px; background:#11162b; border:1px solid #232a4a; }
+  .big { font-size:22px; font-weight:600; word-break:break-word; }
+  #log { margin-top:16px; font-size:14px; color:#aab0c8; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Thử Firebase</h1>
+  <div class="muted" id="who">Chưa đăng nhập</div>
+
+  <button id="btnIn">Đăng nhập Google</button>
+
+  <input id="txt" placeholder="Gõ gì đó rồi bấm Ghi" disabled>
+  <button id="btnWrite" disabled>Ghi</button>
+  <button id="btnRead" disabled>Đọc lại từ kho</button>
+
+  <div class="card">
+    <div class="muted">Trong kho đang là</div>
+    <div class="big" id="live">...</div>
+    <div class="muted" id="liveMeta"></div>
+  </div>
+
+  <div id="log"></div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, doc, setDoc, getDocFromServer, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyASB1j4PZWwWHr8uUEbb7UcBmZiAqdY6rk",
+  authDomain: "calasu-6d785.firebaseapp.com",
+  projectId: "calasu-6d785",
+  storageBucket: "calasu-6d785.firebasestorage.app",
+  messagingSenderId: "759941890669",
+  appId: "1:759941890669:web:a79ca9fb01c936f22fb564"
+});
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache() });
+
+const $ = id => document.getElementById(id);
+const log = s => { $("log").textContent = s + "\n" + $("log").textContent; };
+const may = /Android|iPhone|iPad/i.test(navigator.userAgent) ? "điện thoại" : "máy tính";
+let ref = null, unsub = null;
+
+$("btnIn").onclick = async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) { log("Đăng nhập lỗi: " + e.code); }
+};
+
+onAuthStateChanged(auth, user => {
+  if (unsub) { unsub(); unsub = null; }
+  const on = !!user;
+  ["txt", "btnWrite", "btnRead"].forEach(id => $(id).disabled = !on);
+  $("btnIn").style.display = on ? "none" : "";
+  if (!on) { $("who").textContent = "Chưa đăng nhập"; return; }
+  $("who").textContent = "Đã đăng nhập: " + user.email;
+  ref = doc(db, "u", user.uid, "thu", "ping");
+  unsub = onSnapshot(ref, { includeMetadataChanges: true }, snap => {
+    const d = snap.data();
+    $("live").textContent = d ? d.text : "(trống)";
+    if (!d) return;
+    const tu = d.may || "?";
+    const cho = snap.metadata.hasPendingWrites ? " · đang gửi lên kho..." : "";
+    const gio = d.luc ? new Date(d.luc).toLocaleTimeString("vi-VN") : "";
+    $("liveMeta").textContent = "Ghi từ " + tu + " lúc " + gio + cho;
+  }, e => log("Nghe kho lỗi: " + e.code));
+});
+
+$("btnWrite").onclick = async () => {
+  const text = $("txt").value.trim() || "ping";
+  const t0 = performance.now();
+  try {
+    await setDoc(ref, { text, may, luc: Date.now(), server: serverTimestamp() });
+    log("Ghi xong lên kho: " + Math.round(performance.now() - t0) + " ms");
+  } catch (e) { log("Ghi lỗi: " + e.code); }
+};
+
+$("btnRead").onclick = async () => {
+  const t0 = performance.now();
+  try {
+    const s = await getDocFromServer(ref);
+    log("Đọc từ kho: " + Math.round(performance.now() - t0) + " ms → " + (s.data()?.text ?? "(trống)"));
+  } catch (e) { log("Đọc lỗi: " + e.code); }
+};
+</script>
+</body>
+</html>
