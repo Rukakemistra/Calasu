@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="ef9cb57c79">
+    <meta name="cls-build" content="8d89c2e4a6">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -1040,7 +1040,7 @@ function land(ts,dt){const g=landC.getContext('2d');const W=landC.clientWidth;if
     if(styleK==='net'&&L===2){g.save();g.clip();g.strokeStyle=`rgba(${PAL[slot].line},.08)`;g.lineWidth=1;for(let x=0;x<LDW;x+=18){g.beginPath();g.moveTo(x,0);g.lineTo(x,LDH);g.stroke();}for(let y=LDH*.5;y<LDH;y+=12){g.beginPath();g.moveTo(0,y);g.lineTo(LDW,y);g.stroke();}g.restore();}
     g.strokeStyle=styleK==='net'?`rgba(${PAL[slot].line},${.65-L*.15})`:`rgba(${night?'170,180,240':hx3(d.top).join(',')},${night?.22-L*.05:.35-L*.08})`;g.lineWidth=styleK==='net'?1.2:1;if(styleK==='net'){g.shadowColor=`rgb(${PAL[slot].line})`;g.shadowBlur=6;}g.beginPath();r.forEach((h,i)=>{const x=i/(r.length-1)*LDW,y=base-h*amp;i?g.lineTo(x,y):g.moveTo(x,y);});g.stroke();g.shadowBlur=0;
     if(L===0&&!night){const mg=g.createLinearGradient(0,base-amp-6,0,base+18);mg.addColorStop(0,'rgba(255,255,255,0)');mg.addColorStop(.6,`rgba(${hx3(d.top)},.35)`);mg.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=mg;g.fillRect(0,base-amp-6,LDW,30);}});
-  }}g.setTransform(1,0,0,1,0,0);g.drawImage(LANDC,0,0);g.setTransform(dpr,0,0,dpr,0,0);}
+  }}if(LANDC.width&&LANDC.height){g.setTransform(1,0,0,1,0,0);g.drawImage(LANDC,0,0);g.setTransform(dpr,0,0,dpr,0,0);}}
   if(night){LIGHTS.forEach(l=>{const L=2,r=RIDGE[L],i=Math.floor(l.x*(r.length-1));const base=LDH*(.42+L*.17)-r[i]*(18-L*3);const y=base+8+l.y*(LDH-base-14);const a=.5+.5*Math.sin(ts*(1.5+l.p)+l.p*7);
     g.fillStyle=`rgba(255,${200+Math.round(30*a)},140,${.55+.4*a})`;g.shadowColor='rgba(255,200,130,1)';g.shadowBlur=6;g.fillRect(l.x*LDW,y,1.8,1.8);});g.shadowBlur=0;}
   else if(!RM){birdNext-=dt;if(!birds&&birdNext<=0){birds={t:0,y:LDH*(.12+Math.random()*.2),dir:Math.random()<.5?1:-1,n:3+Math.floor(Math.random()*4)};birdNext=7+Math.random()*8;}
