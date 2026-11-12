@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="4e0737096a">
+    <meta name="cls-build" content="480c492ed2">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -88,46 +88,65 @@
                 var woToday = !!((LS('macro_workouts') || {})[today] || (LS('macro_cardio') || {})[today]);
                 var streakQua = 0; while (streakQua < 3660 && onBeat(lastSleep(back(1 + streakQua)))) streakQua++; // chuỗi tính tới hôm qua
                 // ===================== KHO CÂU CHÀO (sửa câu ở đây) =====================
-                // Mỗi câu: id, k = khung giờ (sang, trua, chieu, toi, khuya), t = chữ to, s = dòng dưới (chữ hoặc hàm),
-                // when = điều kiện (bỏ trống là luôn hợp), uu = độ ưu tiên (số lớn thắng; trống là 0).
-                // Chọn: lấy các câu hợp khung giờ và điều kiện, giữ những câu có uu cao nhất, nhiều câu thì chọn ngẫu nhiên,
-                // không lặp lại câu hôm qua. Biến dùng được: h, mi (giờ phút), streak (chuỗi ngủ đúng nhịp tính tới hôm nay),
-                // streakQua (tới hôm qua), tdy (giấc ngủ đêm qua), tasks / undone (việc hôm nay / còn lại), left (phút tới 23:00),
-                // st (nhật ký hôm nay: summary, moodSang...), anTrua (đã ghi bữa trưa), woToday (hôm nay có tập).
+                // Bản 180, theo bản chốt (demo-thu/chuyen-phien.md): mỗi khung có câu mặc định; câu có điều kiện thắng câu mặc định;
+                // nhiều câu cùng khớp thì chọn ngẫu nhiên, không lặp câu hôm qua. Chỉ một câu, không dòng phụ.
+                // Mỗi câu: id, k = khung giờ (sang, trua, chieu, toi, khuya), t = chữ (hoặc hàm), when = điều kiện, uu = 1 cho câu có điều kiện.
+                var raw = function (k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+                var GOAL_P = 115;
+                var protein = foods.reduce(function (a, f) { return a + (Number(f && f.protein) || 0); }, 0);
+                var anSang = foods.some(function (f) { return f && f.meal === 'Sáng'; });
+                var wake = tdy ? mins(tdy.wakeTime) : null, ngu = tdy ? (Number(tdy.duration) || 0) : 0;
+                var w3 = lastSleep(back(3)), w3m = w3 ? mins(w3.wakeTime) : null;
+                var cong = tasks.filter(function (t) { return !/#Reward(?=\s|$)/i.test(String(t.text || '')); });
+                var xong = cong.filter(function (t) { return t.done; }).length;
+                var wDef = { must: 3, should: 2, can: 1 }, wSum = 0, wDone = 0;
+                ['must', 'should', 'can'].forEach(function (cat) { (td[cat] || []).forEach(function (t) { if (!t || /#Reward(?=\s|$)/i.test(String(t.text || ''))) return; var m = /\*([1-7])p(?=\s|$)/i.exec(String(t.text || '')); var w = m ? +m[1] : wDef[cat]; wSum += w; if (t.done) wDone += w; }); });
+                var wPct = wSum ? wDone / wSum : 0;
+                var pinId = raw('work_focus_task'), pin = pinId ? cong.filter(function (t) { return t.id === pinId; })[0] : null;
+                var tom = String(st.summary || '').trim(), chiTiet = String(st.detail || '').trim(), bai = String(st.musicUrl || '').trim();
+                var khuyaHom = LS('cls_khuya') || '';
+                var khuyaLien = khung === 'khuya' && khuyaHom === back(1);
+                if (khung === 'khuya') { try { localStorage.setItem('cls_khuya', JSON.stringify(today)); } catch (e) {} }
+                var gio = function () { return dur(tdy); };
                 var CHAO = [
                     // Sáng 05:00–10:59
-                    { id: 'sang', k: 'sang', uu: 1, when: function () { return !tdy; }, t: 'Chào buổi sáng, Calasu.' },
-                    { id: 'sang-nhip', k: 'sang', uu: 2, when: function () { return onBeat(tdy) && streak >= 1; }, t: 'Chào buổi sáng, Calasu.', s: function () { return 'Đêm qua ngủ ' + dur(tdy) + ', đúng nhịp ngày thứ ' + streak + '.'; } },
-                    { id: 'sang-dut', k: 'sang', uu: 2, when: function () { return tdy && !onBeat(tdy) && streakQua >= 3; }, t: 'Dậy rồi hả, Calasu.', s: function () { return 'Chuỗi ' + streakQua + ' ngày đứt rồi. Tối nay làm lại từ đầu nha.'; } },
-                    { id: 'sang-tre', k: 'sang', uu: 1, when: function () { return tdy && !onBeat(tdy); }, t: 'Dậy rồi hả, Calasu.', s: function () { return 'Đêm qua ngủ ' + dur(tdy) + '. Tối nay ngủ sớm bù nha.'; } },
-                    { id: 'sang-som', k: 'sang', uu: 1, when: function () { return tdy && !onBeat(tdy) && h < 6; }, t: 'Dậy rồi đó hả, lạ ghê.', s: 'Sớm vậy thì trưa nhớ chợp mắt.' },
-                    { id: 'sang-ngu-it', k: 'sang', uu: 2, when: function () { return tdy && !onBeat(tdy) && Number(tdy.duration) > 0 && Number(tdy.duration) < 300; }, t: 'Dậy rồi hả, Calasu.', s: function () { return 'Ngủ có ' + dur(tdy) + ' thôi á?'; } },
+                    { id: 'sang', k: 'sang', t: 'Chào buổi sáng, Calasu.' },
+                    { id: 'sang-som', k: 'sang', uu: 1, when: function () { return wake !== null && (wake < 330 || (w3m !== null && w3m > 420 && wake < 390)); }, t: 'Dậy rồi đó hả, lạ ghê.' },
+                    { id: 'sang-du', k: 'sang', uu: 1, when: function () { return tdy && ngu >= 420; }, t: function () { return 'Đêm qua ngủ ' + gio() + ', cũng được đó.'; } },
+                    { id: 'sang-it', k: 'sang', uu: 1, when: function () { return tdy && ngu > 0 && ngu < 300; }, t: function () { return 'Ngủ có ' + gio() + ' thôi á?'; } },
+                    { id: 'sang-chuoi', k: 'sang', uu: 1, when: function () { return streak >= 3; }, t: function () { return 'Ngày mới, chuỗi ngủ đang ở ' + streak + ' ngày.'; } },
+                    { id: 'sang-tre', k: 'sang', uu: 1, when: function () { return wake !== null && wake > 450; }, t: 'Mắt mở chưa hay mới mở app?' },
                     // Trưa 11:00–13:59
-                    { id: 'trua', k: 'trua', t: 'Trưa rồi, Calasu.', s: 'Nghỉ tay ăn trưa đi.' },
-                    { id: 'trua-2', k: 'trua', t: 'Nửa ngày rồi đó.', s: 'Ăn no rồi chợp mắt chút cho chiều tỉnh.' },
-                    { id: 'trua-chua-an', k: 'trua', uu: 1, when: function () { return h >= 12 && !anTrua; }, t: 'Trưa rồi, Calasu.', s: 'Ăn trưa chưa đó? Đừng để bụng réo mới nhớ.' },
-                    { id: 'trua-viec', k: 'trua', uu: 1, when: function () { return undone > 0 && anTrua; }, t: 'Trưa rồi, Calasu.', s: function () { return 'Còn ' + undone + ' việc. Ăn xong rồi tính tiếp.'; } },
-                    { id: 'trua-xong', k: 'trua', uu: 2, when: function () { return tasks.length > 0 && undone === 0; }, t: 'Trưa mà xong hết rồi?', s: 'Chiều nay rảnh tay, sướng nha.' },
+                    { id: 'trua', k: 'trua', t: 'Trưa rồi, Calasu.' },
+                    { id: 'trua-an', k: 'trua', uu: 1, when: function () { return !anTrua || protein < GOAL_P * 0.4; }, t: function () { return 'Ăn trưa chưa, protein mới có ' + Math.round(protein) + 'g à.'; } },
+                    { id: 'trua-nua', k: 'trua', uu: 1, when: function () { return cong.length > 0 && xong < cong.length / 2; }, t: function () { return 'Nửa ngày rồi đó, Working ' + xong + '/' + cong.length + '.'; } },
+                    { id: 'trua-nghi', k: 'trua', uu: 1, when: function () { return cong.length > 0 && xong >= cong.length / 2 && xong < cong.length; }, t: 'Nghỉ tay chút đi.' },
+                    { id: 'trua-mood', k: 'trua', uu: 1, when: function () { return !(Number(st.moodSang) > 0); }, t: 'Sáng nay thấy sao?' },
+                    { id: 'trua-sang', k: 'trua', uu: 1, when: function () { return !anSang; }, t: 'Bữa sáng đâu, đừng nói là nhịn nha.' },
+                    { id: 'trua-ngu', k: 'trua', uu: 1, when: function () { return tdy && ngu > 0 && ngu < 360; }, t: function () { return 'Đêm qua ngủ có ' + gio() + ', chợp mắt 20 phút đi.'; } },
+                    { id: 'trua-ghim', k: 'trua', uu: 1, when: function () { return undone >= 4 && !pin; }, t: 'Ghim một việc rồi làm cho xong cái đã.' },
+                    { id: 'trua-xong', k: 'trua', uu: 1, when: function () { return cong.length > 0 && xong === cong.length; }, t: 'Xong hết từ trưa luôn? Ai đây?' },
                     // Chiều 14:00–17:59
-                    { id: 'chieu', k: 'chieu', t: 'Chiều rồi, Calasu.', s: 'Uống miếng nước đi rồi làm tiếp.' },
-                    { id: 'chieu-2', k: 'chieu', t: 'Chiều rồi, Calasu.', s: 'Đứng dậy vươn vai cái coi.' },
-                    { id: 'chieu-viec', k: 'chieu', uu: 1, when: function () { return undone > 0; }, t: 'Chiều rồi, Calasu.', s: function () { return 'Còn ' + undone + ' việc. Chọn một cái làm cho xong trước khi trời tối.'; } },
-                    { id: 'chieu-tap', k: 'chieu', uu: 1, when: function () { return !woToday && h >= 16; }, t: 'Chiều rồi, Calasu.', s: 'Còn kịp tập một buổi đó.' },
-                    { id: 'chieu-met', k: 'chieu', uu: 2, when: function () { return Number(st.energy) === 1 || Number(st.energy) === 2; }, t: 'Chiều rồi, Calasu.', s: 'Mệt thì đứng dậy đi vài vòng, đừng nằm.' },
-                    { id: 'chieu-xong', k: 'chieu', uu: 2, when: function () { return tasks.length > 0 && undone === 0; }, t: 'Xong sạch từ chiều.', s: 'Giỏi ghê. Tối nay thong thả rồi.' },
+                    { id: 'chieu', k: 'chieu', t: 'Chiều rồi, Calasu.' },
+                    { id: 'chieu-tap', k: 'chieu', uu: 1, when: function () { return !woToday; }, t: 'Còn kịp tập một buổi đó.' },
+                    { id: 'chieu-nang', k: 'chieu', uu: 1, when: function () { return h * 60 + mi >= 990 && undone >= 3; }, t: function () { return 'Nắng sắp tắt, việc còn ' + undone + ' cái.'; } },
+                    { id: 'chieu-mood', k: 'chieu', uu: 1, when: function () { return !(Number(st.moodChieu) > 0); }, t: 'Chiều nay thấy sao?' },
+                    { id: 'chieu-met', k: 'chieu', uu: 1, when: function () { return Number(st.energy) === 1 || Number(st.energy) === 2; }, t: 'Mệt thì đứng dậy đi vài vòng, đừng nằm.' },
+                    { id: 'chieu-ghim', k: 'chieu', uu: 1, when: function () { return h >= 15 && pin && !pin.done; }, t: 'Việc trọng tâm xong chưa đó?' },
+                    { id: 'chieu-pro', k: 'chieu', uu: 1, when: function () { return woToday && protein < GOAL_P * 0.6; }, t: 'Tập rồi á, nạp protein lại nha.' },
+                    { id: 'chieu-xong', k: 'chieu', uu: 1, when: function () { return cong.length > 0 && xong === cong.length; }, t: 'Xong hết rồi? Tối nay muốn làm gì làm.' },
                     // Tối 18:00–22:59
-                    { id: 'toi', k: 'toi', t: 'Tối rồi, Calasu.', s: 'Gom lại ngày hôm nay rồi đi ngủ nha.' },
-                    { id: 'toi-tom', k: 'toi', when: function () { return !String(st.summary || '').trim(); }, t: 'Tối rồi, Calasu.', s: 'Hôm nay tóm lại một câu thì là gì?' },
-                    { id: 'toi-nhip', k: 'toi', uu: 1, when: function () { return streak >= 3 && h >= 22; }, t: 'Sắp tới giờ rồi.', s: function () { return 'Chuỗi ngủ đúng nhịp đang ' + streak + ' ngày, giữ nha.'; } },
-                    { id: 'toi-con-viec', k: 'toi', uu: 2, when: function () { return h >= 21 && undone > 0 && left > 0; }, t: 'Tối rồi, Calasu.', s: function () { return 'Cô còn ' + left + ' phút để hoàn thành 💢'; } },
-                    { id: 'toi-xong', k: 'toi', uu: 1, when: function () { return tasks.length > 0 && undone === 0; }, t: 'Tối rồi, Calasu.', s: 'Xong hết rồi, đi ngủ được rồi đó' },
+                    { id: 'toi', k: 'toi', t: 'Tối rồi, Calasu.' },
+                    { id: 'toi-bai', k: 'toi', uu: 1, when: function () { return !bai; }, t: 'Nay nghe bài gì dạ?' },
+                    { id: 'toi-viet', k: 'toi', uu: 1, when: function () { return !tom && !chiTiet; }, t: 'Viết vài dòng rồi nghỉ.' },
+                    { id: 'toi-con-viec', k: 'toi', uu: 1, when: function () { return h === 22 && (undone > 0 || (!tom && !chiTiet)); }, t: function () { return 'Cô còn ' + left + ' phút để hoàn thành 💢'; } },
                     // Khuya 23:00–04:59
-                    { id: 'khuya', k: 'khuya', t: 'Sáng tạo đêm muộn à Calasu?' },
-                    { id: 'khuya-2', k: 'khuya', t: 'Khuya rồi đó, Calasu.', s: 'Điện thoại cũng cần ngủ.' },
-                    { id: 'khuya-3', k: 'khuya', t: 'Còn thức hả?', s: 'Mai dậy nổi không đó.' },
-                    { id: 'khuya-viec', k: 'khuya', when: function () { return undone > 0; }, t: 'Khuya rồi, Calasu.', s: 'Việc còn lại để mai. Giờ đi ngủ.' },
-                    { id: 'khuya-khuya', k: 'khuya', uu: 1, when: function () { return streak === 0 && h >= 1 && h < 4; }, t: 'Không sợ ung thư hả má!?', s: 'Đi ngủ lẹ giùm cái.' },
-                    { id: 'khuya-dut', k: 'khuya', uu: 1, when: function () { return streak >= 1; }, t: 'Sáng tạo đêm muộn à Calasu?', s: 'Chuỗi ngủ đúng nhịp đứt rồi. Ghi nốt rồi ngủ, mai làm lại từ đầu.' }
+                    { id: 'khuya', k: 'khuya', t: 'Hiểu rồi hiểu rồi' },
+                    { id: 'khuya-ns', k: 'khuya', uu: 1, when: function () { return wSum > 0 && wPct >= 0.8; }, t: 'Năng suất ha' },
+                    { id: 'khuya-quen', k: 'khuya', uu: 1, when: function () { return (!tom && !chiTiet) || !bai || !foods.length; }, t: 'Chắc là... chỉ quên nhập cái gì đúng không?' },
+                    { id: 'khuya-ut', k: 'khuya', uu: 1, when: function () { return (h >= 1 && h < 4) || khuyaLien; }, t: 'Không sợ ung thư hả má!?' },
+                    { id: 'khuya-bay', k: 'khuya', uu: 1, when: function () { return streak >= 2; }, t: 'Bay chuỗi ngủ giờ!' },
+                    { id: 'khuya-khong', k: 'khuya', uu: 1, when: function () { return streak === 0; }, t: 'Chuỗi ngủ bay bây giờ, ủa có hay gì mà bay?' }
                 ];
                 // =================== HẾT KHO CÂU CHÀO ===================
                 var hop = CHAO.filter(function (c) { return c.k === khung && (!c.when || c.when()); });
@@ -138,6 +157,7 @@
                 var homQua = hom.ngay === today ? hom.truoc : hom.id;
                 if (hop.length > 1) { var khac = hop.filter(function (c) { return c.id !== homQua; }); if (khac.length) hop = khac; }
                 var cau = hop[Math.floor(Math.random() * hop.length)] || CHAO[0];
+                if (typeof cau.t === 'function') cau = { id: cau.id, t: cau.t() };
                 try { localStorage.setItem('cls_loi_chao', JSON.stringify({ ngay: today, id: cau.id, truoc: homQua || '' })); } catch (e) {}
                 var sub = typeof cau.s === 'function' ? cau.s() : (cau.s || '');
                 // ---- bầu trời 5 khung giờ (theo bản mẫu troi-theo-gio: khung 360 x 740, trời cao 1500) ----
@@ -186,7 +206,7 @@
                 // bản 170: trao câu chào và bầu trời cho màn chào (app React). Màn chào hiện ở lần mở đầu tiên của mỗi khung giờ trong ngày.
                 var da = LS('cls_chao_da') || {};
                 var daK = da.ngay === today && Array.isArray(da.k) ? da.k : [];
-                var show = daK.indexOf(khung) < 0 && (!auto || forceChao);
+                var show = !auto || forceChao; // bản 180: lần mở nào cũng dừng ở màn chào
                 if (show) { try { localStorage.setItem('cls_chao_da', JSON.stringify({ ngay: today, k: daK.concat([khung]) })); } catch (e) {} }
                 window.__clsChao = { khung: khung, id: cau.id, t: cau.t, s: sub, today: today, wd: WD[cday.getDay()], ink: F.ink, skyBg: F.sky, sky: sky, show: show, gone: false, skip: false };
                 var fin = function (skip) { var c = window.__clsChao; c.gone = true; c.skip = !!skip; try { window.dispatchEvent(new CustomEvent('cls-intro-done', { detail: { skip: !!skip } })); } catch (e) {} };
@@ -201,13 +221,13 @@
                     + '<div class="dt">' + WD[cday.getDay()] + ' ' + today.slice(0, 5) + '</div>';
                 el.setAttribute('data-cau', cau.id);
                 var gone = false;
-                var done = function () { if (gone) return; gone = true; if (el.parentNode) el.parentNode.removeChild(el); fin(taps >= 2); };
+                var done = function () { if (gone) return; gone = true; if (el.parentNode) el.parentNode.removeChild(el); fin(false); };
                 var taps = 0;
                 el.addEventListener('pointerdown', function (e) {
                     e.preventDefault();
                     taps++;
-                    if (taps === 1 && el.getAnimations) { el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = 3; }); el.setAttribute('data-nhanh', '3'); }
-                    else { el.style.transition = 'opacity .12s'; el.style.opacity = '0'; setTimeout(done, 130); }
+                    var rate = Math.min(27, Math.pow(3, taps));
+                    if (el.getAnimations) { el.getAnimations({ subtree: true }).forEach(function (a) { a.playbackRate = rate; }); el.setAttribute('data-nhanh', String(rate)); }
                 });
                 el.addEventListener('animationend', function (e) { if (e.target === el) done(); });
                 setTimeout(done, 4000); // chốt chặn: không bao giờ che app lâu
@@ -1506,6 +1526,42 @@ return {reload:()=>{if(logOpen)return;syncFromApp();renderDay();}};
         @keyframes clsMemTw{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:1;transform:scale(1)}}
         @media (min-aspect-ratio:11/10){.mem-again{left:auto;right:calc(22px + env(safe-area-inset-right,0px));transform:none}}
         @media (prefers-reduced-motion:reduce){.cls-mem-item::after,.cls-mem-tw{animation:none}}
+    </style>
+    <style>
+        /* bản 180: màn chào, các việc nổi trên trời, không khối */
+        #cls-chao .cc-list{display:flex;flex-direction:column;gap:24px;margin-top:36px}
+        #cls-chao .cc-it{position:relative;max-height:180px;transition:transform .55s cubic-bezier(.55,0,.8,.2),opacity .45s ease-in,max-height .45s ease .4s,margin .45s ease .4s}
+        #cls-chao .cc-it.gone{transform:translateX(70vw);opacity:0;max-height:0;margin-top:-24px;pointer-events:none}
+        #cls-chao .cc-lb{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;opacity:.66}
+        #cls-chao .cc-tk{display:inline-flex;color:#FFE6A8;filter:drop-shadow(0 0 6px #FFE6A8);animation:ccPop .45s cubic-bezier(.2,1.7,.4,1)}
+        #cls-chao.cc-light .cc-tk{color:#B4531E;filter:drop-shadow(0 0 6px rgba(255,255,255,.9))}
+        @keyframes ccPop{from{transform:scale(0) rotate(-30deg)}to{transform:none}}
+        #cls-chao .cc-sl,#cls-chao .cc-sm{display:flex;align-items:center;gap:14px;margin-top:6px}
+        #cls-chao .cc-sl input,#cls-chao .cc-sm input{all:unset;box-sizing:border-box;color:inherit;font-family:'Chakra Petch','Be Vietnam Pro',sans-serif;font-weight:600;font-size:26px;letter-spacing:.02em;padding:2px 0 5px;background:linear-gradient(90deg,currentColor,transparent) bottom/100% 1px no-repeat;min-width:0}
+        #cls-chao .cc-sl input{display:block;flex:none;width:5.4em;overflow:hidden;position:relative}
+        #cls-chao .cc-sm input{flex:1;font-family:inherit;font-weight:500;font-size:18px}
+        #cls-chao .cc-ar{width:18px;height:1px;background:currentColor;opacity:.45;flex:none}
+        #cls-chao .cc-ok{all:unset;cursor:pointer;flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px currentColor,0 0 16px rgba(255,230,168,.35);transition:transform .15s}
+        #cls-chao .cc-ok:active{transform:scale(.9)}#cls-chao .cc-ok:disabled{opacity:.3;cursor:default}
+        #cls-chao .cc-lv{display:flex;align-items:center;flex-wrap:wrap;gap:6px 11px;margin-top:8px}
+        #cls-chao .cc-lv button{all:unset;cursor:pointer;font-size:15.5px;opacity:.7;padding:4px 0;transition:opacity .2s,color .2s,text-shadow .2s}
+        #cls-chao .cc-lv button.on{opacity:1;color:#FFE6A8;text-shadow:0 0 12px rgba(255,230,168,.85)}
+        #cls-chao.cc-light .cc-lv button.on{color:#B4531E;text-shadow:0 0 10px rgba(255,255,255,.9)}
+        #cls-chao .cc-dot{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.35}
+        #cls-chao .cc-td{all:unset;cursor:pointer;display:flex;align-items:center;gap:14px}
+        #cls-chao .cc-ck{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1.5px currentColor;transition:background .25s,box-shadow .25s}
+        #cls-chao .cc-td.dn .cc-ck{background:#FFE6A8;color:#1a1530;box-shadow:0 0 16px #FFE6A8}
+        #cls-chao .cc-tx{font-size:17px}#cls-chao .cc-it.big .cc-tx{font-size:21px;font-weight:600}
+        #cls-chao .cc-td.dn .cc-tx{opacity:.55;text-decoration:line-through}
+        #cls-chao.cc-dark .cc-list{text-shadow:0 1px 12px rgba(0,0,0,.65)}
+        #cls-chao.cc-light .cc-list{text-shadow:0 1px 12px rgba(255,255,255,.55)}
+        #cls-chao .cc-bot{display:flex;align-items:flex-end;justify-content:space-between}
+        #cls-chao .cc-pull{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600;letter-spacing:.14em;opacity:.8;padding:12px 2px}
+        #cls-chao .cc-go{all:unset;cursor:pointer;width:58px;height:58px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 1px currentColor,0 0 24px rgba(255,230,168,.35);animation:ccGo 2.6s ease-in-out infinite}
+        @keyframes ccGo{50%{transform:translateX(5px)}}
+        #cls-chao .cc-sheet{position:absolute;left:0;right:0;bottom:0;padding:40px 22px calc(22px + env(safe-area-inset-bottom,0px));background:linear-gradient(rgba(8,10,24,0),rgba(8,10,24,.94) 34%);color:#ECE8DF}
+        #cls-chao .cc-story{all:unset;cursor:pointer;margin-top:16px;display:inline-flex;font-weight:600;letter-spacing:.06em;color:#FFE6A8;text-shadow:0 0 12px rgba(255,230,168,.6)}
+        @media (prefers-reduced-motion:reduce){#cls-chao .cc-it,#cls-chao .cc-go,#cls-chao .cc-tk{transition:none;animation:none}}
     </style>
 </head>
 <body>
@@ -5365,55 +5421,107 @@ try {
     anh: React.createElement("svg", { width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "#B79CFF", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }, React.createElement("rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }), React.createElement("circle", { cx: "9", cy: "9", r: "2" }), React.createElement("path", { d: "m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" })),
     wo: React.createElement("svg", { width: "16", height: "16", viewBox: "0 0 24 24", fill: "none", stroke: "#5FD39A", strokeWidth: "2", strokeLinecap: "round" }, React.createElement("path", { d: "m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7" }))
   };
-  const ChaoLevels = ({ list, val, onSet, light }) => React.createElement("div", { className: "grid grid-cols-5 gap-1.5 mt-2" }, list.map((m) => React.createElement(
-    "button",
-    {
-      key: m.val,
-      type: "button",
-      "aria-pressed": val === m.val ? "true" : "false",
-      onClick: () => onSet(val === m.val ? 0 : m.val),
-      className: `h-9 px-1 text-[12.5px] leading-tight transition-colors active:scale-95 ${val === m.val ? "bg-accent text-onaccent font-semibold" : light ? "bg-white/55 text-[#17142a]" : "bg-white/10 text-[#ECE8DF]"}`
-    },
-    m.label
-  )));
+  const ChaoTick = () => React.createElement("svg", { viewBox: "0 0 24 24", width: "18", height: "18", fill: "none", stroke: "currentColor", strokeWidth: "2.2", strokeLinecap: "round", strokeLinejoin: "round" }, React.createElement("path", { d: "M5 12.5l4.5 4.5L19 7.5" }));
+  const ChaoLevels = ({ list, val, onSet }) => React.createElement("div", { className: "cc-lv" }, list.map((m, i) => React.createElement(React.Fragment, { key: m.val }, i > 0 && React.createElement("i", { className: "cc-dot" }), React.createElement("button", { type: "button", "aria-pressed": val === m.val ? "true" : "false", onClick: () => onSet(val === m.val ? 0 : m.val), className: val === m.val ? "on" : "" }, m.label))));
+  const chaoDissolve = (el, done) => {
+    try {
+      const W = window.innerWidth, H = window.innerHeight, d = Math.min(2, window.devicePixelRatio || 1);
+      const cv = document.createElement("canvas");
+      cv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;z-index:2147482600;pointer-events:none";
+      cv.width = W * d;
+      cv.height = H * d;
+      document.body.appendChild(cv);
+      const g = cv.getContext("2d");
+      g.scale(d, d);
+      const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const P = [];
+      for (let i = 0; i < 260; i++) {
+        const r = Math.random();
+        P.push({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - 0.5) * 40, vy: -(60 + Math.random() * 220), dl: Math.random() * 0.3, s: 0.6 + Math.random() * 1.9, c: r < 0.5 ? "255,236,200" : r < 0.8 ? "214,226,255" : "255,255,255" });
+      }
+      const T0 = performance.now(), DUR = RM ? 200 : 1100;
+      if (el) {
+        el.style.transition = `opacity ${RM ? 150 : 600}ms ease-out, filter ${RM ? 150 : 600}ms ease-out`;
+        el.style.opacity = "0";
+        el.style.filter = "blur(6px)";
+      }
+      setTimeout(done, RM ? 150 : 520);
+      const step = (now) => {
+        const u = Math.min(1, (now - T0) / DUR);
+        g.clearRect(0, 0, W, H);
+        P.forEach((p) => {
+          const t = u - p.dl;
+          if (t <= 0) return;
+          const a = Math.max(0, 1 - t / 0.7);
+          if (!a) return;
+          g.fillStyle = `rgba(${p.c},${a})`;
+          g.shadowColor = `rgba(${p.c},${a})`;
+          g.shadowBlur = 6;
+          g.fillRect(p.x + p.vx * t, p.y + p.vy * t * 1.4, p.s, p.s);
+        });
+        if (u < 1) requestAnimationFrame(step);
+        else cv.remove();
+      };
+      requestAnimationFrame(step);
+    } catch (e) {
+      done();
+    }
+  };
   const ChaoScreen = ({ c, items, live, act, pullHint, onPull, onClose, sky, onOpenDay, revealed }) => {
     const light = !!CHAO_LIGHT[c.khung];
     const night = c.khung === "toi" || c.khung === "khuya";
     const [selKey, setSelKey] = useState(null);
     const [sl, setSl] = useState(() => live.sleepGuess || { s: "23:00", w: "06:00" });
     const [sum, setSum] = useState("");
+    const [gone, setGone] = useState({});
+    const rootRef = useRef(null), leaving = useRef(false);
     const ink = c.ink || "#ECE8DF";
-    const glass = light ? { background: "rgba(255,255,255,.62)", color: "#17142a", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" } : { background: "rgba(12,15,30,.62)", color: "#ECE8DF", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" };
-    const sub = light ? "text-[#17142a]/70" : "text-[#ECE8DF]/70";
-    const inp = `relative h-9 px-2 text-[14px] outline-none border ${light ? "bg-white/70 border-black/10 text-[#17142a]" : "bg-white/10 border-white/15 text-[#ECE8DF]"}`;
-    const DoneMark = ({ children }) => React.createElement("div", { className: "flex items-center gap-2 text-[14px]" }, React.createElement("span", { className: "w-5 h-5 shrink-0 bg-accent text-onaccent flex items-center justify-center" }, React.createElement(CheckIcon, { size: 13 })), React.createElement("span", { className: "min-w-0 truncate" }, children));
+    const isDone = (it) => it.kind === "sleep" ? !!live.sleepToday : it.kind === "sum" ? !!live.summary : it.kind === "todo" ? !!live.todoDone[it.id] : !!(live.levels[it.key] || 0);
+    const keyOf = (it) => it.kind === "todo" ? "t" + it.id : it.kind + (it.key || "");
+    useEffect(() => {
+      const tms = [];
+      items.forEach((it) => {
+        const k = keyOf(it);
+        if (isDone(it) && !gone[k]) tms.push(setTimeout(() => setGone((g) => ({ ...g, [k]: true })), 750));
+      });
+      return () => tms.forEach(clearTimeout);
+    });
+    const leave = (fn) => {
+      if (leaving.current) return;
+      leaving.current = true;
+      chaoDissolve(rootRef.current, fn || onClose);
+    };
     const row = (it) => {
-      const pad = it.big ? "px-4 py-3.5" : "px-3.5 py-2.5";
-      if (it.kind === "sleep") {
-        const done = live.sleepToday;
-        return React.createElement("div", { key: "sleep", className: pad, style: glass, "data-chao-item": "sleep" }, done ? React.createElement(DoneMark, null, "Đêm qua ngủ ", done) : React.createElement(React.Fragment, null, React.createElement("div", { className: `text-[13px] ${sub}` }, "Giờ ngủ đêm qua"), React.createElement("div", { className: "flex items-center gap-2 mt-2" }, React.createElement("input", { type: "time", "aria-label": "Giờ ngủ", value: sl.s, onChange: (e) => setSl((v) => ({ ...v, s: e.target.value })), className: inp + " flex-1 min-w-0 w-0", "data-chao-sleep": "s" }), React.createElement("span", { className: sub + " shrink-0" }, "→"), React.createElement("input", { type: "time", "aria-label": "Giờ dậy", value: sl.w, onChange: (e) => setSl((v) => ({ ...v, w: e.target.value })), className: inp + " flex-1 min-w-0 w-0", "data-chao-sleep": "w" }), React.createElement("button", { type: "button", disabled: !sl.s || !sl.w, onClick: () => act.sleep(sl.s, sl.w), className: "shrink-0 h-9 px-3.5 bg-accent text-onaccent font-semibold text-[14px] active:scale-95 disabled:opacity-50", "data-chao-save": "sleep" }, "Lưu"))));
-      }
-      if (it.kind === "mood" || it.kind === "energy") {
-        const val = live.levels[it.key] || 0;
-        return React.createElement("div", { key: it.key, className: pad, style: glass, "data-chao-item": it.key }, React.createElement("div", { className: `text-[13px] ${sub}` }, it.label), React.createElement(ChaoLevels, { list: it.kind === "mood" ? MOOD5 : ENERGY5, val, light, onSet: (v) => act.level(it.key, v) }));
-      }
-      if (it.kind === "sum") {
-        const done = live.summary;
-        return React.createElement("div", { key: "sum", className: pad, style: glass, "data-chao-item": "sum" }, done ? React.createElement(DoneMark, null, done) : React.createElement(React.Fragment, null, React.createElement("div", { className: `text-[13px] ${sub}` }, "Tóm tắt hôm nay"), React.createElement("form", { className: "flex gap-2 mt-2", onSubmit: (e) => {
-          e.preventDefault();
-          if (sum.trim()) act.summary(sum.trim());
-        } }, React.createElement("input", { type: "text", "aria-label": "Tóm tắt hôm nay", value: sum, onChange: (e) => setSum(e.target.value), className: inp + " flex-1 min-w-0", "data-chao-sum": true }), React.createElement("button", { type: "submit", disabled: !sum.trim(), className: "shrink-0 h-9 px-3.5 bg-accent text-onaccent font-semibold text-[14px] active:scale-95 disabled:opacity-50", "data-chao-save": "sum" }, "Lưu"))));
-      }
-      if (it.kind === "todo") {
-        const done = !!live.todoDone[it.id];
-        return React.createElement("button", { key: "t" + it.id, type: "button", onClick: () => act.todo(it.cat, it.id), "aria-pressed": done ? "true" : "false", className: `${pad} flex items-center gap-3 text-left w-full active:scale-[0.99] transition-transform`, style: glass, "data-chao-item": "todo", "data-chao-todo": it.id }, React.createElement("span", { className: `w-5 h-5 shrink-0 border-2 flex items-center justify-center ${done ? "bg-accent border-accent text-onaccent" : light ? "border-[#17142a]/40" : "border-white/40"}`, style: { borderRadius: "50%" } }, done && React.createElement(CheckIcon, { size: 12 })), React.createElement("span", { className: `min-w-0 ${it.big ? "text-[16px] font-semibold" : "text-[14px]"} ${done ? "line-through opacity-60" : ""}` }, it.text));
-      }
+      const k = keyOf(it), dn = isDone(it), cls = `cc-it ${it.big ? "big" : ""} ${dn ? "dn" : ""} ${gone[k] ? "gone" : ""}`;
+      const tick = React.createElement("span", { className: "cc-tk", "aria-hidden": "true" }, React.createElement(ChaoTick, null));
+      if (it.kind === "sleep") return React.createElement("div", { key: k, className: cls, "data-chao-item": "sleep" }, React.createElement("div", { className: "cc-lb" }, "Giờ ngủ đêm qua"), React.createElement("div", { className: "cc-sl" }, React.createElement("input", { type: "time", "aria-label": "Giờ ngủ", value: sl.s, onChange: (e) => setSl((v) => ({ ...v, s: e.target.value })), "data-chao-sleep": "s", disabled: dn }), React.createElement("i", { className: "cc-ar" }), React.createElement("input", { type: "time", "aria-label": "Giờ dậy", value: sl.w, onChange: (e) => setSl((v) => ({ ...v, w: e.target.value })), "data-chao-sleep": "w", disabled: dn }), dn ? tick : React.createElement("button", { type: "button", className: "cc-ok", "aria-label": "Lưu", disabled: !sl.s || !sl.w, onClick: () => act.sleep(sl.s, sl.w), "data-chao-save": "sleep" }, React.createElement(ChaoTick, null))));
+      if (it.kind === "mood" || it.kind === "energy") return React.createElement("div", { key: k, className: cls, "data-chao-item": it.key }, React.createElement("div", { className: "cc-lb" }, it.label, dn && tick), React.createElement(ChaoLevels, { list: it.kind === "mood" ? MOOD5 : ENERGY5, val: live.levels[it.key] || 0, onSet: (v) => act.level(it.key, v) }));
+      if (it.kind === "sum") return React.createElement("div", { key: k, className: cls, "data-chao-item": "sum" }, React.createElement("div", { className: "cc-lb" }, "Tóm tắt hôm nay"), React.createElement("form", { className: "cc-sm", onSubmit: (e) => {
+        e.preventDefault();
+        if (sum.trim()) act.summary(sum.trim());
+      } }, React.createElement("input", { type: "text", "aria-label": "Tóm tắt hôm nay", value: dn ? live.summary : sum, onChange: (e) => setSum(e.target.value), disabled: dn, "data-chao-sum": true }), dn ? tick : React.createElement("button", { type: "submit", className: "cc-ok", "aria-label": "Lưu", disabled: !sum.trim(), "data-chao-save": "sum" }, React.createElement(ChaoTick, null))));
+      if (it.kind === "todo") return React.createElement("button", { key: k, type: "button", className: cls + " cc-td", onClick: () => !dn && act.todo(it.cat, it.id), "aria-pressed": dn ? "true" : "false", "data-chao-item": "todo", "data-chao-todo": it.id }, React.createElement("span", { className: "cc-ck" }, dn && React.createElement(ChaoTick, null)), React.createElement("span", { className: "cc-tx" }, it.text));
       return null;
     };
     const pick = sky && selKey ? sky.find((d) => d.k === selKey) : null;
-    return React.createElement("div", { id: "cls-chao", className: revealed ? "lo" : "", "data-chao": c.khung, "data-cau": c.id, style: { color: ink }, onDoubleClick: (e) => {
-      if (!e.target.closest("button,input,form,[data-chao-sheet]")) onClose();
-    } }, night ? React.createElement(DaySky, { days: sky || [], mode: c.khung, selKey, onPick: setSelKey }) : React.createElement("div", { className: "sky", style: { background: c.skyBg }, dangerouslySetInnerHTML: { __html: c.sky || "" } }), React.createElement("div", { className: "dt" }, c.wd, " ", String(c.today || "").slice(0, 5)), React.createElement("div", { className: "col" }, React.createElement("div", { className: "gr" }, React.createElement("b", null, c.t), c.s ? React.createElement("span", null, c.s) : null), items.length > 0 && React.createElement("div", { className: "in flex flex-col gap-2 mt-6", "data-chao-items": true }, items.map(row)), React.createElement("div", { className: "flex-1 pointer-events-none", style: { pointerEvents: "none" } }), React.createElement("div", { className: "in flex gap-2.5", "data-chao-bottom": true }, pullHint && React.createElement("button", { type: "button", onClick: onPull, className: "h-12 px-5 font-semibold text-[15px] flex items-center gap-2 active:scale-[0.98]", style: glass, "data-chao-pull": true }, React.createElement(DownloadIcon, { size: 16 }), " Pull"), React.createElement("button", { type: "button", onClick: onClose, className: "flex-1 h-12 bg-accent text-onaccent font-semibold text-[15px] active:scale-[0.98] transition-transform", "data-chao-close": true }, "Vào app"))), pick && React.createElement("div", { className: "absolute left-0 right-0 bottom-0 px-[22px] pt-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))]", style: { background: "rgba(14,17,34,.94)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderTop: "1px solid #262B42", color: "#ECE8DF" }, "data-chao-sheet": pick.k }, React.createElement("div", { className: "max-w-[520px] mx-auto" }, React.createElement("div", { className: "flex items-baseline gap-2.5" }, React.createElement("span", { className: "font-num font-bold text-[22px]" }, pick.wd, " ", pick.k.slice(0, 5)), pick.mood && React.createElement("span", { className: "text-[14px] text-[#8D92AD]" }, pick.mood), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => setSelKey(null), className: "ml-auto w-8 h-8 flex items-center justify-center text-[#8D92AD]" }, React.createElement(XIcon, { size: 18 }))), pick.song && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.nhac, React.createElement("span", { className: "min-w-0 truncate" }, pick.song)), pick.chain > 0 && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.ngu, "Chuỗi ngủ đúng nhịp: ngày ", pick.ci, " / ", pick.chain), pick.photo && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.anh, "Có ảnh"), pick.wo && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.wo, "Có tập"), React.createElement("button", { type: "button", onClick: () => onOpenDay(pick.k), className: "mt-4 h-11 w-full bg-accent text-onaccent font-semibold text-[15px] active:scale-[0.98]", "data-chao-story": true }, "Mở story ngày này"))));
+    return React.createElement(
+      "div",
+      {
+        id: "cls-chao",
+        ref: rootRef,
+        className: `${revealed ? "lo" : ""} ${light ? "cc-light" : "cc-dark"}`,
+        "data-chao": c.khung,
+        "data-cau": c.id,
+        style: { color: ink },
+        onDoubleClick: (e) => {
+          if (!e.target.closest("button,input,form,[data-chao-sheet]")) leave();
+        }
+      },
+      night ? React.createElement(DaySky, { days: sky || [], mode: c.khung, selKey, onPick: setSelKey }) : React.createElement("div", { className: "sky", style: { background: c.skyBg }, dangerouslySetInnerHTML: { __html: c.sky || "" } }),
+      React.createElement("div", { className: "dt" }, c.wd, " ", String(c.today || "").slice(0, 5)),
+      React.createElement("div", { className: "col" }, React.createElement("div", { className: "gr" }, React.createElement("b", null, c.t)), items.length > 0 && React.createElement("div", { className: "in cc-list", "data-chao-items": true }, items.map(row)), React.createElement("div", { className: "flex-1", style: { pointerEvents: "none" } }), React.createElement("div", { className: "in cc-bot", "data-chao-bottom": true }, pullHint ? React.createElement("button", { type: "button", className: "cc-pull", onClick: () => leave(onPull), "data-chao-pull": true }, React.createElement(DownloadIcon, { size: 15 }), " Pull") : React.createElement("span", null), React.createElement("button", { type: "button", className: "cc-go", "aria-label": "Vào app", onClick: () => leave(), "data-chao-close": true }, React.createElement("svg", { viewBox: "0 0 24 24", width: "22", height: "22", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" }, React.createElement("path", { d: "M5 12h13M13 6l6 6-6 6" }))))),
+      pick && React.createElement("div", { className: "cc-sheet", "data-chao-sheet": pick.k }, React.createElement("div", { className: "max-w-[520px] mx-auto" }, React.createElement("div", { className: "flex items-baseline gap-2.5" }, React.createElement("span", { className: "font-num font-bold text-[22px]" }, pick.wd, " ", pick.k.slice(0, 5)), pick.mood && React.createElement("span", { className: "text-[14px] opacity-70" }, pick.mood), React.createElement("button", { type: "button", "aria-label": "Đóng", onClick: () => setSelKey(null), className: "ml-auto w-8 h-8 flex items-center justify-center opacity-70" }, React.createElement(XIcon, { size: 18 }))), pick.song && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.nhac, React.createElement("span", { className: "min-w-0 truncate" }, pick.song)), pick.chain > 0 && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.ngu, "Chuỗi ngủ đúng nhịp: ngày ", pick.ci, " / ", pick.chain), pick.photo && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.anh, "Có ảnh"), pick.wo && React.createElement("div", { className: "flex items-center gap-2 mt-2.5 text-[14.5px]" }, CHAO_IC.wo, "Có tập"), React.createElement("button", { type: "button", onClick: () => leave(() => onOpenDay(pick.k)), className: "cc-story", "data-chao-story": true }, "Mở story ngày này")))
+    );
   };
   const EAT_THEME = true;
   const msParse = (str) => {
