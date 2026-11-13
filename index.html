@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="854e365c13">
+    <meta name="cls-build" content="36bd832082">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -2883,6 +2883,176 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
+  const CLS_BAN = 188;
+  const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
+  const FB_V = "10.12.2";
+  const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top"];
+  const FB_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+  const FB_CHUNK = 8e5;
+  let fbMods = null;
+  const fbLoad = async () => {
+    if (fbMods) return fbMods;
+    const imp = new Function("u", "return import(u)");
+    const base = "https://www.gstatic.com/firebasejs/" + FB_V + "/";
+    const [A, U, F] = await Promise.all([imp(base + "firebase-app.js"), imp(base + "firebase-auth.js"), imp(base + "firebase-firestore.js")]);
+    const app = A.getApps().length ? A.getApp() : A.initializeApp(FB_CFG);
+    const auth = U.getAuth(app);
+    const db = F.getFirestore(app);
+    fbMods = { U, F, auth, db };
+    return fbMods;
+  };
+  const fbSplitKey = (key, raw) => {
+    const out = [];
+    const chunks = (id, str, k) => {
+      if (str.length <= FB_CHUNK) {
+        out.push({ id, k, j: str });
+        return;
+      }
+      for (let i = 0, n = 0; i < str.length; i += FB_CHUNK, n++) out.push({ id: id + "~" + n, k, j: str.slice(i, i + FB_CHUNK) });
+    };
+    let v;
+    try {
+      v = JSON.parse(raw);
+    } catch (e) {
+      chunks("_tat", JSON.stringify(raw));
+      return out;
+    }
+    const isMap = v && typeof v === "object" && !Array.isArray(v);
+    const ks = isMap ? Object.keys(v) : [];
+    const dk = ks.filter((k) => FB_DATE.test(k));
+    if (!isMap || !dk.length || dk.length < ks.length / 2) {
+      chunks("_tat", raw);
+      return out;
+    }
+    const rest = {};
+    ks.forEach((k) => {
+      const m = k.match(FB_DATE);
+      if (!m) {
+        rest[k] = v[k];
+        return;
+      }
+      const id = m[3] + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
+      const j = JSON.stringify(v[k]);
+      if (j.length > FB_CHUNK) chunks(id, j, k);
+      else out.push({ id, k, j });
+    });
+    if (Object.keys(rest).length) chunks("_khac", JSON.stringify(rest));
+    return out;
+  };
+  const fbJoinKey = (docs) => {
+    const byId = {};
+    docs.forEach((d) => {
+      byId[d.id] = d;
+    });
+    const whole = (id) => {
+      if (byId[id]) return byId[id].j;
+      const parts = Object.keys(byId).filter((x) => x.startsWith(id + "~")).sort((a, b) => +a.split("~")[1] - +b.split("~")[1]);
+      return parts.length ? parts.map((x) => byId[x].j).join("") : null;
+    };
+    const tat = whole("_tat");
+    if (tat !== null) return tat;
+    const obj = {};
+    const ids = new Set(Object.keys(byId).map((x) => x.split("~")[0]).filter((x) => x !== "_khac"));
+    ids.forEach((id) => {
+      const d = byId[id];
+      const j = whole(id);
+      const k = d ? d.k : (byId[id + "~0"] || {}).k;
+      obj[k] = JSON.parse(j);
+    });
+    const kh = whole("_khac");
+    if (kh !== null) Object.assign(obj, JSON.parse(kh));
+    return obj;
+  };
+  const fbSame = (a, b) => {
+    const norm = (x) => {
+      if (x && typeof x === "object" && !Array.isArray(x)) {
+        const o = {};
+        Object.keys(x).sort().forEach((k) => {
+          o[k] = norm(x[k]);
+        });
+        return o;
+      }
+      if (Array.isArray(x)) return x.map(norm);
+      return x;
+    };
+    return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+  };
+  const FirebaseBox = ({ showToast }) => {
+    const [user, setUser] = useState(null);
+    const [busy, setBusy] = useState("");
+    const [res, setRes] = useState("");
+    useEffect(() => {
+      let off = null, dead = false;
+      fbLoad().then(({ U, auth }) => {
+        if (dead) return;
+        off = U.onAuthStateChanged(auth, (u) => setUser(u ? { email: u.email, uid: u.uid } : null));
+      }).catch(() => setRes("Không tải được Firebase (mất mạng?)"));
+      return () => {
+        dead = true;
+        if (off) off();
+      };
+    }, []);
+    const login = async () => {
+      try {
+        const { U, auth } = await fbLoad();
+        await U.signInWithPopup(auth, new U.GoogleAuthProvider());
+      } catch (e) {
+        showToast("Đăng nhập lỗi: " + (e.code || e.message), "error");
+      }
+    };
+    const copy = async () => {
+      if (!user || busy) return;
+      setRes("");
+      setBusy("Đang chép...");
+      try {
+        const { F, db } = await fbLoad();
+        const t0 = Date.now();
+        const plan = [];
+        FB_KEYS.forEach((key) => {
+          const raw = localStorage.getItem(key);
+          if (raw === null) return;
+          fbSplitKey(key, raw).forEach((d) => plan.push({ key, d }));
+        });
+        for (let i = 0; i < plan.length; i += 400) {
+          const b = F.writeBatch(db);
+          plan.slice(i, i + 400).forEach(({ key, d }) => b.set(F.doc(db, "u", user.uid, "k", key, "d", d.id), { k: d.k || key, j: d.j, b: CLS_BAN, t: F.serverTimestamp() }));
+          await b.commit();
+          setBusy(`Đang chép ${Math.min(i + 400, plan.length)}/${plan.length}...`);
+        }
+        setBusy("Đang đọc lại để đối chiếu...");
+        const keys = [...new Set(plan.map((p) => p.key))];
+        const bad = [];
+        let nDays = 0;
+        for (const key of keys) {
+          const snap = await F.getDocsFromServer(F.collection(db, "u", user.uid, "k", key, "d"));
+          const docs = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+          nDays += docs.filter((x) => /^\d{4}-/.test(x.id)).length;
+          const back = fbJoinKey(docs);
+          const raw = localStorage.getItem(key);
+          let mine;
+          try {
+            mine = JSON.parse(raw);
+          } catch (e) {
+            mine = raw;
+          }
+          if (!fbSame(typeof back === "string" ? (() => {
+            try {
+              return JSON.parse(back);
+            } catch (e) {
+              return back;
+            }
+          })() : back, mine)) bad.push(key);
+        }
+        const sec = ((Date.now() - t0) / 1e3).toFixed(1);
+        setRes(bad.length ? `Lệch ${bad.length} mục: ${bad.join(", ")}` : `Khớp đủ ${keys.length} mục, ${nDays} thẻ ngày, ${plan.length} thẻ. ${sec} giây.`);
+        showToast(bad.length ? "Chép xong nhưng có mục lệch" : "Đã chép lên Firebase, đối chiếu khớp", bad.length ? "error" : "success");
+      } catch (e) {
+        setRes("Lỗi: " + (e.code || e.message));
+      }
+      setBusy("");
+    };
+    return React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line", "data-fb-box": true }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Firebase"), user ? React.createElement("p", { className: "text-sm text-ink", "data-fb-user": true }, user.email) : React.createElement("button", { type: "button", onClick: login, className: "w-full py-3 bg-card border border-line text-ink rounded-[2px] font-bold" }, "Đăng nhập Google"), user && React.createElement("button", { type: "button", onClick: copy, disabled: !!busy, className: "w-full mt-3 py-3 bg-accent text-onaccent rounded-[2px] font-bold disabled:opacity-50", "data-fb-copy": true }, busy || "Chép lên Firebase"), res && React.createElement("p", { className: "mt-2 text-xs text-sub", "data-fb-res": true }, res));
+  };
   const PlayerBar = ({ sp, markMs, canPin, onPin, place }) => {
     const [, setTick] = useState(0);
     const [drag, setDrag] = useState(null);
@@ -12116,7 +12286,7 @@ try {
     }, className: "w-full bg-transparent outline-none text-sm font-bold text-onaccent text-ink dark:[color-scheme:dark]", required: true })), React.createElement("div", { className: "flex-1 bg-groove/50 p-3.5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-1.5" }, "Đến ngày"), React.createElement("input", { type: "date", value: avgEndDate, onChange: (e) => {
       setAvgEndDate(e.target.value);
       setAvgPresetMode("custom");
-    }, className: "w-full bg-transparent outline-none text-sm font-bold text-onaccent text-ink dark:[color-scheme:dark]", required: true }))), React.createElement("button", { type: "submit", className: "w-full py-3.5 bg-accent hover:bg-accent text-onaccent font-bold rounded-[2px] active:scale-95 transition-all" }, "Tính Toán")), avgResult && React.createElement("div", { className: "bg-bg p-5 rounded-[2px] text-ink border-line animate-[fadeScale_0.2s_ease-out]" }, React.createElement("p", { className: "text-xs font-bold text-sub mb-4 border-b border-line pb-3 flex items-center justify-between" }, React.createElement("span", null, "Kết quả (", appMode === "macro" ? avgResult.mDays : avgResult.sDays, " ngày có dl)"), React.createElement(CheckCircleIcon, { size: 16, className: "text-accent" })), appMode === "macro" && React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-accent mb-1" }, "Kcal TB"), React.createElement("p", { className: "text-3xl font-bold text-accent" }, avgResult.kcal)), React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-bad mb-1" }, "Protein TB"), React.createElement("p", { className: "text-3xl font-bold text-bad" }, avgResult.pro, React.createElement("span", { className: "text-sm ml-1" }, "g")))), appMode === "sleep" && React.createElement("div", { className: "space-y-4" }, React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Ngủ lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.sleep)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Dậy lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.wake)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px] border border-line" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Thời lượng TB"), React.createElement("span", { className: "text-xl font-bold text-accent" }, formatDuration(avgResult.dur))))))), showSettings && React.createElement("div", { className: "fixed inset-0 z-[100] flex justify-center items-center p-4" }, React.createElement("div", { className: "absolute inset-0 bg-bg/60 backdrop-blur-sm modal-overlay", onClick: () => setShowSettings(false) }), React.createElement("div", { className: "bg-card w-full max-w-md rounded-[2px] p-6 transition-colors relative z-10 bottom-sheet" }, React.createElement("div", { className: "flex justify-between items-center mb-8" }, React.createElement("h2", { className: "font-bold text-ink flex items-center gap-3 tracking-tight" }, React.createElement("div", { className: "p-2 bg-accent/10 rounded-[2px]" }, React.createElement(CloudIcon, { className: "text-accent", size: 24 })), "Đồng bộ Dữ liệu"), React.createElement("button", { onClick: () => setShowSettings(false), className: "text-sub bg-groove p-2.5 rounded-[2px] hover:bg-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "space-y-6" }, React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Link Apps Script"), React.createElement("input", { type: "text", value: gasUrl, onChange: (e) => setGasUrl(e.target.value), placeholder: "https://script.google.com/macros/s/...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Mật mã đồng bộ"), React.createElement("div", { className: "relative" }, React.createElement("input", { type: showGasKey ? "text" : "password", value: gasKey, onChange: (e) => setGasKey(e.target.value), placeholder: "Giống mật mã đặt trong Apps Script", autoComplete: "off", spellCheck: false, className: "w-full bg-card border-line rounded-[2px] pl-4 pr-16 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" }), React.createElement("button", { type: "button", onClick: () => setShowGasKey((v) => !v), className: "absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-[2px] font-bold text-sub hover:bg-groove transition-all" }, showGasKey ? "Ẩn" : "Hiện"))), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 14, className: "text-accent" }), " Gemini API Key"), React.createElement("input", { type: "text", value: geminiApiKey, onChange: (e) => setGeminiApiKey(e.target.value), placeholder: "Nhập API Key để dùng AI...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement("div", { className: "grid grid-cols-2 gap-4 mt-2" }, React.createElement("button", { onClick: () => {
+    }, className: "w-full bg-transparent outline-none text-sm font-bold text-onaccent text-ink dark:[color-scheme:dark]", required: true }))), React.createElement("button", { type: "submit", className: "w-full py-3.5 bg-accent hover:bg-accent text-onaccent font-bold rounded-[2px] active:scale-95 transition-all" }, "Tính Toán")), avgResult && React.createElement("div", { className: "bg-bg p-5 rounded-[2px] text-ink border-line animate-[fadeScale_0.2s_ease-out]" }, React.createElement("p", { className: "text-xs font-bold text-sub mb-4 border-b border-line pb-3 flex items-center justify-between" }, React.createElement("span", null, "Kết quả (", appMode === "macro" ? avgResult.mDays : avgResult.sDays, " ngày có dl)"), React.createElement(CheckCircleIcon, { size: 16, className: "text-accent" })), appMode === "macro" && React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-accent mb-1" }, "Kcal TB"), React.createElement("p", { className: "text-3xl font-bold text-accent" }, avgResult.kcal)), React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-bad mb-1" }, "Protein TB"), React.createElement("p", { className: "text-3xl font-bold text-bad" }, avgResult.pro, React.createElement("span", { className: "text-sm ml-1" }, "g")))), appMode === "sleep" && React.createElement("div", { className: "space-y-4" }, React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Ngủ lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.sleep)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Dậy lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.wake)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px] border border-line" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Thời lượng TB"), React.createElement("span", { className: "text-xl font-bold text-accent" }, formatDuration(avgResult.dur))))))), showSettings && React.createElement("div", { className: "fixed inset-0 z-[100] flex justify-center items-center p-4" }, React.createElement("div", { className: "absolute inset-0 bg-bg/60 backdrop-blur-sm modal-overlay", onClick: () => setShowSettings(false) }), React.createElement("div", { className: "bg-card w-full max-w-md rounded-[2px] p-6 transition-colors relative z-10 bottom-sheet" }, React.createElement("div", { className: "flex justify-between items-center mb-8" }, React.createElement("h2", { className: "font-bold text-ink flex items-center gap-3 tracking-tight" }, React.createElement("div", { className: "p-2 bg-accent/10 rounded-[2px]" }, React.createElement(CloudIcon, { className: "text-accent", size: 24 })), "Đồng bộ Dữ liệu"), React.createElement("button", { onClick: () => setShowSettings(false), className: "text-sub bg-groove p-2.5 rounded-[2px] hover:bg-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "space-y-6" }, React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Link Apps Script"), React.createElement("input", { type: "text", value: gasUrl, onChange: (e) => setGasUrl(e.target.value), placeholder: "https://script.google.com/macros/s/...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Mật mã đồng bộ"), React.createElement("div", { className: "relative" }, React.createElement("input", { type: showGasKey ? "text" : "password", value: gasKey, onChange: (e) => setGasKey(e.target.value), placeholder: "Giống mật mã đặt trong Apps Script", autoComplete: "off", spellCheck: false, className: "w-full bg-card border-line rounded-[2px] pl-4 pr-16 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" }), React.createElement("button", { type: "button", onClick: () => setShowGasKey((v) => !v), className: "absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-[2px] font-bold text-sub hover:bg-groove transition-all" }, showGasKey ? "Ẩn" : "Hiện"))), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 14, className: "text-accent" }), " Gemini API Key"), React.createElement("input", { type: "text", value: geminiApiKey, onChange: (e) => setGeminiApiKey(e.target.value), placeholder: "Nhập API Key để dùng AI...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement(FirebaseBox, { showToast }), React.createElement("div", { className: "grid grid-cols-2 gap-4 mt-2" }, React.createElement("button", { onClick: () => {
       setIsAutoSyncEnabled(true);
       setHasUnsavedChanges(false);
       handleSyncPush(false);
