@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="9c056e9e19">
+    <meta name="cls-build" content="bea921ef89">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -2883,7 +2883,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 189;
+  const CLS_BAN = 190;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top"];
@@ -3323,6 +3323,7 @@ try {
       fbLs(FB_AUTO, v ? "1" : "0");
       if (v) fbAutoOn();
       else fbAutoOff();
+      fbTell();
     };
     useEffect(() => {
       let off = null, dead = false;
@@ -7708,7 +7709,27 @@ try {
     const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem("gemini_api_key") || defaultGeminiKey);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(false);
-    const [showPullReminder, setShowPullReminder] = useState(true);
+    const [showPullReminder0, setShowPullReminder] = useState(true);
+    const [fbAutoApp, setFbAutoApp] = useState(() => {
+      try {
+        return localStorage.getItem(FB_AUTO) === "1";
+      } catch (e) {
+        return false;
+      }
+    });
+    useEffect(() => {
+      const f = () => {
+        try {
+          setFbAutoApp(localStorage.getItem(FB_AUTO) === "1");
+        } catch (e) {
+        }
+      };
+      fbS.subs.add(f);
+      return () => {
+        fbS.subs.delete(f);
+      };
+    }, []);
+    const showPullReminder = showPullReminder0 && !fbAutoApp;
     const isPullingRef = useRef(false);
     const skipNextAutoPushRef = useRef(false);
     const [syncRing, setSyncRing] = useState({ active: false, mode: "push", progress: 0 });
@@ -11154,20 +11175,6 @@ try {
         setCurrentView("day");
       } })),
       document.body
-    ), React.createElement(
-      "button",
-      {
-        onClick: () => {
-          const nextState = !isAutoSyncEnabled;
-          if (nextState) skipNextAutoPushRef.current = true;
-          setIsAutoSyncEnabled(nextState);
-          if (nextState) setHasUnsavedChanges(false);
-          showToast(nextState ? "Đã bật sao lưu tự động!" : "Đã tắt sao lưu tự động!", "success");
-        },
-        className: `w-9 h-9 transition-all active:scale-90 flex items-center justify-center ${isAutoSyncEnabled ? "text-accent cls-glow-svg" : "text-sub hover:text-ink"}`,
-        title: isAutoSyncEnabled ? "Đang bật Sao lưu tự động (Bấm để tắt)" : "Bấm để bật Sao lưu tự động"
-      },
-      React.createElement(DownloadIcon, { size: 18 })
     ), React.createElement("button", { onClick: () => setShowSettings(true), "aria-label": "Đồng bộ", className: `relative w-9 h-9 transition-all active:scale-90 flex items-center justify-center ${syncRing.active ? "text-accent" : "text-sub hover:text-ink"}` }, syncRing.active && React.createElement("svg", { className: "absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] -rotate-90 pointer-events-none", viewBox: "0 0 44 44" }, React.createElement("circle", { cx: "22", cy: "22", r: "19", fill: "none", stroke: "currentColor", strokeWidth: "2.5", className: "opacity-20" }), React.createElement(
       "circle",
       {
@@ -11208,30 +11215,7 @@ try {
         title: "Đóng"
       },
       React.createElement(XIcon, { size: 14 })
-    )))), hasUnsavedChanges && !isAutoSyncEnabled && React.createElement("div", { className: "shrink-0 z-30 border-b border-line pl-4 pr-2 h-[42px] flex justify-center" }, React.createElement("div", { className: `${isWide ? "max-w-full 2xl:max-w-[1680px]" : isDesktopMode ? "max-w-[96vw] 2xl:max-w-[1680px]" : "max-w-full"} w-full flex items-center justify-between gap-2.5` }, React.createElement("div", { className: "flex items-center gap-2 min-w-0" }, React.createElement("span", { className: "w-1.5 h-1.5 rounded-full bg-accent cls-glow shrink-0" }), React.createElement("span", { className: "text-[13px] text-sub truncate" }, "Chưa bật sao lưu tự động")), React.createElement("div", { className: "flex items-center gap-1.5 shrink-0" }, React.createElement(
-      "button",
-      {
-        type: "button",
-        onClick: () => {
-          skipNextAutoPushRef.current = true;
-          setIsAutoSyncEnabled(true);
-          setHasUnsavedChanges(false);
-          handleSyncPush(false);
-        },
-        className: "h-[26px] px-3 rounded-[2px] bg-accent text-onaccent text-[13px] font-semibold cls-glow active:scale-95 transition-all flex items-center gap-1.5"
-      },
-      React.createElement(UploadIcon, { size: 12 }),
-      " Lưu lên Sheet ngay"
-    ), React.createElement(
-      "button",
-      {
-        type: "button",
-        onClick: () => setHasUnsavedChanges(false),
-        className: "w-[30px] h-[30px] flex items-center justify-center text-sub hover:text-ink active:scale-90 transition-all",
-        title: "Ẩn tạm"
-      },
-      React.createElement(XIcon, { size: 14 })
-    )))), (appMode === "journal" || appMode === "stat") && React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark, place: "top" }), React.createElement(
+    )))), false, (appMode === "journal" || appMode === "stat") && React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark, place: "top" }), React.createElement(
       "main",
       {
         className: "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col",
@@ -12678,7 +12662,6 @@ try {
       setAvgEndDate(e.target.value);
       setAvgPresetMode("custom");
     }, className: "w-full bg-transparent outline-none text-sm font-bold text-onaccent text-ink dark:[color-scheme:dark]", required: true }))), React.createElement("button", { type: "submit", className: "w-full py-3.5 bg-accent hover:bg-accent text-onaccent font-bold rounded-[2px] active:scale-95 transition-all" }, "Tính Toán")), avgResult && React.createElement("div", { className: "bg-bg p-5 rounded-[2px] text-ink border-line animate-[fadeScale_0.2s_ease-out]" }, React.createElement("p", { className: "text-xs font-bold text-sub mb-4 border-b border-line pb-3 flex items-center justify-between" }, React.createElement("span", null, "Kết quả (", appMode === "macro" ? avgResult.mDays : avgResult.sDays, " ngày có dl)"), React.createElement(CheckCircleIcon, { size: 16, className: "text-accent" })), appMode === "macro" && React.createElement("div", { className: "grid grid-cols-2 gap-4" }, React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-accent mb-1" }, "Kcal TB"), React.createElement("p", { className: "text-3xl font-bold text-accent" }, avgResult.kcal)), React.createElement("div", null, React.createElement("p", { className: "text-[10px] font-bold text-bad mb-1" }, "Protein TB"), React.createElement("p", { className: "text-3xl font-bold text-bad" }, avgResult.pro, React.createElement("span", { className: "text-sm ml-1" }, "g")))), appMode === "sleep" && React.createElement("div", { className: "space-y-4" }, React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Ngủ lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.sleep)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px]" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Dậy lúc"), React.createElement("span", { className: "text-xl font-bold text-accent" }, avgResult.wake)), React.createElement("div", { className: "flex justify-between items-center bg-ink/5 p-3 rounded-[2px] border border-line" }, React.createElement("span", { className: "text-[11px] font-bold text-sub" }, "Thời lượng TB"), React.createElement("span", { className: "text-xl font-bold text-accent" }, formatDuration(avgResult.dur))))))), showSettings && React.createElement("div", { className: "fixed inset-0 z-[100] flex justify-center items-center p-4" }, React.createElement("div", { className: "absolute inset-0 bg-bg/60 backdrop-blur-sm modal-overlay", onClick: () => setShowSettings(false) }), React.createElement("div", { className: "bg-card w-full max-w-md rounded-[2px] p-6 transition-colors relative z-10 bottom-sheet" }, React.createElement("div", { className: "flex justify-between items-center mb-8" }, React.createElement("h2", { className: "font-bold text-ink flex items-center gap-3 tracking-tight" }, React.createElement("div", { className: "p-2 bg-accent/10 rounded-[2px]" }, React.createElement(CloudIcon, { className: "text-accent", size: 24 })), "Đồng bộ Dữ liệu"), React.createElement("button", { onClick: () => setShowSettings(false), className: "text-sub bg-groove p-2.5 rounded-[2px] hover:bg-line transition-all active:scale-90" }, React.createElement(XIcon, { size: 20 }))), React.createElement("div", { className: "space-y-6" }, React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Link Apps Script"), React.createElement("input", { type: "text", value: gasUrl, onChange: (e) => setGasUrl(e.target.value), placeholder: "https://script.google.com/macros/s/...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Mật mã đồng bộ"), React.createElement("div", { className: "relative" }, React.createElement("input", { type: showGasKey ? "text" : "password", value: gasKey, onChange: (e) => setGasKey(e.target.value), placeholder: "Giống mật mã đặt trong Apps Script", autoComplete: "off", spellCheck: false, className: "w-full bg-card border-line rounded-[2px] pl-4 pr-16 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" }), React.createElement("button", { type: "button", onClick: () => setShowGasKey((v) => !v), className: "absolute right-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-[2px] font-bold text-sub hover:bg-groove transition-all" }, showGasKey ? "Ẩn" : "Hiện"))), React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line" }, React.createElement("label", { className: "block font-bold text-sub mb-3 flex items-center gap-1.5" }, React.createElement(SparklesIcon, { size: 14, className: "text-accent" }), " Gemini API Key"), React.createElement("input", { type: "text", value: geminiApiKey, onChange: (e) => setGeminiApiKey(e.target.value), placeholder: "Nhập API Key để dùng AI...", className: "w-full bg-card border-line rounded-[2px] px-4 py-3.5 outline-none focus:border-accent/40 focus:ring-4 focus:ring-accent font-semibold text-ink transition-all" })), React.createElement(FirebaseBox, { showToast }), React.createElement("div", { className: "grid grid-cols-2 gap-4 mt-2" }, React.createElement("button", { onClick: () => {
-      setIsAutoSyncEnabled(true);
       setHasUnsavedChanges(false);
       handleSyncPush(false);
     }, disabled: isSyncing, className: "py-4 bg-accent hover:bg-accent text-onaccent rounded-[2px] font-bold flex flex-col items-center justify-center gap-1 disabled:opacity-50 transition-all active:scale-95" }, React.createElement(UploadIcon, { size: 24, className: "mb-1" }), React.createElement("span", { className: "text-xs" }, "Đẩy lên Sheet")), React.createElement("button", { onClick: () => {
