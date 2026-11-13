@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="36bd832082">
+    <meta name="cls-build" content="9c056e9e19">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -2883,7 +2883,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 188;
+  const CLS_BAN = 189;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top"];
@@ -2897,7 +2897,12 @@ try {
     const [A, U, F] = await Promise.all([imp(base + "firebase-app.js"), imp(base + "firebase-auth.js"), imp(base + "firebase-firestore.js")]);
     const app = A.getApps().length ? A.getApp() : A.initializeApp(FB_CFG);
     const auth = U.getAuth(app);
-    const db = F.getFirestore(app);
+    let db;
+    try {
+      db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) });
+    } catch (e) {
+      db = F.getFirestore(app);
+    }
     fbMods = { U, F, auth, db };
     return fbMods;
   };
@@ -2915,6 +2920,9 @@ try {
       v = JSON.parse(raw);
     } catch (e) {
       chunks("_tat", JSON.stringify(raw));
+      out.forEach((d) => {
+        d.s = 1;
+      });
       return out;
     }
     const isMap = v && typeof v === "object" && !Array.isArray(v);
@@ -2977,10 +2985,345 @@ try {
     };
     return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
   };
+  const FB_AUTO = "cls_fb_auto", FB_LAST = "cls_fb_last", FB_DIRTY = "cls_fb_dirty";
+  const FB_RAW = ["work_scratchpad", "work_focus_task"];
+  const fbS = { on: false, uid: null, base: {}, dirty: /* @__PURE__ */ new Set(), unack: {}, timer: 0, blocked: false, offs: [], applying: false, subs: /* @__PURE__ */ new Set(), st: "", q: Promise.resolve() };
+  const fbTell = () => fbS.subs.forEach((f) => {
+    try {
+      f();
+    } catch (e) {
+    }
+  });
+  const fbRawSet = Storage.prototype.setItem, fbRawDel = Storage.prototype.removeItem;
+  const fbLs = (k, v) => {
+    try {
+      fbRawSet.call(window.localStorage, k, v);
+    } catch (e) {
+    }
+  };
+  const fbMap = (key, raw) => {
+    const m = {};
+    if (raw === null || raw === void 0) return m;
+    fbSplitKey(key, raw).forEach((d) => {
+      m[d.id] = d;
+    });
+    return m;
+  };
+  const fbDayId = (k) => {
+    const m = String(k).match(FB_DATE);
+    return m ? m[3] + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0") : null;
+  };
+  const fbSaveDirty = () => fbLs(FB_DIRTY, JSON.stringify([...fbS.dirty]));
+  const fbKick = () => {
+    clearTimeout(fbS.timer);
+    fbS.timer = setTimeout(() => {
+      fbFlush();
+    }, 600);
+  };
+  const fbIsLs = (o) => {
+    try {
+      return o === window.localStorage;
+    } catch (e) {
+      return false;
+    }
+  };
+  Storage.prototype.setItem = function(k, v) {
+    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && fbIsLs(this);
+    const old = watch && !fbS.base[k] ? this.getItem(k) : null;
+    fbRawSet.call(this, k, v);
+    if (!watch) return;
+    if (!fbS.base[k]) fbS.base[k] = fbMap(k, old);
+    fbS.dirty.add(k);
+    fbSaveDirty();
+    fbKick();
+  };
+  Storage.prototype.removeItem = function(k) {
+    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && fbIsLs(this);
+    const old = watch && !fbS.base[k] ? this.getItem(k) : null;
+    fbRawDel.call(this, k);
+    if (!watch) return;
+    if (!fbS.base[k]) fbS.base[k] = fbMap(k, old);
+    fbS.dirty.add(k);
+    fbSaveDirty();
+    fbKick();
+  };
+  const fbFlush = async () => {
+    clearTimeout(fbS.timer);
+    if (!fbS.on || fbS.blocked || !fbS.uid || !fbS.dirty.size || !fbMods) return;
+    const { F, db } = fbMods, uid = fbS.uid;
+    const keys = [...fbS.dirty];
+    fbS.dirty.clear();
+    const ops = [];
+    for (const key of keys) {
+      let base = fbS.base[key];
+      if (!base) {
+        base = {};
+        try {
+          const sn = await F.getDocsFromCache(F.collection(db, "u", uid, "k", key, "d"));
+          sn.docs.forEach((x) => {
+            const d = x.data();
+            if (!d.x) base[x.id] = { id: x.id, k: d.k, j: d.j };
+          });
+        } catch (e) {
+        }
+      }
+      const now = fbMap(key, localStorage.getItem(key));
+      Object.keys(now).forEach((id) => {
+        const b = base[id];
+        if (!b || b.j !== now[id].j) ops.push({ key, id, data: { k: now[id].k || key, j: now[id].j, ...now[id].s ? { s: 1 } : {} } });
+      });
+      Object.keys(base).forEach((id) => {
+        if (!now[id]) ops.push({ key, id, data: { k: base[id].k || key, j: "", x: 1 } });
+      });
+      fbS.base[key] = now;
+    }
+    fbSaveDirty();
+    for (let i = 0; i < ops.length; i += 400) {
+      const part = ops.slice(i, i + 400), b = F.writeBatch(db);
+      part.forEach((o) => {
+        fbS.unack[o.key + "/" + o.id] = o.data.j;
+        b.set(F.doc(db, "u", uid, "k", o.key, "d", o.id), { ...o.data, b: CLS_BAN, t: F.serverTimestamp() });
+      });
+      b.commit().then(() => {
+        part.forEach((o) => {
+          if (fbS.unack[o.key + "/" + o.id] === o.data.j) delete fbS.unack[o.key + "/" + o.id];
+        });
+        if (fbS.st) {
+          fbS.st = "";
+          fbTell();
+        }
+      }).catch((e) => {
+        part.forEach((o) => {
+          delete fbS.unack[o.key + "/" + o.id];
+          if (fbS.base[o.key]) delete fbS.base[o.key][o.id];
+          fbS.dirty.add(o.key);
+        });
+        fbSaveDirty();
+        fbS.st = "Kho từ chối ghi: " + (e.code || e.message);
+        fbTell();
+      });
+    }
+  };
+  const fbApply = async (key, docs) => {
+    const raw0 = localStorage.getItem(key);
+    const base = fbS.base[key] || (fbS.base[key] = fbMap(key, raw0));
+    const loc = fbS.dirty.has(key) ? fbMap(key, raw0) : null;
+    const take = docs.filter((d) => {
+      if (fbS.unack[key + "/" + d.id] !== void 0) return false;
+      const bj = base[d.id] ? base[d.id].j : null;
+      if (loc && (loc[d.id] ? loc[d.id].j : null) !== bj) return false;
+      if (d.x ? bj === null : bj === d.j) return false;
+      return true;
+    });
+    if (!take.length) return;
+    const { F, db } = fbMods;
+    const pieces = {};
+    for (const d of take) {
+      if (!d.id.includes("~")) continue;
+      const id0 = d.id.split("~")[0];
+      if (pieces[id0]) continue;
+      const sn = await F.getDocs(F.collection(db, "u", fbS.uid, "k", key, "d"));
+      const ps = sn.docs.filter((x) => x.id.startsWith(id0 + "~")).map((x) => ({ id: x.id, ...x.data() })).sort((a, b) => +a.id.split("~")[1] - +b.id.split("~")[1]);
+      pieces[id0] = { k: ps.length ? ps[0].k : key, j: ps.filter((p) => !p.x).map((p) => p.j).join(""), s: ps.some((p) => p.s), x: !ps.some((p) => !p.x) };
+    }
+    const all = take.filter((d) => !d.id.includes("~")).concat(Object.keys(pieces).map((id) => ({ id, ...pieces[id] })));
+    let raw = raw0;
+    const tat = all.find((d) => d.id === "_tat");
+    if (tat) {
+      if (tat.x) raw = null;
+      else if (tat.s) {
+        try {
+          raw = JSON.parse(tat.j);
+        } catch (e) {
+          raw = tat.j;
+        }
+      } else if (FB_RAW.includes(key)) {
+        try {
+          const v = JSON.parse(tat.j);
+          raw = typeof v === "string" ? v : tat.j;
+        } catch (e) {
+          raw = tat.j;
+        }
+      } else raw = tat.j;
+    } else {
+      let obj;
+      try {
+        obj = JSON.parse(raw0 || "{}");
+      } catch (e) {
+        obj = {};
+      }
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) obj = {};
+      all.forEach((d) => {
+        if (d.id === "_khac") {
+          Object.keys(obj).forEach((k) => {
+            if (!fbDayId(k)) delete obj[k];
+          });
+          if (!d.x) Object.assign(obj, JSON.parse(d.j));
+          return;
+        }
+        Object.keys(obj).forEach((k) => {
+          if (fbDayId(k) === d.id) delete obj[k];
+        });
+        if (!d.x) obj[d.k] = JSON.parse(d.j);
+      });
+      raw = JSON.stringify(obj);
+    }
+    all.forEach((d) => {
+      if (d.x) delete base[d.id];
+      else base[d.id] = { id: d.id, k: d.k, j: d.j };
+    });
+    if (raw === raw0) return;
+    fbS.applying = true;
+    try {
+      if (raw === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, raw);
+    } catch (e) {
+    }
+    fbS.applying = false;
+    if (window.__clsFbReload) window.__clsFbReload(key);
+  };
+  const fbOldBar = (show) => {
+    const old = document.getElementById("cls-fb-old");
+    if (!show) {
+      if (old) old.remove();
+      return;
+    }
+    if (old) return;
+    const bar = document.createElement("div");
+    bar.id = "cls-fb-old";
+    bar.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 16px;border-radius:999px;background:rgba(24,24,27,0.96);border:1px solid rgba(255,255,255,0.12);box-shadow:0 10px 30px rgba(0,0,0,0.45);font:600 13px "Plus Jakarta Sans",Inter,sans-serif;color:#f4f4f5;white-space:nowrap';
+    bar.innerHTML = '<span>Có bản mới</span><button type="button" style="border:0;background:#fafafa;color:#09090b;font-family:inherit;font-weight:800;font-size:12px;padding:7px 14px;border-radius:999px;cursor:pointer">Cập nhật</button>';
+    bar.querySelector("button").onclick = () => location.reload();
+    document.body.appendChild(bar);
+  };
+  const fbStop = () => {
+    fbS.offs.forEach((f) => {
+      try {
+        f();
+      } catch (e) {
+      }
+    });
+    fbS.offs = [];
+    fbS.on = false;
+    fbS.uid = null;
+    fbS.base = {};
+    fbS.blocked = false;
+    fbOldBar(false);
+    clearTimeout(fbS.timer);
+    fbTell();
+  };
+  const fbRun = (uid) => {
+    const { F, db } = fbMods;
+    fbS.on = true;
+    fbS.uid = uid;
+    fbS.base = {};
+    fbS.st = "";
+    try {
+      JSON.parse(localStorage.getItem(FB_DIRTY) || "[]").forEach((k) => {
+        if (FB_KEYS.includes(k)) fbS.dirty.add(k);
+      });
+    } catch (e) {
+    }
+    const cref = F.doc(db, "u", uid, "config", "app");
+    fbS.offs.push(F.onSnapshot(cref, (sn) => {
+      const mb = sn.exists() ? Number(sn.data().minBan) || 0 : 0;
+      fbS.blocked = mb > CLS_BAN;
+      if (mb < CLS_BAN && !sn.metadata.hasPendingWrites) F.setDoc(cref, { minBan: CLS_BAN }, { merge: true }).catch(() => {
+      });
+      fbOldBar(fbS.blocked);
+      fbTell();
+      if (!fbS.blocked && fbS.dirty.size) fbKick();
+    }, () => {
+    }));
+    const last = Number(localStorage.getItem(FB_LAST)) || 0;
+    FB_KEYS.forEach((key) => {
+      const q = F.query(F.collection(db, "u", uid, "k", key, "d"), F.where("t", ">", F.Timestamp.fromMillis(last)));
+      fbS.offs.push(F.onSnapshot(q, (sn) => {
+        const docs = [];
+        let mx = 0;
+        sn.docChanges().forEach((ch) => {
+          if (ch.type === "removed" || ch.doc.metadata.hasPendingWrites) return;
+          const x = ch.doc.data();
+          const t = x.t && x.t.toMillis ? x.t.toMillis() : 0;
+          if (t > mx) mx = t;
+          docs.push({ id: ch.doc.id, ...x });
+        });
+        if (!docs.length) return;
+        fbS.q = fbS.q.then(() => fbS.on && fbS.uid === uid ? fbApply(key, docs) : null).catch(() => {
+        }).then(() => {
+          if (mx > (Number(localStorage.getItem(FB_LAST)) || 0)) fbLs(FB_LAST, String(mx));
+        });
+      }, (e) => {
+        fbS.st = "Lỗi nghe kho: " + (e.code || e.message);
+        fbTell();
+      }));
+    });
+    fbTell();
+  };
+  let fbAuthOff = null;
+  const fbAutoOn = async () => {
+    if (fbAuthOff) return;
+    try {
+      await fbLoad();
+    } catch (e) {
+      fbS.st = "Không tải được Firebase";
+      fbTell();
+      return;
+    }
+    const { U, auth } = fbMods;
+    fbAuthOff = U.onAuthStateChanged(auth, (u) => {
+      if (fbS.on) fbStop();
+      if (u) fbRun(u.uid);
+      else {
+        fbS.st = "Chưa đăng nhập";
+        fbTell();
+      }
+    });
+  };
+  const fbAutoOff = () => {
+    if (fbAuthOff) {
+      fbAuthOff();
+      fbAuthOff = null;
+    }
+    fbFlush();
+    fbStop();
+  };
+  try {
+    window.addEventListener("pagehide", () => {
+      fbFlush();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) fbFlush();
+    });
+    if (localStorage.getItem(FB_AUTO) === "1") setTimeout(fbAutoOn, 1200);
+  } catch (e) {
+  }
   const FirebaseBox = ({ showToast }) => {
     const [user, setUser] = useState(null);
     const [busy, setBusy] = useState("");
     const [res, setRes] = useState("");
+    const [auto, setAuto] = useState(() => {
+      try {
+        return localStorage.getItem(FB_AUTO) === "1";
+      } catch (e) {
+        return false;
+      }
+    });
+    const [, fbTick] = useState(0);
+    useEffect(() => {
+      const f = () => fbTick((x) => x + 1);
+      fbS.subs.add(f);
+      return () => {
+        fbS.subs.delete(f);
+      };
+    }, []);
+    const toggleAuto = () => {
+      const v = !auto;
+      setAuto(v);
+      fbLs(FB_AUTO, v ? "1" : "0");
+      if (v) fbAutoOn();
+      else fbAutoOff();
+    };
     useEffect(() => {
       let off = null, dead = false;
       fbLoad().then(({ U, auth }) => {
@@ -3044,6 +3387,10 @@ try {
           })() : back, mine)) bad.push(key);
         }
         const sec = ((Date.now() - t0) / 1e3).toFixed(1);
+        if (!bad.length) {
+          fbLs(FB_LAST, String(t0));
+          fbS.base = {};
+        }
         setRes(bad.length ? `Lệch ${bad.length} mục: ${bad.join(", ")}` : `Khớp đủ ${keys.length} mục, ${nDays} thẻ ngày, ${plan.length} thẻ. ${sec} giây.`);
         showToast(bad.length ? "Chép xong nhưng có mục lệch" : "Đã chép lên Firebase, đối chiếu khớp", bad.length ? "error" : "success");
       } catch (e) {
@@ -3051,7 +3398,7 @@ try {
       }
       setBusy("");
     };
-    return React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line", "data-fb-box": true }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Firebase"), user ? React.createElement("p", { className: "text-sm text-ink", "data-fb-user": true }, user.email) : React.createElement("button", { type: "button", onClick: login, className: "w-full py-3 bg-card border border-line text-ink rounded-[2px] font-bold" }, "Đăng nhập Google"), user && React.createElement("button", { type: "button", onClick: copy, disabled: !!busy, className: "w-full mt-3 py-3 bg-accent text-onaccent rounded-[2px] font-bold disabled:opacity-50", "data-fb-copy": true }, busy || "Chép lên Firebase"), res && React.createElement("p", { className: "mt-2 text-xs text-sub", "data-fb-res": true }, res));
+    return React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line", "data-fb-box": true }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Firebase"), user ? React.createElement("p", { className: "text-sm text-ink", "data-fb-user": true }, user.email) : React.createElement("button", { type: "button", onClick: login, className: "w-full py-3 bg-card border border-line text-ink rounded-[2px] font-bold" }, "Đăng nhập Google"), user && React.createElement("button", { type: "button", onClick: copy, disabled: !!busy, className: "w-full mt-3 py-3 bg-accent text-onaccent rounded-[2px] font-bold disabled:opacity-50", "data-fb-copy": true }, busy || "Chép lên Firebase"), user && React.createElement("button", { type: "button", onClick: toggleAuto, className: `w-full mt-3 py-3 rounded-[2px] font-bold border ${auto ? "bg-accent text-onaccent border-accent" : "bg-card text-ink border-line"}`, "data-fb-auto": auto ? "1" : "0" }, "Tự đồng bộ: ", auto ? "Bật" : "Tắt"), (res || auto && fbS.st) && React.createElement("p", { className: "mt-2 text-xs text-sub", "data-fb-res": true }, res || fbS.st));
   };
   const PlayerBar = ({ sp, markMs, canPin, onPin, place }) => {
     const [, setTick] = useState(0);
@@ -8272,6 +8619,50 @@ try {
     useEffect(() => {
       localStorage.setItem("work_todos", JSON.stringify(todoCache));
     }, [todoCache]);
+    useEffect(() => {
+      const J = (k) => loadSafeJSON(k);
+      const RL = {
+        macro_foods: () => setFoodsByDate(J("macro_foods")),
+        macro_stats: () => setStatsByDate(J("macro_stats")),
+        macro_sleeps: () => setSleepByDate(J("macro_sleeps")),
+        macro_naps: () => setNapByDate(J("macro_naps")),
+        macro_sleep_notes: () => setSleepNotesByDate(J("macro_sleep_notes")),
+        macro_meal_stars: () => setMealStarsByDate(J("macro_meal_stars")),
+        macro_meal_photos: () => setMealPhotosByDate(J("macro_meal_photos")),
+        macro_meal_notes: () => setMealNotesByDate(J("macro_meal_notes")),
+        macro_meal_desc: () => setMealDescByDate(J("macro_meal_desc")),
+        macro_dish_photos: () => setDishPhotosByDate(J("macro_dish_photos")),
+        macro_cardio: () => setCardioByDate(J("macro_cardio")),
+        macro_workouts: () => setWorkoutsByDate(J("macro_workouts")),
+        workout_templates: () => setWorkoutTemplates(J("workout_templates")),
+        work_todos: () => setTodoCacheRaw(J("work_todos")),
+        work_urgents: () => {
+          try {
+            setUrgentList(JSON.parse(localStorage.getItem("work_urgents") || "[]"));
+          } catch (e) {
+          }
+        },
+        work_basket: () => {
+          try {
+            const v = JSON.parse(localStorage.getItem("work_basket") || "[]");
+            setWorkBasket(Array.isArray(v) ? v.map(normBasketItem) : []);
+          } catch (e) {
+          }
+        },
+        work_scratchpad: () => setScratchpad(localStorage.getItem("work_scratchpad") || ""),
+        work_focus_task: () => setFocusTaskId(localStorage.getItem("work_focus_task") || null),
+        story_by_date: () => setStories(J("story_by_date")),
+        story_kho: () => setStoryKho(loadArr("story_kho")),
+        story_mau: () => setStoryMau(loadArr("story_mau")),
+        day_music_top: () => setDayMusic(J("day_music_top"))
+      };
+      window.__clsFbReload = (k) => {
+        if (RL[k]) RL[k]();
+      };
+      return () => {
+        window.__clsFbReload = null;
+      };
+    }, []);
     useEffect(() => {
       localStorage.setItem("work_urgents", JSON.stringify(urgentList));
     }, [urgentList]);
