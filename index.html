@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="56f4b8005b">
+    <meta name="cls-build" content="fdbaa85bc2">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -1987,8 +1987,13 @@ try {
         return false;
       }
     })();
-    if (spMobile) st.sdkBroken = true;
-    let seq = 0, warmed = false, connP = null, pendingPlay = null;
+    let sdkFailAt = 0;
+    const sdkOk = () => !st.sdkBroken || Date.now() - sdkFailAt > 3e4;
+    const sdkFail = () => {
+      st.sdkBroken = true;
+      sdkFailAt = Date.now();
+    };
+    let seq = 0, warmed = false, connP = null, newAt = 0;
     const subs = /* @__PURE__ */ new Set();
     const snap = () => ({
       playingTrack: st.playingTrack,
@@ -2166,6 +2171,7 @@ try {
     const fromSdk = (s) => ({ paused: !!s.paused, pos: s.position, dur: s.duration, item: trackItem(s.track_window && s.track_window.current_track) });
     const fromApi = (j) => ({ paused: !j.is_playing, pos: j.progress_ms, dur: j.item && j.item.duration_ms, item: trackItem(j.item) });
     const applyState = (o) => {
+      if (!o && Date.now() - newAt < 3e3) return;
       if (!o) {
         if (!st.paused) {
           st.pos = position();
@@ -2175,6 +2181,7 @@ try {
         emit();
         return;
       }
+      if (o.item && o.item.id && st.playingTrack && o.item.id !== st.playingTrack && Date.now() - newAt < 3e3) return;
       st.paused = !!o.paused;
       setPos(o.pos);
       if (o.dur) st.dur = Number(o.dur) || 0;
@@ -2230,6 +2237,7 @@ try {
       st.playingTrack = trackId;
       st.paused = false;
       st.closed = false;
+      newAt = Date.now();
       emit();
       try {
         return await play0(trackId, opt, my);
@@ -2249,6 +2257,7 @@ try {
       const body = startMs ? { uris: [uri], position_ms: startMs } : { uris: [uri] };
       const started = (mode) => {
         if (my !== seq) return "cu";
+        newAt = Date.now();
         const m = spotifyMetaCache[trackId];
         Object.assign(st, {
           mode,
@@ -2266,7 +2275,7 @@ try {
         pollT = setTimeout(refresh, 1200);
         return mode;
       };
-      if (!st.sdkBroken) {
+      if (sdkOk()) {
         try {
           const dev = await connectSdk();
           if (my !== seq) return "cu";
@@ -2282,7 +2291,7 @@ try {
           return started("sdk");
         } catch (e) {
           if (e && e.message === "chưa đăng nhập") throw e;
-          st.sdkBroken = true;
+          sdkFail();
         }
       }
       if (my !== seq) return "cu";
@@ -2303,19 +2312,7 @@ try {
       const d = await api("GET", "/me/player/devices");
       const devs = (d.devices || []).filter((x) => !x.is_restricted);
       const pick = devs.find((x) => x.is_active) || devs.find((x) => /smartphone|computer|tablet/i.test(x.type || "")) || devs[0];
-      if (!pick) {
-        if (spMobile && !o.noDeep) {
-          pendingPlay = { trackId, opt: o, at: Date.now() };
-          try {
-            window.location.href = "spotify:track:" + trackId + ":play";
-          } catch (x) {
-          }
-          const e2 = new Error("mở app Spotify");
-          e2.deeplink = true;
-          throw e2;
-        }
-        throw new Error("không có máy nào đang mở Spotify");
-      }
+      if (!pick) throw new Error("không có máy nào đang mở Spotify");
       if (my !== seq) return "cu";
       await api("PUT", "/me/player/play?device_id=" + encodeURIComponent(pick.id), body);
       try {
@@ -2375,33 +2372,13 @@ try {
         }
       }
     };
-    try {
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState !== "visible" || !pendingPlay) return;
-        const p = pendingPlay;
-        pendingPlay = null;
-        if (Date.now() - p.at > 12e4) return;
-        (async () => {
-          for (let i = 0; i < 5; i++) {
-            try {
-              await play(p.trackId, { ...p.opt, noDeep: true });
-              return;
-            } catch (e) {
-              if (e && e.message === "chưa đăng nhập") return;
-              await new Promise((r) => setTimeout(r, 1200));
-            }
-          }
-        })();
-      });
-    } catch (e) {
-    }
     const warm = () => {
       if (warmed || !loggedIn()) return;
       warmed = true;
       getToken().catch(() => {
       });
-      if (!st.sdkBroken) connectSdk().catch(() => {
-        st.sdkBroken = true;
+      if (sdkOk()) connectSdk().catch(() => {
+        sdkFail();
       });
     };
     const close = () => {
@@ -3021,7 +2998,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 193;
+  const CLS_BAN = 194;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top"];
