@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="f50899e6d3">
+    <meta name="cls-build" content="643e9df53c">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -2450,6 +2450,17 @@ try {
     const m = dateKey ? spMarks.get(dateKey, trackId) : null;
     return { dateKey: dateKey || null, positionMs: m !== null && m !== void 0 ? Math.max(0, m) : 0 };
   };
+  const spErrToast = (e) => {
+    try {
+      const t = document.createElement("div");
+      t.setAttribute("data-sp-err", "");
+      t.textContent = "Spotify: " + (e && (e.status ? e.status + " " : "") + (e.message || e) || "lỗi");
+      t.style.cssText = "position:fixed;left:12px;right:12px;bottom:80px;z-index:2147483000;padding:10px 12px;background:#2a1215;color:#ffb4ab;font:12px/1.4 system-ui;border:1px solid #6b2a2a;word-break:break-word";
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 8e3);
+    } catch (x) {
+    }
+  };
   const playOrEmbed = (trackId, embed, dateKey) => {
     if (!trackId) {
       embed();
@@ -2460,9 +2471,12 @@ try {
       return;
     }
     Spotify.dismissInvite();
-    Spotify.toggle(trackId, spStartOpt(trackId, dateKey)).catch(() => {
+    Spotify.toggle(trackId, spStartOpt(trackId, dateKey)).catch((e) => {
       if (!Spotify.loggedIn()) Spotify.invite();
-      else embed();
+      else {
+        spErrToast(e);
+        embed();
+      }
     });
   };
   const playDayPhoto = (trackId, dateKey) => {
@@ -2974,7 +2988,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 191;
+  const CLS_BAN = 192;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top"];
