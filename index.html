@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="b84b2d2369">
+    <meta name="cls-build" content="f1cfa2651d">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -389,8 +389,8 @@
         }
         /* === BẢN 196: NHẬT KÝ TUẦN (KÍNH ĐÊM, 7 GẠCH 1 MÀU, ĐĨA THAN LÓ MÉP, LỜI QUÉT TỪNG ÂM TIẾT) === */
         .cls-journal .cls-app { background: linear-gradient(180deg, #13100e 0px, #0c0b0b 104px, #09090a 240px, #060607 100%); }
-        .jwk-hdr { position: relative; overflow: hidden; border-bottom-color: rgba(201,164,106,0.22) !important; background: #0c0b0b; contain: paint; }
-        .jwk-art { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+        .jwk-hdr { position: relative; border-bottom-color: rgba(201,164,106,0.22) !important; background: #0c0b0b; }
+        .jwk-art { position: absolute; inset: 0; pointer-events: none; overflow: hidden; contain: paint; }
         .jwk-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 42%; opacity: 0.92; display: block; }
         .jwk-fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(14,12,11,0.44) 0%, rgba(14,12,11,0.12) 38%, rgba(11,10,11,0.78) 84%, #0c0b0b 100%); }
         .jwk-st { position: absolute; width: 1.8px; height: 1.8px; border-radius: 50%; background: #fff; opacity: 0.14; animation: jwkTw 3.8s ease-in-out infinite; will-change: opacity, transform; }
@@ -421,9 +421,7 @@
         /* Lời quét sáng từng âm tiết + khúc ngân + tự trượt ngang (không cắt dấu ...) */
         .ly-mask { position: relative; flex: 1; min-width: 0; height: 26px; overflow: hidden; display: flex; align-items: center; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%); }
         .ly-track { display: inline-flex; align-items: baseline; white-space: nowrap; padding: 0 12px 0 4px; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 16.5px; font-weight: 600; line-height: 1.25; transform: translate3d(0,0,0); will-change: transform; }
-        .syl { display: inline-block; white-space: pre; --p: 0%; --lift: 0px; --sc: 1; --glow: 0; background-image: linear-gradient(90deg, #f8f3ea 0%, #f8f3ea var(--p), rgba(241,238,233,0.28) calc(var(--p) + 6%), rgba(241,238,233,0.28) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; transform: translate3d(0, var(--lift), 0) scale(var(--sc)); transform-origin: center bottom; will-change: transform, background-image; }
-        .syl.hold { background-image: linear-gradient(90deg, #ffe2ae 0%, #fff6e6 var(--p), rgba(241,238,233,0.28) calc(var(--p) + 8%), rgba(241,238,233,0.28) 100%); }
-        .syl.hold-on { text-shadow: 0 0 calc(var(--glow) * 14px) rgba(242,183,102, calc(var(--glow) * 0.82)), 0 0 calc(var(--glow) * 26px) rgba(255,224,168, calc(var(--glow) * 0.45)); }
+        .ly-ch { display: inline-block; white-space: pre; will-change: opacity, transform; }
         .jwk-seek { -webkit-appearance: none; appearance: none; height: 14px; background: transparent; cursor: pointer; margin: 0; width: 100%; }
         .jwk-seek:disabled { cursor: default; }
         .jwk-seek::-webkit-slider-runnable-track { height: 2px; background: linear-gradient(90deg, #ece7de var(--p, 0%), rgba(255,255,255,0.16) var(--p, 0%)); }
@@ -942,54 +940,228 @@ return api;
             }
         };
     </script>
-    <!-- BẢN 195: NHẬT KÝ TOA CUỐI (tranh trên đầu thẻ ngày, Shadow DOM, sinh bằng do-nghe/mk_toa_195.py từ nhat-ky-toa-cuoi.html vòng 8) -->
+    <!-- BẢN 198: NHẬT KÝ TOA CUỐI (Shadow DOM: lời ngoài cửa sổ vũ trụ tan tại chỗ sau 0,2s + tua + ghim + sóng nhạc 2 tầng) -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Barlow+Condensed:wght@600&display=swap">
     <script>
         window.CLS_TOA = {
-            css: "*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}\nbutton{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation}\n:host{color:var(--ink);font-family:\"Be Vietnam Pro\",system-ui,sans-serif;font-size:14px}\n\n:host{display:block;--bg:#15110e;--ink:#f1e7d8;--sub:#ab9e8d;--dim:#75695b;--amb:#f2b766;--brass:#c9a46a;--acc:#6EA8FF}\n.num{font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.01em}\n.serif{font-family:'Cormorant Garamond',serif}\n/* ===== TRANH ===== */\n.hz{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;contain:paint;user-select:none}\n.hz>img.base{position:absolute;inset:0;width:100%;height:100%;display:block}\n.loff{position:absolute;left:0;top:52.734%;width:33.203%;height:35.156%;opacity:1;transition:opacity 1.4s ease}\n.on .loff{opacity:0}\n.glow{position:absolute;left:-4%;top:46%;width:38%;height:38%;border-radius:50%;background:radial-gradient(circle,rgba(255,176,90,.28),rgba(255,160,70,.08) 45%,transparent 70%);opacity:0;transition:opacity 1.4s ease}\n.on .glow{opacity:1}\n.glow i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 50% 42%,rgba(255,200,130,.22),transparent 55%);animation:fl 5.5s ease-in-out infinite;will-change:opacity}\n@keyframes fl{0%,100%{opacity:.9}31%{opacity:.55}34%{opacity:.95}62%{opacity:.7}}\n.st{position:absolute;width:1%;aspect-ratio:1;margin:-.5% 0 0 -.5%;border-radius:50%;background:radial-gradient(circle,#fff 0,rgba(235,240,255,.85) 22%,rgba(200,215,255,.25) 45%,transparent 70%);opacity:0;animation:tw 3.2s ease-in-out infinite;will-change:opacity,transform}\n.st.b{animation-duration:4.4s}.st.c{animation-duration:2.5s}\n@keyframes tw{0%,100%{opacity:0;transform:scale(.7)}50%{opacity:.6;transform:scale(1)}}\n.pane{position:absolute;left:40.918%;top:27.539%;width:18.262%;height:28.906%;overflow:hidden}\n.inn{position:absolute;left:-224.06%;top:-95.27%;width:547.6%;height:345.9%}\n.mv{position:absolute;inset:0;will-change:transform}\n.rl .mv{animation:rlm 7s linear infinite}\n.rl .d{position:absolute;left:50.29%;top:56.35%;width:1.6%;aspect-ratio:1;margin:-.8% 0 0 -.8%;border-radius:50%;background:radial-gradient(circle,#fff6e4 0,rgba(255,220,160,.7) 30%,transparent 70%);animation:rld 7s linear infinite;will-change:transform,opacity}\n@keyframes rlm{0%{transform:translate(0,0)}30%{transform:translate(1.66%,-4.59%)}55%{transform:translate(3.61%,-8%)}78%{transform:translate(5.18%,-10.25%)}100%{transform:translate(7.32%,-11.62%)}}\n@keyframes rld{0%{opacity:0;transform:scale(1.4)}8%{opacity:1}30%{transform:scale(.95)}55%{transform:scale(.62)}78%{opacity:.8;transform:scale(.4)}100%{opacity:0;transform:scale(.22)}}\n.sh .mv{animation:shm 10s linear infinite 2.5s;transform:translate(0,0)}\n.sh .d{position:absolute;left:43%;top:29.3%;width:7%;height:.22%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95));transform:rotate(33.7deg);transform-origin:100% 50%;opacity:0;animation:shd 10s linear infinite 2.5s;will-change:opacity}\n@keyframes shm{0%{transform:translate(0,0)}6%,100%{transform:translate(11.7%,7.8%)}}\n@keyframes shd{0%{opacity:0}1%{opacity:1}5%{opacity:.6}6%,100%{opacity:0}}\n.rec{position:absolute;left:86.57%;top:68.95%;width:5.57%;aspect-ratio:1;transform:translateY(-50%) scaleY(.36)}\n.lab{position:absolute;inset:0;border-radius:50%;background:center/cover;animation:spin 1.82s linear infinite;animation-play-state:paused;will-change:transform;box-shadow:inset 0 0 0 1.5px rgba(20,16,12,.55)}\n.lab::after{content:'';position:absolute;left:46%;top:46%;width:8%;height:8%;border-radius:50%;background:#1a1612}\n.playing .lab{animation-play-state:running}\n@keyframes spin{to{transform:rotate(360deg)}}\n.recbtn{position:absolute;left:79%;top:64.5%;width:19.5%;height:9.5%}\n.song{position:absolute;left:31%;right:4%;bottom:5.5%;pointer-events:none}\n.song b{display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:clamp(20px,5.6vw,26px);line-height:1.05;text-shadow:0 2px 10px #000}\n.song small{display:block;margin-top:3px;font-size:12px;color:var(--sub);text-shadow:0 1px 6px #000}\n.song .eq{display:inline-block;width:14px;margin-right:6px;opacity:0;transition:opacity .2s}\n.playing .song .eq{opacity:1}\n.eq i{display:inline-block;width:2px;height:9px;margin-right:2px;background:var(--amb);transform-origin:bottom;animation:eq 1s ease-in-out infinite;animation-play-state:paused}\n.eq i:nth-child(2){animation-delay:-.35s}.eq i:nth-child(3){animation-delay:-.7s}\n.playing .eq i{animation-play-state:running}\n@keyframes eq{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}\n.hd{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:6px;padding:max(12px,env(safe-area-inset-top)) 14px 0}\n.hd .vw{display:flex;gap:14px;font-size:13px;color:var(--sub)}\n.hd .dt{margin-left:auto;display:flex;align-items:center;gap:2px}\n.hd .dt span{font-size:20px;min-width:92px;text-align:center}\n.ib{width:34px;height:34px;display:grid;place-items:center;color:var(--sub)}\n.ib svg{width:18px;height:18px}\n.paused *,.paused *::after{animation-play-state:paused!important}\n.tint{position:absolute;inset:0;background-color:#7C9EDA;opacity:.2;-webkit-mask:url(anh/nhatky/n1.webp) 0 0/100% 100%;mask:url(anh/nhatky/n1.webp) 0 0/100% 100%;transition:background-color 1.2s ease}\n.night{position:absolute;inset:0;background:rgba(6,10,24,.38);opacity:0;transition:opacity 1.5s ease;pointer-events:none}\n.khuya .night{opacity:1}\n.disc{position:absolute;left:82.71%;top:68.95%;width:15.23%;aspect-ratio:1;transform:translateY(-50%) scaleY(.295);pointer-events:none;opacity:0;transition:opacity .4s}\n.disc i{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 8%,rgba(255,240,220,.35) 12%,transparent 18% 58%,rgba(255,240,220,.28) 62%,transparent 68%);animation:spin 1.82s linear infinite;animation-play-state:paused;will-change:transform}\n.playing .disc{opacity:1}.playing .disc i{animation-play-state:running}\n.nbtn{position:absolute;left:12.5%;top:72.5%;width:13.5%;height:6.5%}\n.pg{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(17,13,10,.97);opacity:0;pointer-events:none;transition:opacity .12s ease}\n.pg.open{opacity:1;pointer-events:auto}\n.pg .pp{width:min(88vw,460px);max-height:78vh;overflow:auto;padding:8px 4px;transform:scale(.94);transition:transform .16s cubic-bezier(.2,.9,.3,1)}\n.pg.open .pp{transform:none}\n.pg .pv{transform:scale(.3);transition:transform .22s cubic-bezier(.2,.9,.3,1)}.pg.open .pv{transform:none}\n.pp .d{font-size:12px;color:var(--sub);letter-spacing:.06em;margin-bottom:6px}\n.pp h4{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:28px;margin-bottom:12px;color:var(--amb)}\n.pp textarea{min-height:46vh;font-size:19px}\n.stg{position:absolute;left:0;top:0;width:1024px;height:1024px;transform-origin:0 0;transform:scale(var(--k,.38))}\n.stg>img.base,.stg>img.loff{position:absolute;left:0;top:0;width:1024px;height:1024px}\n.stg>img.loff{opacity:1;transition:opacity 1.4s ease}.on .stg>img.loff{opacity:0}\n.stg .tint{position:absolute;inset:0;background-color:transparent;opacity:1;-webkit-mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;transition:background-color 1.2s ease}\n.stg .night{position:absolute;inset:0;background:rgba(4,4,6,.42);opacity:0;transition:opacity 1.5s ease;-webkit-mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;mask:url(anh/nhatky/n2.webp) 0 0/100% 100%}\n.khuya .stg .night{opacity:1}\n.skw{position:absolute;inset:0;-webkit-mask:url(anh/nhatky/n1.webp) 0 0/100% 100%;mask:url(anh/nhatky/n1.webp) 0 0/100% 100%}\n.du{position:absolute;border-radius:50%;background:radial-gradient(circle,#fff 0,rgba(var(--c),.95) 25%,rgba(var(--c),.35) 50%,transparent 72%);opacity:0;animation:dum 2s linear infinite;will-change:transform,opacity}\n@keyframes dum{0%{transform:translate(0,0) scale(1);opacity:0}8%{opacity:1}25%{transform:translate(var(--x1),var(--y1)) scale(.7)}50%{transform:translate(var(--x2),var(--y2)) scale(.45);opacity:.8}75%{transform:translate(var(--x3),var(--y3)) scale(.28);opacity:.5}100%{transform:translate(var(--x4),var(--y4)) scale(.15);opacity:0}}\n.rib{position:absolute;border-radius:50%;opacity:.7;animation:rb 1.3s ease-in-out infinite alternate;will-change:opacity,transform}\n.rib.a{left:390px;top:540px;width:250px;height:52px;background:radial-gradient(ellipse,rgba(255,210,110,.55),rgba(255,190,80,.15) 45%,transparent 70%)}\n.rib.b{left:430px;top:528px;width:170px;height:44px;background:radial-gradient(ellipse,rgba(180,140,255,.5),rgba(160,120,255,.12) 45%,transparent 70%);animation-duration:1.7s;animation-delay:-.6s}\n@keyframes rb{from{opacity:.5}to{opacity:1}}\n.sk b{position:absolute;left:0;top:-1px;width:46px;height:2px;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(235,240,255,.85));transform-origin:0 50%;opacity:0;animation:skm 3s linear infinite;will-change:transform,opacity}\n@keyframes skm{0%{transform:translateX(var(--d)) scaleX(1.2);opacity:0}12%{opacity:.75}75%{opacity:.35}100%{transform:translateX(calc(var(--d)*.12)) scaleX(.15);opacity:0}}\n.fph{position:absolute;left:0;top:0;transform-origin:0 0;background:center/cover;filter:saturate(.8) brightness(.82)}\n.fph::after{content:'';position:absolute;inset:0;background:linear-gradient(125deg,rgba(255,255,255,.16),transparent 38%),radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45))}\n.stg .glow{position:absolute;left:-30px;top:260px;width:450px;height:450px;border-radius:50%;background:radial-gradient(circle,rgba(255,176,90,.24),rgba(255,160,70,.06) 45%,transparent 70%);opacity:0;transition:opacity 1.4s ease}\n.on .stg .glow{opacity:1}\n.stg .glow i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 50% 45%,rgba(255,200,130,.18),transparent 55%);animation:fl 5.5s ease-in-out infinite;will-change:opacity}\n.stg .st{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;background:radial-gradient(circle,rgba(255,255,255,.9) 0,rgba(230,236,255,.35) 30%,transparent 65%)}\n.shw{position:absolute;left:388px;top:222px;width:250px;height:200px;overflow:hidden}\n.shd2{position:absolute;left:10px;top:20px;width:80px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95));transform:translate(0,0) rotate(31deg);opacity:0;animation:sh2 10s linear infinite 2.5s;will-change:transform,opacity}\n@keyframes sh2{0%{opacity:0;transform:translate(0,0) rotate(31deg)}1%{opacity:1}6%{opacity:0;transform:translate(160px,96px) rotate(31deg)}100%{opacity:0;transform:translate(160px,96px) rotate(31deg)}}\n.stg .disc{position:absolute;left:735px;top:647px;width:366px;height:366px;transform:scaleY(.36);pointer-events:none;opacity:0;transition:opacity .4s}\n.rec2{position:absolute;left:917.75px;top:829.6px;width:364px;height:364px;margin:-182px 0 0 -182px;transform:rotate(8.6deg) scaleY(.365)}\n.spin{position:absolute;inset:0;animation:spin 1.82s linear infinite;animation-play-state:paused;will-change:transform}\n.playing .spin{animation-play-state:running}\n.spin img{position:absolute;inset:0;width:100%;height:100%}\n.rec2 .lab{inset:auto;left:120px;top:120px;width:124px;height:124px;animation:none;box-shadow:inset 0 0 0 1px rgba(20,16,12,.35),0 0 2px 1px rgba(0,0,0,.35)}\n.stg .arm{position:absolute}\n.rec2 .hl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}\n.sheen{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 6%,rgba(255,236,210,.16) 12%,transparent 20% 52%,rgba(255,236,210,.12) 60%,transparent 68%);-webkit-mask:radial-gradient(circle,transparent 0 36%,#000 37.5% 97%,transparent 99%);mask:radial-gradient(circle,transparent 0 36%,#000 37.5% 97%,transparent 99%)}\n.hit{position:absolute}\n.pv{width:min(88vw,460px);aspect-ratio:3/4;border-radius:12px;background:center/cover}\n.lp{position:absolute;left:4%;bottom:4%;width:58%;display:flex;align-items:center;gap:14px}\n.cv{position:relative;flex:none;width:clamp(48px,14vw,64px);aspect-ratio:1}\n.cv .art{position:absolute;inset:0;border-radius:4px;background:center/cover;box-shadow:0 6px 16px rgba(0,0,0,.6)}\n.cv .vin{position:absolute;inset:4%;border-radius:50%;background:radial-gradient(circle,#d9c9a8 0 17%,#121212 18% 30%,#1c1c1c 31% 44%,#111 45% 58%,#1d1d1d 59% 72%,#0f0f0f 73%);transform:translateX(0);transition:transform .45s cubic-bezier(.2,.9,.3,1)}\n.vr{position:absolute;inset:0;border-radius:50%;background:conic-gradient(transparent 0 20%,rgba(255,255,255,.18) 25%,transparent 32% 70%,rgba(255,255,255,.12) 75%,transparent 82%);animation:spin 1.82s linear infinite;animation-play-state:paused}\n.playing .cv .vin{transform:translateX(48%)}.playing .vr{animation-play-state:running}\n.tx{min-width:0;flex:1;padding-left:4px}\n.playing .tx{padding-left:calc(clamp(48px,14vw,64px)*.42)}\n.tx b{display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:clamp(17px,4.6vw,22px);line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 8px #000}\n.tt{display:flex;align-items:center;gap:8px}.tt b{min-width:0}\n.pp2{flex:none;width:30px;height:30px;display:grid;place-items:center;color:var(--amb);margin:-6px 0}.pp2 svg{width:16px;height:16px}\n.tx small{display:block;font-size:11.5px;color:var(--sub);margin-top:1px}\n.pbar{position:relative;height:1px;margin:7px 0 6px;background:rgba(239,233,223,.22)}\n.pbar i{position:absolute;inset:0;background:linear-gradient(90deg,rgba(242,183,102,.35),var(--amb));transform-origin:0 50%;transform:scaleX(0);transition:transform .25s linear}\n.pgh{position:absolute;left:0;top:0;width:100%;height:1px;transform:translateX(0);transition:transform .25s linear;pointer-events:none}\n.pgh b{position:absolute;left:-4px;top:-3.5px;width:8px;height:8px;border-radius:50%;background:radial-gradient(circle,#fff 0,#ffd58a 40%,rgba(242,183,102,0) 72%);opacity:0;transition:opacity .3s}\n.pgh b::after{content:'';position:absolute;left:-10px;top:-10px;width:28px;height:28px;border-radius:50%;background:radial-gradient(circle,rgba(255,200,120,.45),transparent 65%);animation:hp 1.1s ease-in-out infinite alternate;animation-play-state:paused}\n.pgh u{position:absolute;right:0;top:-.5px;width:46px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,220,150,.9));opacity:0;transition:opacity .3s}\n.playing .pgh b,.playing .pgh u{opacity:1}.playing .pgh b::after{animation-play-state:running}\n@keyframes hp{from{transform:scale(.6);opacity:.5}to{transform:scale(1.15);opacity:1}}\n.ly{position:relative;height:18px;font-size:12px;color:#e9e2d6;text-shadow:0 1px 6px #000}\n.ly span{position:absolute;left:0;right:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .35s ease,transform .35s ease}\n.ly span.out{opacity:0;transform:translateY(-6px)}.ly span.pre{opacity:0;transform:translateY(6px)}\n.sep{height:1px;margin:2px 0 14px;background:linear-gradient(90deg,transparent,rgba(201,164,106,.7) 30%,rgba(201,164,106,.25) 70%,transparent)}\n\n.hz{background:#15110e}\n.fph.no{display:none}.hit.fb.no{display:none}\n.lp{pointer-events:auto}.lp.no{display:none}\n.cv .art{border-radius:4px}\n.tap0 .cv{cursor:default}\n",
-            html: "<div class=\"heroCol\"><div class=\"hz\" id=\"hz\"><div class=\"stg\" id=\"stg\">\n  <img class=\"base\" src=\"anh/nhatky/n3.webp\" alt=\"\" decoding=\"async\" fetchpriority=\"high\" width=\"1024\" height=\"1024\">\n  <img class=\"loff\" src=\"anh/nhatky/n4.webp\" alt=\"\" decoding=\"async\" width=\"1024\" height=\"1024\">\n  <div class=\"tint\" id=\"tint\"></div>\n  <i class=\"fph no\" style=\"width:39px;height:120px;transform:matrix3d(-1.436026,-1.175385,0.000000,-0.002692,0.000000,0.895000,0.000000,0.000000,0.000000,0.000000,1.000000,0.000000,862.400000,303.600000,0.000000,1.000000);\"></i>\n  <i class=\"fph no\" style=\"width:50px;height:135px;transform:matrix3d(-0.752417,-0.817354,0.000000,-0.001779,0.013817,0.937477,0.000000,0.000009,0.000000,0.000000,1.000000,0.000000,935.300000,323.300000,0.000000,1.000000);\"></i>\n  <div class=\"glow\"><i></i></div>\n  <div id=\"stars\"></div>\n  <div class=\"shw\"><i class=\"shd2\"></i></div>\n  <div class=\"rec2\"><div class=\"spin\"><img src=\"anh/nhatky/n7.webp\" alt=\"\"><div class=\"lab\" id=\"lab\"></div></div><img class=\"hl\" src=\"anh/nhatky/n8.webp\" alt=\"\"></div>\n  <img class=\"arm\" src=\"anh/nhatky/n9.webp\" alt=\"\" style=\"left:860px;top:850px;width:164px;height:65px\">\n  <div class=\"night\"></div>\n  <button class=\"hit\" id=\"recbtn\" style=\"left:730px;top:760px;width:294px;height:150px\" aria-label=\"Phát bài của ngày\"></button>\n  <button class=\"hit\" id=\"nbtn\" style=\"left:35px;top:625px;width:300px;height:130px\" aria-label=\"Mở nhật ký\"></button>\n  <button class=\"hit fb no\" data-ph=\"0\" style=\"left:848px;top:272px;width:66px;height:150px\" aria-label=\"Xem ảnh\"></button>\n  <button class=\"hit fb no\" data-ph=\"1\" style=\"left:922px;top:296px;width:80px;height:168px\" aria-label=\"Xem ảnh\"></button>\n </div>\n  <div class=\"lp\" id=\"lp\"><button class=\"cv\" id=\"cvbtn\" aria-label=\"Phát\"><i class=\"vin\"><i class=\"vr\"></i></i><i class=\"art\" id=\"lpArt\"></i></button>\n   <div class=\"tx\"><div class=\"tt\"><b id=\"sgT\"></b><button class=\"pp2\" id=\"ppb\" aria-label=\"Phát\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\"><path id=\"ppi\" d=\"M8 5v14l11-7z\"/></svg></button></div><small id=\"sgA\"></small><div class=\"pbar\"><i id=\"pbf\"></i><div class=\"pgh\" id=\"phd\"><u style=\"right:auto;left:-46px\"></u><b></b></div></div><div class=\"ly\"><span id=\"ly0\"></span><span id=\"ly1\"></span></div></div></div>\n  </div></div>",
+            css: "*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}\nbutton{font:inherit;color:inherit;background:none;border:0;cursor:pointer;touch-action:manipulation}\n:host{display:block;color:var(--ink);font-family:\"Be Vietnam Pro\",system-ui,sans-serif;font-size:14px;--bg:#15110e;--ink:#f1e7d8;--sub:#ab9e8d;--dim:#75695b;--amb:#f2b766;--brass:#c9a46a;--acc:#6EA8FF}\n.num{font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.01em}\n.serif{font-family:'Cormorant Garamond',Georgia,serif}\n.hz{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;contain:paint;user-select:none;background:#15110e}\n.hz::after{content:'';position:absolute;left:0;right:0;bottom:0;height:28%;pointer-events:none;z-index:3;background:linear-gradient(to top,rgba(13,10,8,.84) 0%,rgba(13,10,8,.42) 52%,transparent 100%)}\n.stg{position:absolute;left:0;top:0;width:1024px;height:1024px;transform-origin:0 0;transform:scale(var(--k,.38))}\n.stg>img.base,.stg>img.loff{position:absolute;left:0;top:0;width:1024px;height:1024px;display:block}\n.stg>img.loff{opacity:1;transition:opacity 1.4s ease}.on .stg>img.loff{opacity:0}\n.stg .tint{position:absolute;inset:0;background-color:transparent;opacity:1;-webkit-mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;transition:background-color 1.2s ease;pointer-events:none}\n.stg .night{position:absolute;inset:0;background:rgba(4,4,6,.42);opacity:0;transition:opacity 1.5s ease;-webkit-mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;mask:url(anh/nhatky/n2.webp) 0 0/100% 100%;pointer-events:none}\n.khuya .stg .night{opacity:1}\n.fph{position:absolute;left:0;top:0;transform-origin:0 0;background:center/cover;filter:saturate(.8) brightness(.82)}\n.fph::after{content:'';position:absolute;inset:0;background:linear-gradient(125deg,rgba(255,255,255,.16),transparent 38%),radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.45))}\n.fph.no,.hit.fb.no{display:none}\n.stg .glow{position:absolute;left:-30px;top:260px;width:450px;height:450px;border-radius:50%;background:radial-gradient(circle,rgba(255,176,90,.24),rgba(255,160,70,.06) 45%,transparent 70%);opacity:0;transition:opacity 1.4s ease;pointer-events:none}\n.on .stg .glow{opacity:1}\n.stg .glow i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 50% 45%,rgba(255,200,130,.18),transparent 55%);animation:fl 5.5s ease-in-out infinite;will-change:opacity}\n@keyframes fl{0%,100%{opacity:.9}31%{opacity:.55}34%{opacity:.95}62%{opacity:.7}}\n.skw{position:absolute;inset:0;pointer-events:none;-webkit-mask:url(anh/nhatky/n1.webp) 0 0/100% 100%;mask:url(anh/nhatky/n1.webp) 0 0/100% 100%}\n.cos-bg{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse 36% 32% at 50% 37%,rgba(4,7,18,.52) 0%,rgba(5,9,24,.30) 58%,rgba(6,10,24,.10) 100%);transition:opacity .55s ease}\n.cos-on .cos-bg{opacity:1}\n.cos-neb{position:absolute;left:270px;top:140px;width:480px;height:420px;border-radius:50%;background:radial-gradient(circle at 50% 52%,rgba(255,214,142,.20) 0%,rgba(145,180,255,.13) 36%,transparent 70%);opacity:0;transform:scale(.92);transition:opacity .5s ease;will-change:transform,opacity}\n.cos-on .cos-neb{opacity:calc(.20 + var(--en,0) * .72);transform:scale(calc(.92 + var(--en,0) * .16))}\n.st{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.9) 0,rgba(230,236,255,.35) 30%,transparent 65%);opacity:0;animation:tw 3.2s ease-in-out infinite;will-change:opacity,transform}\n.st.b{animation-duration:4.4s}.st.c{animation-duration:2.5s}\n@keyframes tw{0%,100%{opacity:0;transform:scale(.7)}50%{opacity:.65;transform:scale(1)}}\n.shw{position:absolute;left:388px;top:222px;width:250px;height:200px;overflow:hidden}\n.shd2{position:absolute;left:10px;top:20px;width:80px;height:2px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95));transform:translate(0,0) rotate(31deg);opacity:0;animation:sh2 10s linear infinite 2.5s;will-change:transform,opacity}\n@keyframes sh2{0%{opacity:0;transform:translate(0,0) rotate(31deg)}1%{opacity:1}6%{opacity:0;transform:translate(160px,96px) rotate(31deg)}100%{opacity:0;transform:translate(160px,96px) rotate(31deg)}}\n.cos-lyr{position:absolute;left:378px;top:224px;width:258px;height:286px;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;transition:opacity .4s ease}\n.cos-on .cos-lyr{opacity:1}\n.cos-wait{position:absolute;display:flex;gap:14px;align-items:center;justify-content:center;opacity:0;transition:opacity .4s ease}\n.cos-wait.show{opacity:1}\n.cos-wait i{width:7px;height:7px;border-radius:50%;background:radial-gradient(circle,#fff9ea 0,rgba(242,196,120,.6) 55%,transparent 100%);box-shadow:0 0 12px rgba(255,222,155,.75);animation:cwait 1.8s ease-in-out infinite}\n.cos-wait i:nth-child(2){animation-delay:.28s}.cos-wait i:nth-child(3){animation-delay:.56s}\n@keyframes cwait{0%,100%{opacity:.22;transform:scale(.75)}50%{opacity:.95;transform:scale(1.22)}}\n.cos-act{position:relative;z-index:2;width:100%;display:flex;flex-wrap:wrap;justify-content:center;align-content:center;text-align:center;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:600;font-size:38px;line-height:1.28;letter-spacing:.005em;opacity:0;transition:opacity .28s ease}\n.cos-act.in{opacity:1}.cos-act.sz-md{font-size:34px;line-height:1.26}.cos-act.sz-sm{font-size:30px;line-height:1.24}\n.cword{display:inline-flex;white-space:pre;align-items:baseline}\n.cword.bg{flex-basis:100%;justify-content:center;font-size:.74em;margin-top:6px}\n.ch{display:inline-block;white-space:pre;will-change:opacity,transform}\n.cos-glass{position:absolute;inset:0;pointer-events:none;z-index:4;background:linear-gradient(126deg,rgba(255,248,236,.04) 0%,transparent 28%,rgba(195,220,255,.028) 56%,transparent 76%),radial-gradient(ellipse 52% 40% at 50% 35%,transparent 62%,rgba(4,6,14,.30) 100%)}\n.rec2{position:absolute;left:917.75px;top:829.6px;width:364px;height:364px;margin:-182px 0 0 -182px;transform:rotate(8.6deg) scaleY(.365);pointer-events:none}\n.spin{position:absolute;inset:0;animation:spin 1.82s linear infinite;animation-play-state:paused;will-change:transform}\n.playing .spin{animation-play-state:running}\n.spin img{position:absolute;inset:0;width:100%;height:100%}\n.rec2 .lab{position:absolute;left:120px;top:120px;width:124px;height:124px;border-radius:50%;background:center/cover;box-shadow:inset 0 0 0 1px rgba(20,16,12,.35),0 0 2px 1px rgba(0,0,0,.35)}\n.rec2 .lab::after{content:'';position:absolute;left:46%;top:46%;width:8%;height:8%;border-radius:50%;background:#1a1612}\n.rec2 .hl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}\n.stg .arm{position:absolute;pointer-events:none}\n@keyframes spin{to{transform:rotate(360deg)}}\n.hit{position:absolute;background:transparent}\n.hit.win{left:278px;top:116px;width:468px;height:444px;border-radius:234px 234px 12px 12px;cursor:pointer}\n.paused *,.paused *::after{animation-play-state:paused!important}\n.lp{position:absolute;left:3.8%;bottom:3.4%;width:63%;z-index:6;display:flex;align-items:center;gap:12px;pointer-events:auto}\n.lp.no{display:none}.tap0 .cv{cursor:default}\n.cv{position:relative;flex:none;width:clamp(46px,13vw,62px);aspect-ratio:1}\n.cv .art{position:absolute;inset:0;border-radius:4px;background:center/cover;box-shadow:0 6px 16px rgba(0,0,0,.65)}\n.cv .vin{position:absolute;inset:4%;border-radius:50%;background:radial-gradient(circle,#d9c9a8 0 17%,#121212 18% 30%,#1c1c1c 31% 44%,#111 45% 58%,#1d1d1d 59% 72%,#0f0f0f 73%);transform:translateX(0);transition:transform .45s cubic-bezier(.2,.9,.3,1)}\n.vr{position:absolute;inset:0;border-radius:50%;background:conic-gradient(transparent 0 20%,rgba(255,255,255,.18) 25%,transparent 32% 70%,rgba(255,255,255,.12) 75%,transparent 82%);animation:spin 1.82s linear infinite;animation-play-state:paused}\n.playing .cv .vin{transform:translateX(44%)}.playing .vr{animation-play-state:running}\n.tx{min-width:0;flex:1;padding-left:2px;transition:padding-left .35s ease}\n.playing .tx{padding-left:calc(clamp(46px,13vw,62px) * .36)}\n.tt{display:flex;align-items:center;gap:6px}\n.tt b{min-width:0;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:600;font-size:clamp(17px,4.4vw,22px);line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 2px 8px #000}\n.actbtn{flex:none;width:28px;height:28px;display:grid;place-items:center;color:var(--amb);border-radius:50%;transition:transform .15s,color .15s}\n.actbtn:active{transform:scale(.88)}.actbtn svg{width:15px;height:15px}\n.pinbtn{color:var(--sub);margin-left:auto}.pinbtn:hover{color:var(--ink)}\n.pinbtn.pinned{color:var(--amb);filter:drop-shadow(0 0 6px rgba(242,183,102,.65))}\n.pinbtn.no{display:none}\n.meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:1px}\n.meta small{font-size:11.5px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 6px #000}\n.meta .tm{font-size:10.5px;color:rgba(242,233,220,.62);font-variant-numeric:tabular-nums;flex:none;text-shadow:0 1px 5px #000}\n.pbar-hit{position:relative;padding:9px 0 8px;cursor:pointer;touch-action:none}\n.pbar-hit.dis{cursor:default;pointer-events:none}\n.pbar{position:relative;height:2px;background:rgba(239,233,223,.22);border-radius:1px}\n.pbar i{position:absolute;inset:0;border-radius:1px;background:linear-gradient(90deg,rgba(242,183,102,.45),var(--amb));transform-origin:0 50%;transform:scaleX(0)}\n.pmark{position:absolute;top:-4px;width:2px;height:10px;border-radius:1px;background:var(--amb);box-shadow:0 0 6px rgba(242,183,102,.85);transform:translateX(-1px);opacity:0;transition:opacity .2s;pointer-events:none}\n.pmark.show{opacity:1}\n.pgh{position:absolute;left:0;top:0;width:100%;height:2px;transform:translateX(0);pointer-events:none}\n.pgh b{position:absolute;left:-4.5px;top:-3.5px;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle,#fff 0,#ffd58a 45%,rgba(242,183,102,0) 75%);opacity:0;transition:transform .15s ease,opacity .25s}\n.playing .pgh b,.pbar-hit:hover .pgh b,.pbar-hit.scrubbing .pgh b{opacity:1}\n.pbar-hit:hover .pgh b,.pbar-hit.scrubbing .pgh b{transform:scale(1.38)}\n.slot{position:relative;height:26px;overflow:hidden}\n.ly-wrap{position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;transition:opacity .32s ease,transform .32s ease;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 92%,transparent 100%);mask-image:linear-gradient(90deg,#000 0%,#000 92%,transparent 100%)}\n.ly-wrap.scrolled{-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 8%,#000 92%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0%,#000 8%,#000 92%,transparent 100%)}\n.cos-on .ly-wrap{opacity:0;transform:translateY(-7px);pointer-events:none}\n.ly-track{display:inline-flex;align-items:baseline;white-space:nowrap;font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-weight:600;font-size:15px;line-height:1.25;will-change:transform}\n.wave-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:2px;opacity:0;transform:translateY(7px);pointer-events:none;transition:opacity .35s ease,transform .35s ease}\n.cos-on .wave-wrap{opacity:1;transform:none;pointer-events:auto}\n.wbar{flex:1;max-width:2.5px;height:21px;border-radius:99px;background:linear-gradient(to top,rgba(242,183,102,.42),#f6cf8a 52%,#fff6df);transform-origin:center center;transform:scaleY(.08);will-change:transform,opacity;opacity:.72}\n.wbar.hot{background:linear-gradient(to top,rgba(242,183,102,.76),#ffe3a6 50%,#ffffff);box-shadow:0 0 7px rgba(255,214,132,.62);opacity:1}\n",
+            html: "<div class=\"heroCol\"><div class=\"hz\" id=\"hz\"><div class=\"stg\" id=\"stg\"><img class=\"base\" src=\"anh/nhatky/n3.webp\" alt=\"\" decoding=\"async\" fetchpriority=\"high\" width=\"1024\" height=\"1024\"><img class=\"loff\" src=\"anh/nhatky/n4.webp\" alt=\"\" decoding=\"async\" width=\"1024\" height=\"1024\"><div class=\"tint\" id=\"tint\"></div><i class=\"fph no\" style=\"width:39px;height:120px;transform:matrix3d(-1.436026,-1.175385,0,-0.002692,0,0.895,0,0,0,0,1,0,862.4,303.6,0,1)\"></i><i class=\"fph no\" style=\"width:50px;height:135px;transform:matrix3d(-0.752417,-0.817354,0,-0.001779,0.013817,0.937477,0,0.000009,0,0,1,0,935.3,323.3,0,1)\"></i><div class=\"glow\"><i></i></div><div class=\"skw\"><div class=\"cos-bg\"></div><div class=\"cos-neb\"></div><div id=\"stars\"></div><div class=\"shw\"><i class=\"shd2\"></i></div><div class=\"cos-lyr\" id=\"cosLyr\"><div class=\"cos-wait\" id=\"cosWait\"><i></i><i></i><i></i></div><div class=\"cos-act\" id=\"cosAct\"></div></div><div class=\"cos-glass\"></div></div><div class=\"rec2\"><div class=\"spin\"><img src=\"anh/nhatky/n7.webp\" alt=\"\"><div class=\"lab\" id=\"lab\"></div></div><img class=\"hl\" src=\"anh/nhatky/n8.webp\" alt=\"\"></div><img class=\"arm\" src=\"anh/nhatky/n9.webp\" alt=\"\" style=\"left:860px;top:850px;width:164px;height:65px\"><div class=\"night\"></div><button class=\"hit win\" id=\"winbtn\" aria-label=\"Bật tắt lời nhạc ngoài cửa sổ vũ trụ\"></button><button class=\"hit\" id=\"recbtn\" style=\"left:730px;top:760px;width:294px;height:150px\" aria-label=\"Phát bài của ngày\"></button><button class=\"hit\" id=\"nbtn\" style=\"left:35px;top:625px;width:300px;height:130px\" aria-label=\"Mở nhật ký\"></button><button class=\"hit fb no\" data-ph=\"0\" style=\"left:848px;top:272px;width:66px;height:150px\" aria-label=\"Xem ảnh\"></button><button class=\"hit fb no\" data-ph=\"1\" style=\"left:922px;top:296px;width:80px;height:168px\" aria-label=\"Xem ảnh\"></button></div><div class=\"lp\" id=\"lp\"><button class=\"cv\" id=\"cvbtn\" aria-label=\"Phát\"><i class=\"vin\"><i class=\"vr\"></i></i><i class=\"art\" id=\"lpArt\"></i></button><div class=\"tx\"><div class=\"tt\"><b id=\"sgT\"></b><button class=\"actbtn\" id=\"ppb\" aria-label=\"Phát\"><svg viewBox=\"0 0 24 24\" fill=\"currentColor\"><path id=\"ppi\" d=\"M8 5v14l11-7z\"/></svg></button><button class=\"actbtn pinbtn no\" id=\"pinb\" aria-label=\"Ghim cao trào\" title=\"Ghim đoạn cao trào\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 17v5\"/><path d=\"M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z\"/></svg></button></div><div class=\"meta\"><small id=\"sgA\"></small><span class=\"tm\" id=\"sgTm\"></span></div><div class=\"pbar-hit dis\" id=\"pbarHit\" role=\"slider\" aria-label=\"Tua nhạc\"><div class=\"pbar\"><i id=\"pbf\"></i><span class=\"pmark\" id=\"pmark\"></span><div class=\"pgh\" id=\"phd\"><b></b></div></div></div><div class=\"slot\"><div class=\"ly-wrap\" id=\"lyWrap\"><div class=\"ly-track\" id=\"lyTrack\"></div></div><div class=\"wave-wrap\" id=\"waveWrap\"></div></div></div></div></div></div>",
             mount: function (root, B) {
-const P=[[419, 174], [325, 273], [674, 428], [583, 286], [711, 434], [465, 174], [390, 389], [715, 306], [585, 171], [328, 412], [432, 324], [437, 426], [553, 310], [694, 493], [326, 354], [549, 349], [402, 296], [362, 254], [680, 382], [453, 261], [685, 247], [436, 469], [332, 529], [390, 456], [472, 423], [518, 289], [528, 166], [506, 409]],COVER0="anh/nhatky/n10.webp";
-// Bản 195: tranh toa cuối trên đầu thẻ ngày Nhật ký (thân mount(root, B), mk_toa_195.py bọc thành window.CLS_TOA).
-// B.play(): phát / dừng bài của ngày bằng đường phát của 194 (playOrEmbed). B.diary(): mở ô viết nhật ký. B.photo(i): mở ảnh i của ngày.
+const P=[[419,174],[325,273],[674,428],[583,286],[711,434],[465,174],[390,389],[715,306],[585,171],[328,412],[432,324],[437,426],[553,310],[694,493],[326,354],[549,349],[402,296],[362,254],[680,382],[453,261],[685,247],[436,469],[332,529],[390,456],[472,423],[518,289],[528,166],[506,409]],COVER0="anh/nhatky/n10.webp";
 const $=id=>root.getElementById(id),HZ=$('hz');
 $('stars').innerHTML=P.map(([x,y],i)=>`<i class="st ${'abc'[i%3]}" style="left:${x}px;top:${y}px;animation-delay:-${((i*1.37)%4.4).toFixed(2)}s"></i>`).join('');
+const NBARS=44,wWrap=$('waveWrap'),wBars=[],wLev=new Float32Array(NBARS);
+for(let i=0;i<NBARS;i++){const b=document.createElement('i');b.className='wbar';wWrap.appendChild(b);wBars.push(b)}
 const setK=()=>HZ.style.setProperty('--k',HZ.clientWidth/1024);setK();
 let ro=null;try{ro=new ResizeObserver(setK);ro.observe(HZ)}catch(e){addEventListener('resize',setK)}
-// ánh sáng trong toa theo buổi (vũ trụ ngoài kính không đổi): sáng trắng xanh, trưa trắng ấm, chiều cam nhẹ, tối giữ nguyên, khuya trong toa tối hơn
 const BUOI=['rgba(205,220,245,.13)','rgba(250,244,230,.11)','rgba(255,160,80,.13)','rgba(0,0,0,0)','rgba(0,0,0,0)'];
 const buoiNow=()=>{const h=new Date().getHours();return h>=23||h<4?4:h<11?0:h<14?1:h<18?2:3};
 const setBuoi=()=>{const i=buoiNow();$('tint').style.backgroundColor=BUOI[i];HZ.classList.toggle('khuya',i===4)};
 setBuoi();const tB=setInterval(setBuoi,60000);
-let D={},tap=false;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v,lerp=(a,b,t)=>a+(b-a)*t;
+const fmtT=ms=>{const s=Math.max(0,Math.floor(ms/1000));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
+let D={},tap=false,SP={},LY=[],PARTS=[],AN=null,cosOn=false,raf=0,vis=true;
+let scrubbing=false,scrubMs=0,actIdx=-2,inChars=[],cosChars=[],panX=0;
 const fphs=[...root.querySelectorAll('.fph')],fbs=[...root.querySelectorAll('.hit.fb')];
-function update(d){D=d||{};tap=!!D.tap;
- HZ.classList.toggle('on',!!D.lit);
- const c=D.cover||COVER0;$('lab').style.background=`center/cover url("${c}")`;$('lpArt').style.background=`center/cover url("${c}")`;
- $('lp').classList.toggle('no',!D.title);$('sgT').textContent=D.title||'';$('sgA').textContent=D.artist||'';
- HZ.classList.toggle('tap0',!tap);
- fphs.forEach((f,i)=>{const u=(D.photos||[])[i];f.classList.toggle('no',!u);if(u)f.style.backgroundImage=`url("${u}")`;fbs[i].classList.toggle('no',!u)});
- sp(D.sp)}
-let SP={},tP=0;
-// lời bài hát: một dòng chạy theo vị trí phát (LRC từ LRCLIB, app gửi vào bằng api.lyrics)
-let LY=[],lyI=-2,flip=0;
-const setLy=t=>{const a=$(flip?'ly1':'ly0'),b=$(flip?'ly0':'ly1');a.className='out';b.className='pre';b.textContent=t;requestAnimationFrame(()=>{b.className=''});flip^=1};
-const lyrics=L=>{LY=Array.isArray(L)?L:[];lyI=-2;bar()};
-const bar=()=>{const s=SP,pos=(s.pos||0)+(s.playing&&s.posAt?Date.now()-s.posAt:0),r=s.dur?Math.min(1,pos/s.dur):0;$('pbf').style.transform=`scaleX(${r.toFixed(4)})`;$('phd').style.transform=`translateX(${(r*100).toFixed(2)}%)`;
- let i=-1;if(s.playing||pos>0)for(let j=0;j<LY.length;j++)if(LY[j][0]*1000<=pos+150)i=j;if(i!==lyI){lyI=i;setLy(i>=0?LY[i][1]:'')}};
-function sp(s){SP=s||{};const on=!!SP.playing;HZ.classList.toggle('playing',on);$('ppi').setAttribute('d',on?'M7 5h4v14H7zM13 5h4v14h-4z':'M8 5v14l11-7z');
- bar();clearInterval(tP);if(on)tP=setInterval(bar,250)}
+const curPos=()=>{if(scrubbing)return scrubMs;const s=SP;const p=(s.pos||0)+(s.playing&&s.posAt?Date.now()-s.posAt:0);return Math.max(0,s.dur?Math.min(s.dur,p):p)};
+function groupWords(syls){
+  const ws=[];let c=null;
+  for(let i=0;i<syls.length;i++){
+    const [t0,d0,txt,bg]=syls[i];const isBg=bg?1:0;
+    if(!c||c.isBg!==isBg){c={isBg,items:[]};ws.push(c)}
+    c.items.push({t0,dur:Math.max(110,d0||200),txt:String(txt||''),isBg});
+    if(/\s$/.test(txt||''))c=null;
+  }
+  return ws;
+}
+function appendChars(box,items,arr,isBg){
+  for(const it of items){
+    const cs=[...it.txt],n=Math.max(1,cs.length),held=it.dur>=650&&it.txt.trim().length>=2,se=it.t0+it.dur;
+    for(let c=0;c<n;c++){
+      const ch=cs[c],sp=document.createElement('span');sp.className='ch';sp.textContent=ch;box.appendChild(sp);
+      arr.push({el:sp,cS:it.t0+(c/n)*it.dur,cE:it.t0+((c+1)/n)*it.dur,sS:it.t0,sE:se,sD:it.dur,ci:c,cn:n,held,isBg,sp:ch.trim()===''});
+    }
+  }
+}
+function renderIn(idx){
+  inChars=[];panX=0;const tr=$('lyTrack');tr.style.transform='translate3d(0,0,0)';$('lyWrap').classList.remove('scrolled');tr.innerHTML='';
+  if(idx<0||!LY[idx])return;
+  const ws=groupWords((LY[idx][2]||[]).filter(x=>!x[3]));
+  for(const w of ws){const we=document.createElement('span');we.className='cword';appendChars(we,w.items,inChars,0);tr.appendChild(we)}
+}
+function renderCos(idx){
+  cosChars=[];const act=$('cosAct');act.className='cos-act';act.innerHTML='';
+  if(idx<0||!LY[idx]){$('cosWait').classList.toggle('show',cosOn&&!!(SP.playing||SP.pos>0));return}
+  $('cosWait').classList.remove('show');
+  const syls=LY[idx][2]||[],txt=syls.filter(x=>!x[3]).map(x=>x[2]).join('');
+  if(txt.length>44)act.classList.add('sz-sm');else if(txt.length>26)act.classList.add('sz-md');
+  for(const w of groupWords(syls)){const we=document.createElement('span');we.className='cword'+(w.isBg?' bg':'');appendChars(we,w.items,cosChars,w.isBg);act.appendChild(we)}
+  requestAnimationFrame(()=>act.classList.add('in'));
+}
+function updCos(now){
+  for(let i=0;i<cosChars.length;i++){
+    const d=cosChars[i];if(d.sp)continue;
+    const lit=clamp((now-(d.cS-35))/Math.max(85,d.cE-d.cS+55),0,1);
+    const holdA=d.held?(d.sE+d.ci*22):(d.cE+20);
+    const van=clamp((now-(holdA+200))/380,0,1),rem=1-van*van*(3-2*van);
+    const op=lerp(d.isBg?.24:.30,1,lit)*rem;
+    const r=Math.round(lerp(d.isBg?175:210,255,lit)),g=Math.round(lerp(d.isBg?205:224,d.isBg?242:252,lit)),b=Math.round(lerp(255,d.isBg?255:240,lit));
+    const ap=lit*rem;let ty=0,sc=1;
+    if(now>=d.sS-35&&now<=d.sE+160){
+      if(d.held){const p=clamp((now-d.sS)/d.sD,0,1),cp=d.ci/Math.max(1,d.cn-1),w=Math.max(0,1-Math.abs(p-cp)*2.4)*Math.sin(Math.min(1,p*1.15)*Math.PI);ty=-4.5*w;sc=1+.045*w}
+      else{ty=-2.2*Math.sin(clamp((now-d.cS)/Math.max(140,d.cE-d.cS+90),0,1)*Math.PI)}
+    }else if(van>0){sc=1-.05*van}
+    const st=d.el.style;
+    st.opacity=op<.006?'0':op.toFixed(3);st.color=`rgb(${r},${g},${b})`;
+    st.textShadow=ap>.05?`0 0 11px rgba(${d.isBg?'150,196,255':'255,226,158'},${(ap*.82).toFixed(2)}),0 0 24px rgba(${d.isBg?'120,170,255':'175,208,255'},${(ap*(d.held?.56:.34)).toFixed(2)})`:'none';
+    st.transform=(Math.abs(ty)>.05||Math.abs(sc-1)>.003)?`translate3d(0,${ty.toFixed(2)}px,0) scale(${sc.toFixed(3)})`:'';
+  }
+}
+function updIn(now){
+  let act=null;
+  for(let i=0;i<inChars.length;i++){
+    const d=inChars[i];if(d.sp)continue;
+    const lit=clamp((now-(d.cS-30))/Math.max(85,d.cE-d.cS+50),0,1);
+    const cur=now>=d.cS-30&&now<=d.sE+80;if(cur)act=d.el;
+    const df=now>d.sE+180?clamp((now-(d.sE+180))/300,0,1):0;
+    const op=lerp(.34,1,lit)*lerp(1,.84,df);
+    const r=Math.round(lerp(220,255,lit)),g=Math.round(lerp(212,lerp(246,232,df),lit)),b=Math.round(lerp(198,lerp(220,206,df),lit));
+    const ga=lit*(1-df*.72);let ty=0;
+    if(cur){
+      if(d.held){const p=clamp((now-d.sS)/d.sD,0,1),cp=d.ci/Math.max(1,d.cn-1),w=Math.max(0,1-Math.abs(p-cp)*2.4)*Math.sin(Math.min(1,p*1.15)*Math.PI);ty=-2.4*w}
+      else ty=-1.2*Math.sin(clamp((now-d.cS)/Math.max(120,d.cE-d.cS+80),0,1)*Math.PI);
+    }
+    const st=d.el.style;st.opacity=op.toFixed(3);st.color=`rgb(${r},${g},${b})`;
+    st.textShadow=ga>.08?`0 0 10px rgba(242,196,115,${(ga*.78).toFixed(2)}),0 1px 3px rgba(0,0,0,.9)`:'0 1px 3px rgba(0,0,0,.85)';
+    st.transform=Math.abs(ty)>.05?`translate3d(0,${ty.toFixed(2)}px,0)`:'';
+  }
+  return act;
+}
+function energyAt(t){
+  // Tầng 1: nếu có dữ liệu độ to gốc từ Spotify audio-analysis thì dùng trực tiếp
+  if(AN&&AN.length){
+    let lo=0,hi=AN.length-1,mid=0;
+    while(lo<=hi){mid=(lo+hi)>>1;if(AN[mid][0]<=t)lo=mid+1;else hi=mid-1}
+    const idx=Math.max(0,hi),seg=AN[idx];
+    if(seg){return{total:clamp(seg[2],.08,1),held:seg[2]>.78?seg[2]-.65:0}}
+  }
+  // Tầng 2: đường cường độ từ cấu trúc bài Apple Music + âm tiết + khúc ngân + bè nền
+  let sec=.22;
+  for(const p of PARTS){
+    if(t>=p[1]&&t<=p[1]+p[2]){
+      const nm=String(p[0]||'').toLowerCase(),fr=clamp((t-p[1])/Math.max(1,p[2]),0,1);
+      if(nm.includes('prechorus'))sec=.44+fr*.28;
+      else if(nm.includes('postchorus'))sec=.68-fr*.14;
+      else if(nm.includes('chorus'))sec=.78;
+      else if(nm.includes('bridge'))sec=.66+Math.sin(fr*Math.PI)*.24;
+      else if(nm.includes('verse'))sec=.34;
+      else if(nm.includes('intro')||nm.includes('outro'))sec=.18;
+      else sec=.54;
+      break;
+    }
+  }
+  let voc=0,held=0,bg=0,near=false;
+  for(let i=0;i<LY.length;i++){
+    const [lt,ld,syls]=LY[i];
+    if(t>=lt-120&&t<=lt+ld+260){
+      near=true;
+      for(let j=0;j<syls.length;j++){
+        const [st,sd,,isB]=syls[j];
+        if(t>=st-40&&t<=st+sd+120){
+          const p=clamp((t-st)/Math.max(120,sd),0,1),v=Math.max(0,p<.16?p/.16:1-(p-.16)*.28);
+          if(isB)bg=Math.max(bg,v*.28);
+          else{voc=Math.max(voc,v*.54);if(sd>=650)held=Math.max(held,(.28*Math.sin(p*Math.PI)+.05*Math.sin((t-st)*.036))*Math.min(1.4,sd/850))}
+        }
+      }
+      break;
+    }
+  }
+  if(!near)return{total:Math.min(.28,sec*.42+.055*(.5+.5*Math.sin(t*.0052))),held:0};
+  const gr=.06*Math.pow(.5+.5*Math.sin(t*.0068),2);
+  return{total:clamp(sec*.52+voc+held+bg+gr,.08,1),held};
+}
+function updWave(t,on){
+  const e=on?energyAt(t):{total:.05,held:0};HZ.style.setProperty('--en',e.total.toFixed(3));
+  const mid=(NBARS-1)/2,ts=t/1000;
+  for(let i=0;i<NBARS;i++){
+    const dist=Math.abs(i-mid)/mid,arch=Math.pow(Math.cos(dist*Math.PI*.48),1.35);
+    const w1=.5+.5*Math.sin(ts*(4.2+(i%5)*.7)-dist*5.2),w2=.5+.5*Math.cos(ts*(7.6+(i%3)*1.1)+i*.65);
+    const tg=on?clamp(.08+e.total*arch*(.48+.66*(.35+.65*w1)*(.62+.38*w2))+e.held*(1-dist*.7)*.35,.08,1):.07;
+    wLev[i]+=(tg-wLev[i])*(tg>wLev[i]?.34:.16);
+    const h=wLev[i];wBars[i].style.transform=`scaleY(${h.toFixed(3)})`;wBars[i].classList.toggle('hot',h>.72);
+  }
+}
+function paint(force){
+  raf=0;
+  const s=SP,on=!!s.playing&&!scrubbing,pos=curPos(),dur=s.dur||0,r=dur?clamp(pos/dur,0,1):0;
+  $('pbf').style.transform=`scaleX(${r.toFixed(4)})`;$('phd').style.transform=`translateX(${(r*100).toFixed(2)}%)`;
+  $('sgTm').textContent=dur?(fmtT(pos)+' / '+fmtT(dur)):'';
+  let li=-1;
+  if(s.playing||pos>0){
+    for(let i=0;i<LY.length;i++){
+      const [lt,ld]=LY[i];
+      if(pos>=lt-160){const nt=i+1<LY.length?LY[i+1][0]:(dur||lt+ld+1000);if(pos<=Math.min(nt-160,lt+ld+620))li=i}
+      else break;
+    }
+  }
+  if(li!==actIdx||force){actIdx=li;renderIn(li);renderCos(li)}
+  if(!cosOn){
+    const act=updIn(pos),ww=$('lyWrap').clientWidth,tw=$('lyTrack').scrollWidth;
+    let tg=0;if(tw>ww+4&&act)tg=clamp(act.offsetLeft+act.offsetWidth*.5-ww*.42,0,tw-ww+10);
+    panX+=(tg-panX)*(force?1:.14);$('lyTrack').style.transform=`translate3d(${(-panX).toFixed(1)}px,0,0)`;$('lyWrap').classList.toggle('scrolled',panX>8);
+  }else{updCos(pos)}
+  if(cosOn)updWave(pos,on);
+  if(vis&&!document.hidden&&(s.playing||scrubbing))raf=requestAnimationFrame(()=>paint(false));
+}
+function ensureLoop(){if(!raf&&vis&&!document.hidden&&(SP.playing||scrubbing))raf=requestAnimationFrame(()=>paint(false))}
+function update(d){
+  D=d||{};tap=!!D.tap;HZ.classList.toggle('on',!!D.lit);
+  const c=D.cover||COVER0;$('lab').style.background=`center/cover url("${c}")`;$('lpArt').style.background=`center/cover url("${c}")`;
+  $('lp').classList.toggle('no',!D.title);$('sgT').textContent=D.title||'';$('sgA').textContent=D.artist||'';
+  HZ.classList.toggle('tap0',!tap);
+  const pb=$('pinb');pb.classList.toggle('no',!D.canPin);pb.classList.toggle('pinned',D.markMs!==null&&D.markMs!==undefined);
+  const dur=(D.sp&&D.sp.dur)||0;const pm=$('pmark');
+  const hm=D.canPin&&D.markMs!==null&&D.markMs!==undefined&&dur>0;
+  pm.classList.toggle('show',hm);if(hm)pm.style.left=clamp((D.markMs/dur)*100,0,100).toFixed(2)+'%';
+  $('pbarHit').classList.toggle('dis',!dur);
+  fphs.forEach((f,i)=>{const u=(D.photos||[])[i];f.classList.toggle('no',!u);if(u)f.style.backgroundImage=`url("${u}")`;fbs[i].classList.toggle('no',!u)});
+  sp(D.sp);
+}
+function sp(s){
+  SP=s||{};const on=!!SP.playing;HZ.classList.toggle('playing',on);
+  $('ppi').setAttribute('d',on?'M7 5h4v14H7zM13 5h4v14h-4z':'M8 5v14l11-7z');
+  if(!SP.playing&&!(SP.pos>0)){$('cosWait').classList.remove('show')}
+  paint(true);ensureLoop();
+}
+function lyrics(payload){
+  if(payload&&Array.isArray(payload.lines)){LY=payload.lines;PARTS=Array.isArray(payload.parts)?payload.parts:[]}
+  else if(Array.isArray(payload)){LY=payload;PARTS=[]}
+  else{LY=[];PARTS=[]}
+  actIdx=-2;paint(true);
+}
+function analysis(segs){AN=Array.isArray(segs)&&segs.length?segs:null}
+$('winbtn').addEventListener('click',()=>{
+  if(!D.title)return;
+  cosOn=!cosOn;HZ.classList.toggle('cos-on',cosOn);
+  paint(true);ensureLoop();
+});
 $('ppb').addEventListener('click',e=>{e.stopPropagation();B.play()});
 $('cvbtn').addEventListener('click',e=>{e.stopPropagation();if(tap)B.play()});
 $('recbtn').addEventListener('click',()=>{if(tap)B.play()});
+$('pinb').addEventListener('click',e=>{e.stopPropagation();if(B.pin)B.pin(Math.round(curPos()))});
 $('nbtn').addEventListener('click',()=>B.diary());
 fbs.forEach((b,i)=>b.addEventListener('click',()=>B.photo(i)));
-// dừng chuyển động khi tranh khuất hoặc app ẩn
-let vis=true;const pz=()=>HZ.classList.toggle('paused',!vis||document.hidden);
+const phit=$('pbarHit');
+const msAt=ev=>{const r=phit.getBoundingClientRect();return Math.round(clamp((ev.clientX-r.left)/Math.max(1,r.width),0,1)*(SP.dur||0))};
+phit.addEventListener('pointerdown',ev=>{if(!(SP.dur>0))return;ev.preventDefault();try{phit.setPointerCapture(ev.pointerId)}catch(e){}scrubbing=true;phit.classList.add('scrubbing');scrubMs=msAt(ev);paint(true)});
+phit.addEventListener('pointermove',ev=>{if(!scrubbing)return;scrubMs=msAt(ev);paint(true)});
+const endScrub=ev=>{if(!scrubbing)return;scrubbing=false;phit.classList.remove('scrubbing');const v=msAt(ev);SP={...SP,pos:v,posAt:Date.now()};if(B.seek)B.seek(v);paint(true);ensureLoop()};
+phit.addEventListener('pointerup',endScrub);
+phit.addEventListener('pointercancel',()=>{scrubbing=false;phit.classList.remove('scrubbing');paint(true);ensureLoop()});
+const pz=()=>{const off=!vis||document.hidden;HZ.classList.toggle('paused',off);if(off&&raf){cancelAnimationFrame(raf);raf=0}else ensureLoop()};
 let io=null;try{io=new IntersectionObserver(es=>{vis=es[0].isIntersecting;pz()},{threshold:0});io.observe(HZ)}catch(e){}
 document.addEventListener('visibilitychange',pz);
-return{update,sp,lyrics,destroy:()=>{clearInterval(tB);clearInterval(tP);ro&&ro.disconnect();io&&io.disconnect();document.removeEventListener('visibilitychange',pz)}};
-
+return{update,sp,lyrics,analysis,destroy:()=>{clearInterval(tB);if(raf)cancelAnimationFrame(raf);ro&&ro.disconnect();io&&io.disconnect();document.removeEventListener('visibilitychange',pz)}};
             }
         };
     </script>
@@ -2808,7 +2980,11 @@ try {
         if (st.player && st.player.activateElement) st.player.activateElement();
       } catch (e) {
       }
-      const prev = { playingTrack: st.playingTrack, paused: st.paused };
+      const prev = { playingTrack: st.playingTrack, paused: st.paused, item: st.item };
+      if (st.playingTrack !== trackId) {
+        const m0 = spotifyMetaCache[trackId];
+        st.item = { id: trackId, title: m0 && m0.title || "", artist: getCachedSpotifyArtist(trackId) || "", thumb: m0 && m0.thumb || "" };
+      }
       st.playingTrack = trackId;
       st.paused = false;
       st.closed = false;
@@ -3003,13 +3179,34 @@ try {
       spSave(null);
       emit();
     };
+    let noAn = false;
+    const anCache = {};
+    const audioAnalysis = async (tid) => {
+      if (!tid || noAn || !loggedIn()) return null;
+      if (anCache[tid] !== void 0) return anCache[tid];
+      try {
+        const j = await api("GET", "/audio-analysis/" + encodeURIComponent(tid));
+        const segs = Array.isArray(j && j.segments) ? j.segments : [];
+        if (!segs.length) {
+          anCache[tid] = null;
+          return null;
+        }
+        const out = segs.map((x) => [Math.round((x.start || 0) * 1e3), Math.max(40, Math.round((x.duration || 0.2) * 1e3)), Math.max(0, Math.min(1, ((typeof x.loudness_max === "number" ? x.loudness_max : -24) + 34) / 31))]);
+        anCache[tid] = out;
+        return out;
+      } catch (e) {
+        if (e && (e.status === 403 || e.status === 404)) noAn = true;
+        anCache[tid] = null;
+        return null;
+      }
+    };
     return { warm, warmToken: () => {
       getToken().catch(() => {
       });
     }, loggedIn, login: () => {
       st.invite = false;
       return login();
-    }, handleRedirect, play, toggle, ensure, pause, resume, playPause, seek, position, refresh, close, logout, invite, dismissInvite, get: snap, subscribe: (f) => {
+    }, handleRedirect, play, toggle, ensure, pause, resume, playPause, seek, position, refresh, close, logout, invite, dismissInvite, audioAnalysis, get: snap, subscribe: (f) => {
       subs.add(f);
       return () => subs.delete(f);
     } };
@@ -3573,7 +3770,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 195;
+  const CLS_BAN = 198;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top", "eatg"];
@@ -4091,7 +4288,7 @@ try {
     };
     return React.createElement("div", { className: "bg-groove/50 p-5 rounded-[2px] border-line", "data-fb-box": true }, React.createElement("label", { className: "block font-bold text-sub mb-3" }, "Firebase"), user ? React.createElement("p", { className: "text-sm text-ink", "data-fb-user": true }, user.email) : React.createElement("button", { type: "button", onClick: login, className: "w-full py-3 bg-card border border-line text-ink rounded-[2px] font-bold" }, "Đăng nhập Google"), user && React.createElement("button", { type: "button", onClick: copy, disabled: !!busy, className: "w-full mt-3 py-3 bg-accent text-onaccent rounded-[2px] font-bold disabled:opacity-50", "data-fb-copy": true }, busy || "Chép lên Firebase"), user && React.createElement("button", { type: "button", onClick: toggleAuto, className: `w-full mt-3 py-3 rounded-[2px] font-bold border ${auto ? "bg-accent text-onaccent border-accent" : "bg-card text-ink border-line"}`, "data-fb-auto": auto ? "1" : "0" }, "Tự đồng bộ: ", auto ? "Bật" : "Tắt"), (res || auto && fbS.st) && React.createElement("p", { className: "mt-2 text-xs text-sub", "data-fb-res": true }, res || fbS.st));
   };
-  const SYL_KEY = "cls_syl_v1", sylPending = {};
+  const SYL_KEY = "cls_syl_v2", sylPending = {}, sylEmptyAt = {};
   const sylCache = (() => {
     try {
       return JSON.parse(localStorage.getItem(SYL_KEY) || "{}") || {};
@@ -4099,6 +4296,7 @@ try {
       return {};
     }
   })();
+  const sylNorm = (v) => String(v || "").toLowerCase().replace(/\s+/g, " ").trim();
   const sylFromLrc = (lines, durMs) => {
     if (!Array.isArray(lines) || !lines.length) return [];
     return lines.map((l, i) => {
@@ -4115,17 +4313,23 @@ try {
       let cur = t0;
       const syls = words.map((w) => {
         const d = Math.max(80, Math.round(span * (Math.max(1, w.trim().length) / totalW)));
-        const row = [cur, d, w];
+        const row = [cur, d, w, 0];
         cur += d;
         return row;
       });
       return [t0, span, syls];
     }).filter((x) => x[2].length);
   };
-  const sylGet = (tid, title, artist, durMs) => {
-    if (!tid || !title) return Promise.resolve([]);
-    if (sylCache[tid]) return Promise.resolve(sylCache[tid]);
-    if (sylPending[tid]) return sylPending[tid];
+  const sylGetFull = (tid, title, artist, durMs) => {
+    const nt = sylNorm(title);
+    if (!tid || !nt || nt === "spotify") return Promise.resolve({ lines: [], parts: [] });
+    const hit = sylCache[tid];
+    if (hit && hit.t === nt && Array.isArray(hit.l) && hit.l.length) {
+      return Promise.resolve({ lines: hit.l, parts: Array.isArray(hit.p) ? hit.p : [] });
+    }
+    const pk = tid + "::" + nt;
+    if (sylEmptyAt[pk] && Date.now() - sylEmptyAt[pk] < 3e4) return Promise.resolve({ lines: [], parts: [] });
+    if (sylPending[pk]) return sylPending[pk];
     const q = (o) => Object.keys(o).filter((k) => o[k]).map((k) => k + "=" + encodeURIComponent(o[k])).join("&");
     const lpUrl = "https://lyricsplus.prjktla.my.id/v2/lyrics/get?" + q({
       title,
@@ -4133,53 +4337,62 @@ try {
       duration: durMs ? Math.round(durMs / 1e3) : "",
       source: "apple,lyricsplus,musixmatch,spotify"
     });
-    const save = (arr) => {
-      sylCache[tid] = arr;
-      try {
-        const ks = Object.keys(sylCache);
-        if (ks.length > 60) delete sylCache[ks[0]];
-        localStorage.setItem(SYL_KEY, JSON.stringify(sylCache));
-      } catch (e) {
+    const finish = (lines, parts) => {
+      delete sylPending[pk];
+      if (Array.isArray(lines) && lines.length) {
+        sylCache[tid] = { t: nt, l: lines, p: Array.isArray(parts) ? parts : [] };
+        try {
+          const ks = Object.keys(sylCache);
+          if (ks.length > 60) delete sylCache[ks[0]];
+          localStorage.setItem(SYL_KEY, JSON.stringify(sylCache));
+        } catch (e) {
+        }
+        return { lines, parts: Array.isArray(parts) ? parts : [] };
       }
-      delete sylPending[tid];
-      return arr;
+      sylEmptyAt[pk] = Date.now();
+      return { lines: [], parts: [] };
     };
-    sylPending[tid] = fetch(lpUrl).then((r) => r.ok ? r.json() : null).catch(() => null).then((j) => {
+    sylPending[pk] = fetch(lpUrl).then((r) => r.ok ? r.json() : null).catch(() => null).then((j) => {
       if (j && Array.isArray(j.lyrics) && j.lyrics.length) {
         const parsed = j.lyrics.map((l) => {
-          const rawSyls = Array.isArray(l.syllabus) ? l.syllabus.filter((s) => !s.isBackground && s.text) : [];
+          const rawSyls = Array.isArray(l.syllabus) ? l.syllabus.filter((s) => s && s.text) : [];
           if (rawSyls.length) {
-            return [Math.round(l.time || 0), Math.round(l.duration || 2e3), rawSyls.map((s) => [Math.round(s.time || 0), Math.max(1, Math.round(s.duration || 200)), String(s.text)])];
+            return [Math.round(l.time || 0), Math.round(l.duration || 2e3), rawSyls.map((s) => [Math.round(s.time || 0), Math.max(1, Math.round(s.duration || 200)), String(s.text), s.isBackground ? 1 : 0])];
           }
-          if (l.text) return [Math.round(l.time || 0), Math.round(l.duration || 2500), [[Math.round(l.time || 0), Math.max(1, Math.round(l.duration || 2500)), String(l.text)]]];
+          if (l.text) return [Math.round(l.time || 0), Math.round(l.duration || 2500), [[Math.round(l.time || 0), Math.max(1, Math.round(l.duration || 2500)), String(l.text), 0]]];
           return null;
         }).filter(Boolean);
-        if (parsed.length) return save(parsed);
+        const sparts = Array.isArray(j.metadata && j.metadata.songParts) ? j.metadata.songParts.map((p) => [String(p.name || ""), Math.round(p.time || 0), Math.round(p.duration || 0)]) : [];
+        if (parsed.length) return finish(parsed, sparts);
       }
-      return (typeof lrcGet === "function" ? lrcGet(tid, title, artist, durMs) : Promise.resolve([])).then((L) => save(sylFromLrc(L, durMs)));
+      return (typeof lrcGet === "function" ? lrcGet(tid, title, artist, durMs) : Promise.resolve([])).then((L) => finish(sylFromLrc(L, durMs), []));
     });
-    return sylPending[tid];
+    return sylPending[pk];
   };
-  const SyllableLyrics = ({ trackId, title, artist, durMs, playing, posOverride }) => {
+  const sylGet = (tid, title, artist, durMs) => sylGetFull(tid, title, artist, durMs).then((r) => r.lines || []);
+  const SyllableLyrics = ({ trackId, title, artist, durMs, playing, posOverride, seekRev }) => {
     const maskRef = useRef(null);
     const trackRef = useRef(null);
     const linesRef = useRef([]);
+    const charsRef = useRef([]);
     const stateRef = useRef({ lineIdx: -99, panX: 0 });
     const posOverRef = useRef(posOverride);
     posOverRef.current = posOverride;
     const [readyTick, setReadyTick] = useState(0);
     useEffect(() => {
       linesRef.current = [];
+      charsRef.current = [];
       stateRef.current = { lineIdx: -99, panX: 0 };
       if (trackRef.current) {
         trackRef.current.innerHTML = "";
         trackRef.current.style.transform = "translate3d(0,0,0)";
       }
-      if (!trackId || !title) return;
+      const nt = sylNorm(title);
+      if (!trackId || !nt || nt === "spotify") return;
       let alive = true;
-      sylGet(trackId, title, artist, durMs).then((L) => {
+      sylGetFull(trackId, title, artist, durMs).then((res) => {
         if (alive) {
-          linesRef.current = L || [];
+          linesRef.current = res && res.lines || [];
           setReadyTick((x) => x + 1);
         }
       });
@@ -4189,7 +4402,8 @@ try {
     }, [trackId, title, artist]);
     useEffect(() => {
       let raf = 0;
-      const escH = (s) => String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      const cl = (v, a, b) => v < a ? a : v > b ? b : v;
+      const lp = (a, b, t) => a + (b - a) * t;
       const paint = () => {
         raf = 0;
         const mask = maskRef.current, tr = trackRef.current, lines = linesRef.current;
@@ -4205,45 +4419,66 @@ try {
         if (st.lineIdx !== idx) {
           st.lineIdx = idx;
           st.panX = 0;
-          tr.innerHTML = line ? line[2].map(([t, d, txt]) => `<span class="syl${d >= 650 ? " hold" : ""}" data-t="${t}" data-d="${d}">${escH(txt)}</span>`).join("") : "";
+          charsRef.current = [];
+          tr.innerHTML = "";
           tr.style.transform = "translate3d(0,0,0)";
-        }
-        if (line) {
-          const spans = tr.children;
-          let focus = null;
-          for (let i = 0; i < spans.length; i++) {
-            const sp = spans[i], t = Number(sp.dataset.t), d = Number(sp.dataset.d), isHold = sp.classList.contains("hold");
-            const p = posMs <= t ? 0 : posMs >= t + d ? 1 : (posMs - t) / d;
-            sp.style.setProperty("--p", (p * 100).toFixed(1) + "%");
-            if (p > 0 && p < 1) {
-              focus = sp;
-              const sw = Math.sin(p * Math.PI);
-              if (isHold) {
-                sp.classList.add("hold-on");
-                sp.style.setProperty("--lift", (-2.8 * sw).toFixed(2) + "px");
-                sp.style.setProperty("--sc", (1 + 0.055 * sw).toFixed(4));
-                sp.style.setProperty("--glow", sw.toFixed(3));
-              } else {
-                sp.style.setProperty("--lift", (-1.1 * sw).toFixed(2) + "px");
-                sp.style.setProperty("--sc", "1");
+          if (line) {
+            const syls = (line[2] || []).filter((x) => !x[3]);
+            for (let j = 0; j < syls.length; j++) {
+              const [t0, d0, txt] = syls[j];
+              const dur = Math.max(110, d0 || 200);
+              const cs = [...String(txt || "")], n = Math.max(1, cs.length);
+              const held = dur >= 650 && String(txt || "").trim().length >= 2;
+              const se = t0 + dur;
+              for (let c = 0; c < n; c++) {
+                const ch = cs[c], sp = document.createElement("span");
+                sp.className = "ly-ch";
+                sp.textContent = ch;
+                tr.appendChild(sp);
+                charsRef.current.push({ el: sp, cS: t0 + c / n * dur, cE: t0 + (c + 1) / n * dur, sS: t0, sE: se, sD: dur, ci: c, cn: n, held, sp: ch.trim() === "" });
               }
-            } else {
-              if (isHold) sp.classList.remove("hold-on");
-              sp.style.setProperty("--lift", "0px");
-              sp.style.setProperty("--sc", "1");
-              sp.style.setProperty("--glow", "0");
-              if (p >= 1) focus = sp;
             }
           }
-          const maxPan = Math.max(0, tr.scrollWidth - mask.clientWidth + 14);
-          if (maxPan > 4 && focus) {
-            const targetPan = Math.max(0, Math.min(maxPan, focus.offsetLeft - mask.clientWidth * 0.34));
-            st.panX += (targetPan - st.panX) * 0.14;
-            tr.style.transform = `translate3d(${(-st.panX).toFixed(1)}px,0,0)`;
-          } else if (st.panX !== 0) {
-            st.panX = 0;
-            tr.style.transform = "translate3d(0,0,0)";
+        }
+        const chars = charsRef.current;
+        let focus = null;
+        for (let i = 0; i < chars.length; i++) {
+          const d = chars[i];
+          if (d.sp) continue;
+          const lit = cl((posMs - (d.cS - 30)) / Math.max(85, d.cE - d.cS + 50), 0, 1);
+          const isCur = posMs >= d.cS - 30 && posMs <= d.sE + 80;
+          if (isCur) focus = d.el;
+          const df = posMs > d.sE + 180 ? cl((posMs - (d.sE + 180)) / 300, 0, 1) : 0;
+          const op = lp(0.32, 1, lit) * lp(1, 0.86, df);
+          const r = Math.round(lp(220, 255, lit));
+          const g = Math.round(lp(212, lp(246, 232, df), lit));
+          const b = Math.round(lp(198, lp(220, 206, df), lit));
+          const ga = lit * (1 - df * 0.72);
+          let ty = 0;
+          if (isCur) {
+            if (d.held) {
+              const p = cl((posMs - d.sS) / d.sD, 0, 1), cp = d.ci / Math.max(1, d.cn - 1);
+              const w = Math.max(0, 1 - Math.abs(p - cp) * 2.4) * Math.sin(Math.min(1, p * 1.15) * Math.PI);
+              ty = -2.4 * w;
+            } else {
+              ty = -1.2 * Math.sin(cl((posMs - d.cS) / Math.max(120, d.cE - d.cS + 80), 0, 1) * Math.PI);
+            }
           }
+          const elS = d.el.style;
+          elS.opacity = op.toFixed(3);
+          elS.color = `rgb(${r},${g},${b})`;
+          elS.textShadow = ga > 0.08 ? `0 0 10px rgba(242,196,115,${(ga * 0.78).toFixed(2)})` : "none";
+          elS.transform = Math.abs(ty) > 0.05 ? `translate3d(0,${ty.toFixed(2)}px,0)` : "";
+        }
+        if (!focus && chars.length && posMs > chars[chars.length - 1].sE) focus = chars[chars.length - 1].el;
+        const maxPan = Math.max(0, tr.scrollWidth - mask.clientWidth + 14);
+        if (maxPan > 4 && focus) {
+          const targetPan = cl(focus.offsetLeft - mask.clientWidth * 0.36, 0, maxPan);
+          st.panX += (targetPan - st.panX) * 0.14;
+          tr.style.transform = `translate3d(${(-st.panX).toFixed(1)}px,0,0)`;
+        } else if (st.panX !== 0) {
+          st.panX = 0;
+          tr.style.transform = "translate3d(0,0,0)";
         }
         if (playing) raf = requestAnimationFrame(paint);
       };
@@ -4251,7 +4486,7 @@ try {
       return () => {
         if (raf) cancelAnimationFrame(raf);
       };
-    }, [playing, readyTick, posOverride]);
+    }, [playing, readyTick, posOverride, seekRev]);
     return React.createElement("div", { ref: maskRef, className: "ly-mask", "data-ly-mask": true }, React.createElement("div", { ref: trackRef, className: "ly-track" }));
   };
   const MiniPlayerBar = ({ sp, onJump }) => {
@@ -4278,11 +4513,18 @@ try {
     const [, setTick] = useState(0);
     const [drag, setDrag] = useState(null);
     const dragRef = useRef(null);
+    const downRef = useRef(false);
     const [imgFailed, setImgFailed] = useState(false);
     const it = sp && sp.item || {};
+    const itemMatches = !it.id || it.id === (sp && sp.playingTrack);
     useEffect(() => {
       setImgFailed(false);
     }, [it.thumb]);
+    useEffect(() => {
+      downRef.current = false;
+      dragRef.current = null;
+      setDrag(null);
+    }, [sp && sp.playingTrack]);
     useEffect(() => {
       if (!sp || sp.paused || drag !== null) return;
       const t = setInterval(() => setTick((x) => x + 1), 500);
@@ -4293,18 +4535,28 @@ try {
     const pos = drag !== null ? drag : Spotify.position();
     const pct = dur ? Math.min(100, pos / dur * 100) : 0;
     const hasMark = canPin && markMs !== null && markMs !== void 0;
+    const startDrag = () => {
+      downRef.current = true;
+    };
     const move = (v) => {
+      if (!downRef.current) {
+        dragRef.current = null;
+        setDrag(null);
+        Spotify.seek(v);
+        return;
+      }
       dragRef.current = v;
       setDrag(v);
     };
     const commit = () => {
+      downRef.current = false;
       const v = dragRef.current;
       if (v === null) return;
       dragRef.current = null;
       setDrag(null);
       Spotify.seek(v);
     };
-    return React.createElement("div", { className: `shrink-0 bg-[#0c0c0d] ${place === "top" ? "border-b" : "border-t"} border-line`, onClick: (e) => e.stopPropagation(), "data-player-bar": sp.paused ? "dung" : "dang-phat", "data-player-place": place === "top" ? "tren" : "duoi" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto flex items-center gap-2.5 pl-3 pr-2 py-2" }, React.createElement("div", { className: "w-10 h-10 rounded-[4px] shrink-0 overflow-hidden", style: { background: COVER_FALLBACK } }, it.thumb && !imgFailed && React.createElement("img", { src: it.thumb, alt: "", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" })), React.createElement("div", { className: "flex-1 min-w-0" }, React.createElement("div", { className: "text-[13px] leading-tight text-ink truncate", "data-player-title": true }, React.createElement("span", { className: "font-semibold" }, it.title || "Spotify"), it.artist ? React.createElement("span", { className: "text-sub" }, " · ", it.artist) : null), React.createElement(SyllableLyrics, { trackId: sp.playingTrack, title: it.title, artist: it.artist, durMs: dur, playing: !sp.paused && drag === null, posOverride: drag }), React.createElement("div", { className: "flex items-center gap-2 mt-0.5 font-num text-[10.5px] text-dim tabular-nums" }, React.createElement("span", { className: "w-7 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-3.5 flex items-center" }, React.createElement(
+    return React.createElement("div", { className: `shrink-0 bg-[#0c0c0d] ${place === "top" ? "border-b" : "border-t"} border-line`, onClick: (e) => e.stopPropagation(), "data-player-bar": sp.paused ? "dung" : "dang-phat", "data-player-place": place === "top" ? "tren" : "duoi" }, React.createElement("div", { className: "max-w-md min-[900px]:max-w-[680px] mx-auto flex items-center gap-2.5 pl-3 pr-2 py-2" }, React.createElement("div", { className: "w-10 h-10 rounded-[4px] shrink-0 overflow-hidden", style: { background: COVER_FALLBACK } }, it.thumb && !imgFailed && React.createElement("img", { src: it.thumb, alt: "", referrerPolicy: "no-referrer", onError: () => setImgFailed(true), className: "w-full h-full object-cover" })), React.createElement("div", { className: "flex-1 min-w-0" }, React.createElement("div", { className: "text-[13px] leading-tight text-ink truncate", "data-player-title": true }, React.createElement("span", { className: "font-semibold" }, it.title || "Spotify"), it.artist ? React.createElement("span", { className: "text-sub" }, " · ", it.artist) : null), React.createElement(SyllableLyrics, { trackId: sp.playingTrack, title: itemMatches ? it.title : "", artist: itemMatches ? it.artist : "", durMs: dur, playing: !sp.paused && drag === null, posOverride: drag, seekRev: sp.posAt }), React.createElement("div", { className: "flex items-center gap-2 mt-0.5 font-num text-[10.5px] text-dim tabular-nums" }, React.createElement("span", { className: "w-7 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-3.5 flex items-center" }, React.createElement(
       "input",
       {
         type: "range",
@@ -4316,6 +4568,9 @@ try {
         "aria-label": "Tua",
         className: "jwk-seek",
         style: { "--p": pct + "%" },
+        onPointerDown: startDrag,
+        onTouchStart: startDrag,
+        onPointerCancel: commit,
         onChange: (e) => move(Number(e.target.value)),
         onPointerUp: commit,
         onTouchEnd: commit,
@@ -7065,16 +7320,16 @@ try {
     });
     return lrcPending[tid];
   };
-  const ToaCuoi = ({ data, onPlay, onDiary, onPhoto }) => {
+  const ToaCuoi = ({ data, onPlay, onSeek, onPin, onDiary, onPhoto }) => {
     const hostRef = useRef(null), api = useRef(null), H = useRef({});
-    H.current = { onPlay, onDiary, onPhoto };
+    H.current = { onPlay, onSeek, onPin, onDiary, onPhoto };
     useEffect(() => {
       const host = hostRef.current;
       if (!host || !window.CLS_TOA) return;
       const root2 = host.shadowRoot || host.attachShadow({ mode: "open" });
       root2.innerHTML = "<style>" + window.CLS_TOA.css + "</style>" + window.CLS_TOA.html;
       try {
-        api.current = window.CLS_TOA.mount(root2, { play: () => H.current.onPlay(), diary: () => H.current.onDiary(), photo: (i) => H.current.onPhoto(i) });
+        api.current = window.CLS_TOA.mount(root2, { play: () => H.current.onPlay(), seek: (ms) => H.current.onSeek && H.current.onSeek(ms), pin: (ms) => H.current.onPin && H.current.onPin(ms), diary: () => H.current.onDiary(), photo: (i) => H.current.onPhoto(i) });
       } catch (e) {
         console.error("CLS_TOA", e);
       }
@@ -7090,15 +7345,22 @@ try {
     }, [sig]);
     const lk = data.tid && data.sp && (data.sp.playing || data.sp.pos) ? data.tid : "";
     useEffect(() => {
-      if (!lk) return;
+      if (!lk) {
+        if (api.current && api.current.lyrics) api.current.lyrics({ lines: [], parts: [] });
+        if (api.current && api.current.analysis) api.current.analysis(null);
+        return;
+      }
       let on = true;
-      lrcGet(lk, data.title, data.artist, data.sp.dur).then((L) => {
-        if (on && api.current && api.current.lyrics) api.current.lyrics(L);
+      sylGetFull(lk, data.title, data.artist, data.sp.dur).then((res) => {
+        if (on && api.current && api.current.lyrics) api.current.lyrics(res);
+      });
+      if (Spotify.audioAnalysis) Spotify.audioAnalysis(lk).then((segs) => {
+        if (on && api.current && api.current.analysis) api.current.analysis(segs);
       });
       return () => {
         on = false;
       };
-    }, [lk]);
+    }, [lk, data.title, data.artist]);
     return React.createElement("div", { ref: hostRef, "data-toa-cuoi": "", className: "block w-full", style: { aspectRatio: "1 / 1" } });
   };
   const EatGio = ({ bridge, data, self, hidden }) => {
@@ -8047,6 +8309,12 @@ try {
     const [, setTick] = useState(0);
     const [drag, setDrag] = useState(null);
     const dragRef = useRef(null);
+    const downRef = useRef(false);
+    useEffect(() => {
+      downRef.current = false;
+      dragRef.current = null;
+      setDrag(null);
+    }, [trackId]);
     useEffect(() => {
       if (!sp || sp.paused || drag !== null) return;
       const t = setInterval(() => setTick((x) => x + 1), 500);
@@ -8056,18 +8324,28 @@ try {
     const pos = drag !== null ? drag : Spotify.position();
     const pct = dur ? Math.min(100, pos / dur * 100) : 0;
     const hasMark = canPin && markMs !== null && markMs !== void 0;
+    const startDrag = () => {
+      downRef.current = true;
+    };
     const move = (v) => {
+      if (!downRef.current) {
+        dragRef.current = null;
+        setDrag(null);
+        Spotify.seek(v);
+        return;
+      }
       dragRef.current = v;
       setDrag(v);
     };
     const commit = () => {
+      downRef.current = false;
       const v = dragRef.current;
       if (v === null) return;
       dragRef.current = null;
       setDrag(null);
       Spotify.seek(v);
     };
-    return React.createElement("div", { className: "pt-0.5 flex flex-col gap-0.5", onClick: (e) => e.stopPropagation(), "data-inline-ctrl": true }, React.createElement("div", { className: "flex items-center gap-1.5 min-w-0" }, React.createElement(SyllableLyrics, { trackId, title, artist, durMs: dur, playing: !sp.paused && drag === null, posOverride: drag }), canPin && React.createElement("button", { type: "button", "aria-label": "Ghim cao trào", title: "Ghim mốc cao trào", onClick: () => onPin(Spotify.position()), className: `w-6 h-6 shrink-0 flex items-center justify-center active:scale-90 ${hasMark ? "text-accent" : "text-sub hover:text-ink"}`, "data-player-pin": true }, React.createElement(PinIcon, { size: 14 })), sp.paused && React.createElement("button", { type: "button", "aria-label": "Tắt trình phát", onClick: () => Spotify.close(), className: "w-6 h-6 shrink-0 flex items-center justify-center text-sub hover:text-ink", "data-player-close": true }, React.createElement(XIcon, { size: 14 }))), React.createElement("div", { className: "flex items-center gap-2 font-num text-[10px] text-dim tabular-nums" }, React.createElement("span", { className: "w-7 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-3.5 flex items-center" }, React.createElement(
+    return React.createElement("div", { className: "pt-0.5 flex flex-col gap-0.5", onClick: (e) => e.stopPropagation(), "data-inline-ctrl": true }, React.createElement("div", { className: "flex items-center gap-1.5 min-w-0" }, React.createElement(SyllableLyrics, { trackId, title, artist, durMs: dur, playing: !sp.paused && drag === null, posOverride: drag, seekRev: sp && sp.posAt }), canPin && React.createElement("button", { type: "button", "aria-label": "Ghim cao trào", title: "Ghim mốc cao trào", onClick: () => onPin(Spotify.position()), className: `w-6 h-6 shrink-0 flex items-center justify-center active:scale-90 ${hasMark ? "text-accent" : "text-sub hover:text-ink"}`, "data-player-pin": true }, React.createElement(PinIcon, { size: 14 })), sp.paused && React.createElement("button", { type: "button", "aria-label": "Tắt trình phát", onClick: () => Spotify.close(), className: "w-6 h-6 shrink-0 flex items-center justify-center text-sub hover:text-ink", "data-player-close": true }, React.createElement(XIcon, { size: 14 }))), React.createElement("div", { className: "flex items-center gap-2 font-num text-[10px] text-dim tabular-nums" }, React.createElement("span", { className: "w-7 shrink-0", "data-player-pos": true }, markFmt(pos)), React.createElement("div", { className: "relative flex-1 min-w-0 h-3.5 flex items-center" }, React.createElement(
       "input",
       {
         type: "range",
@@ -8079,6 +8357,9 @@ try {
         "aria-label": "Tua",
         className: "jwk-seek",
         style: { "--p": pct + "%" },
+        onPointerDown: startDrag,
+        onTouchStart: startDrag,
+        onPointerCancel: commit,
         onChange: (e) => move(Number(e.target.value)),
         onPointerUp: commit,
         onTouchEnd: commit,
@@ -8246,6 +8527,77 @@ try {
       imgEl.style.display = "none";
     }
   };
+  const PULL_BASE_KEY = "cls_pull_base";
+  const pullBase = (() => {
+    try {
+      const o = JSON.parse(localStorage.getItem(PULL_BASE_KEY) || "{}");
+      return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    } catch (e) {
+      return {};
+    }
+  })();
+  const pullBaseSave = () => {
+    try {
+      localStorage.setItem(PULL_BASE_KEY, JSON.stringify(pullBase));
+    } catch (e) {
+    }
+  };
+  const pullHash = (v, keepId) => {
+    const norm = (x) => {
+      if (Array.isArray(x)) return x.map(norm);
+      if (x && typeof x === "object") {
+        const o = {};
+        Object.keys(x).sort().forEach((k) => {
+          if (!keepId && k === "id") return;
+          if (x[k] === void 0) return;
+          o[k] = norm(x[k]);
+        });
+        return o;
+      }
+      return x;
+    };
+    const str = JSON.stringify(norm(v === void 0 ? null : v));
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36) + "." + str.length.toString(36);
+  };
+  const PULL_KEEP_ID = { eatg: true };
+  const pullMerge = (key, prev, sheet) => {
+    prev = prev && typeof prev === "object" ? prev : {};
+    sheet = sheet && typeof sheet === "object" ? sheet : {};
+    const kid = !!PULL_KEEP_ID[key];
+    const had = pullBase[key] && typeof pullBase[key] === "object" ? pullBase[key] : null;
+    const base = {}, out = {};
+    let same = true;
+    (/* @__PURE__ */ new Set([...Object.keys(prev), ...Object.keys(sheet)])).forEach((d) => {
+      const L = prev[d], S = sheet[d];
+      const hL = L === void 0 ? null : pullHash(L, kid), hS = S === void 0 ? null : pullHash(S, kid);
+      const local = had ? hL !== (had[d] === void 0 ? null : had[d]) : L !== void 0 && hL !== hS;
+      if (local) {
+        if (L !== void 0) out[d] = L;
+      } else if (S !== void 0) out[d] = L !== void 0 && hL === hS ? L : S;
+      else if (L !== void 0) out[d] = L;
+      if (hS !== null) base[d] = hS;
+      if (out[d] !== L) same = false;
+    });
+    pullBase[key] = base;
+    pullBaseSave();
+    return same && Object.keys(out).length === Object.keys(prev).length ? prev : out;
+  };
+  const pullMarkPushed = (maps) => {
+    Object.keys(maps).forEach((key) => {
+      const m = maps[key] && typeof maps[key] === "object" ? maps[key] : {}, kid = !!PULL_KEEP_ID[key], b = {};
+      Object.keys(m).forEach((d) => {
+        if (m[d] !== void 0) b[d] = pullHash(m[d], kid);
+      });
+      pullBase[key] = b;
+    });
+    pullBaseSave();
+  };
+  window.__clsPull = { pullMerge, pullMarkPushed, pullHash, pullBase };
   const App = () => {
     const isDarkMode = true;
     const [isDesktopMode, setIsDesktopMode] = useState(() => {
@@ -10804,6 +11156,7 @@ try {
         const cardioPayload = Object.keys(cardioByDate).map((d) => ({ date: d, duration: cardioByDate[d]?.duration || "", note: cardioByDate[d]?.note || "" }));
         const response = await fetch(withGasKey(gasUrl), { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ data: finalPayload, workoutsData: formattedWorkouts, cardioData: cardioPayload, statsData: statsPayload, ...eatgSheetPayload(eatG) }) });
         const res = await response.json();
+        if (res && res.status === "success") pullMarkPushed({ foods: foodsByDate, sleep: sleepByDate, naps: napByDate, sleepNotes: sleepNotesByDate, mealNotes: mealNotesByDate, mealStars: mealStarsByDate, mealDesc: mealDescByDate, mealPhotos: mealPhotosByDate, dishPhotos: dishPhotosByDate, workouts: workoutsByDate, cardio: cardioByDate, stats: statsSrc, eatg: eatG });
         if (res && res.status === "success") applySaveImageResult(res, statsPayload.some((x) => (x.images || []).some(imgIsPending)));
         if (res && res.status === "success") applySaveCaptionResult(res, statsPayload);
         if (res && res.status === "success") applySaveMarkResult(res, statsPayload);
@@ -10918,7 +11271,7 @@ try {
                 }
               }
             });
-            setWorkoutsByDate(nW);
+            setWorkoutsByDate((prev) => pullMerge("workouts", prev, nW));
             setWorkoutTemplates(newTemplates);
           }
           if (data.data.cardio) {
@@ -10932,7 +11285,7 @@ try {
               const cNote = String(r[2] || "").trim();
               if (dur || cNote) nCardio[dClean] = { duration: dur, note: cNote };
             }
-            setCardioByDate(nCardio);
+            setCardioByDate((prev) => pullMerge("cardio", prev, nCardio));
           }
           const parseMealString = (mealName, mealString) => {
             if (!mealString || mealString === "X" || mealString.trim() === "") return [];
@@ -10992,16 +11345,16 @@ try {
           if (data.data.dailyTracking || data.data.dailyTrackin) {
             const oldData = data.data.dailyTracking ? processTracking(data.data.dailyTracking, data.data.dailyTrackingNotes) : { f: {}, s: {}, np: {}, sN: {}, mN: {} };
             const newData = data.data.dailyTrackin ? processTracking(data.data.dailyTrackin, data.data.dailyTrackinNotes) : { f: {}, s: {}, np: {}, sN: {}, mN: {} };
-            setFoodsByDate({ ...oldData.f, ...newData.f });
-            setSleepByDate({ ...oldData.s, ...newData.s });
-            setNapByDate({ ...oldData.np, ...newData.np });
-            setSleepNotesByDate({ ...oldData.sN, ...newData.sN });
-            setMealNotesByDate({ ...oldData.mN, ...newData.mN });
-            if (data.data.dailyTrackin) setMealStarsByDate({ ...oldData.ms || {}, ...newData.ms || {} });
+            setFoodsByDate((prev) => pullMerge("foods", prev, { ...oldData.f, ...newData.f }));
+            setSleepByDate((prev) => pullMerge("sleep", prev, { ...oldData.s, ...newData.s }));
+            setNapByDate((prev) => pullMerge("naps", prev, { ...oldData.np, ...newData.np }));
+            setSleepNotesByDate((prev) => pullMerge("sleepNotes", prev, { ...oldData.sN, ...newData.sN }));
+            setMealNotesByDate((prev) => pullMerge("mealNotes", prev, { ...oldData.mN, ...newData.mN }));
+            if (data.data.dailyTrackin) setMealStarsByDate((prev) => pullMerge("mealStars", prev, { ...oldData.ms || {}, ...newData.ms || {} }));
             if (data.data.dailyTrackin) {
-              setMealDescByDate({ ...oldData.md || {}, ...newData.md || {} });
+              setMealDescByDate((prev) => pullMerge("mealDesc", prev, { ...oldData.md || {}, ...newData.md || {} }));
               setDishPhotosByDate((prev) => {
-                const next = { ...oldData.dp || {}, ...newData.dp || {} };
+                const next = { ...pullMerge("dishPhotos", prev, { ...oldData.dp || {}, ...newData.dp || {} }) };
                 Object.keys(prev || {}).forEach((d) => {
                   if (Object.values(prev[d] || {}).some((o) => Object.values(o || {}).some((l) => (l || []).some((x) => String(x).startsWith("tmp_"))))) next[d] = prev[d];
                 });
@@ -11009,7 +11362,7 @@ try {
               });
             }
             setMealPhotosByDate((prev) => {
-              const next = { ...oldData.mp || {}, ...newData.mp || {} };
+              const next = { ...pullMerge("mealPhotos", prev, { ...oldData.mp || {}, ...newData.mp || {} }) };
               Object.keys(prev || {}).forEach((d) => {
                 if (Object.values(prev[d] || {}).some((l) => (l || []).some((x) => String(x).startsWith("tmp_")))) next[d] = prev[d];
               });
@@ -11059,7 +11412,8 @@ try {
               };
             }
             const keepFields = [...Array.isArray(data.data.statNotes) ? [] : DAY_PART_FIELDS, ...(Number(data.data.v) || 0) >= 145 ? [] : PRODUCTIVITY_FIELDS];
-            setStatsByDate((prev) => {
+            setStatsByDate((prev0) => {
+              const prev = prev0 || {};
               if (keepFields.length) Object.keys(nS).forEach((d) => {
                 const p = prev[d];
                 if (p) keepFields.forEach((k) => {
@@ -11087,7 +11441,7 @@ try {
                   return !id || !have.has(id);
                 })] };
               });
-              return nS;
+              return pullMerge("stats", prev, nS);
             });
           }
           if (data.data.tdl && Array.isArray(data.data.tdl)) {
@@ -11132,7 +11486,10 @@ try {
             });
             setDayMusic(nm);
           }
-          if ((Number(data.data.v) || 0) >= 195 && Array.isArray(data.data.eatGio) && (data.data.eatGio.length || (data.data.eatTuan || []).length)) setEatG(eatgFromSheet(data.data.eatGio, data.data.eatTuan, parseRawDate));
+          if ((Number(data.data.v) || 0) >= 195 && Array.isArray(data.data.eatGio) && (data.data.eatGio.length || (data.data.eatTuan || []).length)) {
+            const eg = eatgFromSheet(data.data.eatGio, data.data.eatTuan, parseRawDate);
+            setEatG((prev) => pullMerge("eatg", prev, eg));
+          }
           if (Array.isArray(data.data.story)) {
             const nSt = {};
             data.data.story.forEach((r, i) => {
@@ -12596,7 +12953,16 @@ try {
         const c = el && el.querySelector(`[data-week-tile="${spState.srcDate}"]`);
         if (el && c) el.scrollTo({ left: Math.max(0, c.offsetLeft - el.clientWidth / 2 + c.clientWidth / 2), behavior: "smooth" });
       }, 60);
-    } }) : React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark, place: "top" })), React.createElement(
+    } }) : currentView === "day" ? (() => {
+      const top0 = (((dayMusic || {})[dateKey] || {}).top || [])[0] || [];
+      const dayTid = getSpotifyTrackId((currentStat || {}).musicUrl || "") || getSpotifyTrackId(top0[1] || "");
+      if (dayTid && spState.playingTrack === dayTid) return null;
+      return React.createElement(MiniPlayerBar, { sp: spState, onJump: () => {
+        if (!spState.srcDate) return;
+        const [dd, mm, yy] = spState.srcDate.split("/").map(Number);
+        setSelectedDate(new Date(yy, mm - 1, dd));
+      } });
+    })() : React.createElement(PlayerBar, { sp: spState, markMs: barMarkMs, canPin: barCanPin, onPin: pinBarMark, place: "top" })), React.createElement(
       "main",
       {
         className: "flex-1 overflow-y-auto overflow-x-hidden no-scrollbar flex flex-col",
@@ -13522,19 +13888,30 @@ try {
           const mt = tid && spotifyMetaCache[tid] || {};
           const nm = String(st.songName || top0[0] || "").split(" — ");
           const on = !!(tid && spState.playingTrack === tid && !spState.paused);
+          const canPinDay = !!(tid && getSpotifyTrackId(st.musicUrl || "") === tid);
+          const dayMarkMs = canPinDay ? markGet(st.musicMarkNote) : null;
+          const spMatch = !!(tid && spState.playingTrack === tid);
+          const spIt = spMatch && spState.item && spState.item.id === tid ? spState.item : null;
           const data = {
             tid,
             tap: toaTap,
             lit: !!(detailText || summaryText),
-            cover: mt.thumb || "",
-            title: tid ? mt.title || nm[0] || "" : "",
-            artist: mt.artist || nm[1] || "",
+            cover: spIt && spIt.thumb || mt.thumb || "",
+            title: tid ? spIt && spIt.title || mt.title || nm[0] || "" : "",
+            artist: spIt && spIt.artist || mt.artist || nm[1] || "",
+            canPin: canPinDay,
+            markMs: dayMarkMs,
             photos: dayImages.slice(0, 2).map((x) => imgIsPending(x) ? x : formatDriveImgUrl(x, 400)),
-            sp: { playing: on, pos: tid && spState.playingTrack === tid ? spState.pos || 0 : 0, posAt: on ? spState.posAt : 0, dur: tid && spState.playingTrack === tid ? spState.dur || 0 : 0 }
+            sp: { playing: on, pos: spMatch ? spState.pos || 0 : 0, posAt: on ? spState.posAt : 0, dur: spMatch ? spState.dur || 0 : 0 }
           };
           return React.createElement(ToaCuoi, { data, onPlay: () => {
             if (tid) playOrEmbed(tid, () => {
             }, dateKey);
+          }, onSeek: (ms) => {
+            if (spMatch) Spotify.seek(ms);
+          }, onPin: (ms) => {
+            if (!canPinDay) return;
+            updateDayStat(dateKey, (base) => ({ musicMarkNote: markSet(base.musicMarkNote || "", ms), musicMarkDirty: true }));
           }, onDiary: () => {
             if (!editing("detail")) openEdit("detail", st.detail);
           }, onPhoto: (i) => {
