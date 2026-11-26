@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>C.L.S</title>
     <meta name="theme-color" content="#09090b">
-    <meta name="cls-build" content="07a5028147">
+    <meta name="cls-build" content="c5c3064d04">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="icon-192.png">
@@ -3859,12 +3859,152 @@ try {
     return { id, raw: String(raw).trim(), ok: true, meal, name: rest[0], kcal: nums[0], protein: nums[1], carbs: nums[2], fat: nums[3] };
   };
   const parseFoodPaste = (text, defaultMeal) => String(text || "").split(/\r?\n/).map((l) => fpRow(l, defaultMeal)).filter(Boolean);
-  const imgIsPending = (s) => typeof s === "string" && s.startsWith("data:image");
+  const imgIsIdb = (s) => typeof s === "string" && s.startsWith("idb:");
+  const imgIsPending = (s) => typeof s === "string" && (s.startsWith("data:image") || s.startsWith("idb:"));
   const imgTmpOf = (s) => {
-    if (!imgIsPending(s)) return "";
+    if (typeof s !== "string") return "";
+    if (s.startsWith("idb:")) return s.slice(4);
+    if (!s.startsWith("data:image")) return "";
     const m = s.slice(0, 200).match(/^data:[^,]*;tmp=([A-Za-z0-9_-]+)[;,]/);
     return m ? m[1] : "";
   };
+  window.__clsMemRaw = window.__clsMemRaw || {};
+  const __clsImgIdb = /* @__PURE__ */ (() => {
+    const DB_NAME = "cls_img_store", STORE = "blobs";
+    let dbP = null;
+    const openDb = () => {
+      if (dbP) return dbP;
+      if (typeof indexedDB === "undefined") return Promise.resolve(null);
+      dbP = new Promise((resolve) => {
+        try {
+          const req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = () => {
+            try {
+              if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+            } catch (e) {
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        } catch (e) {
+          resolve(null);
+        }
+      });
+      return dbP;
+    };
+    const hashId = (str) => {
+      let h = 2166136261;
+      const step = Math.max(1, Math.floor(str.length / 512));
+      for (let i = 0; i < str.length; i += step) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return "h_" + (h >>> 0).toString(36) + "_" + str.length.toString(36);
+    };
+    const putMany = async (pairs) => {
+      if (!pairs || !pairs.length) return;
+      const db = await openDb();
+      if (!db) return;
+      await new Promise((res) => {
+        try {
+          const tx = db.transaction(STORE, "readwrite"), st = tx.objectStore(STORE);
+          pairs.forEach(([id, val]) => st.put(val, id));
+          tx.oncomplete = () => res();
+          tx.onerror = () => res();
+        } catch (e) {
+          res();
+        }
+      });
+    };
+    const getAll = async () => {
+      const db = await openDb();
+      if (!db) return {};
+      return new Promise((res) => {
+        try {
+          const tx = db.transaction(STORE, "readonly"), st = tx.objectStore(STORE);
+          const out = {}, req = st.openCursor();
+          req.onsuccess = () => {
+            const c = req.result;
+            if (c) {
+              out[c.key] = c.value;
+              c.continue();
+            } else res(out);
+          };
+          req.onerror = () => res(out);
+        } catch (e) {
+          res({});
+        }
+      });
+    };
+    const delMany = async (ids) => {
+      if (!ids || !ids.length) return;
+      const db = await openDb();
+      if (!db) return;
+      try {
+        const tx = db.transaction(STORE, "readwrite"), st = tx.objectStore(STORE);
+        ids.forEach((id) => {
+          if (id) st.delete(id);
+        });
+      } catch (e) {
+      }
+    };
+    const slimStatsRaw = (rawJson) => {
+      if (!rawJson || typeof rawJson !== "string" || !rawJson.includes("data:image")) return rawJson;
+      try {
+        const obj = JSON.parse(rawJson);
+        if (!obj || typeof obj !== "object") return rawJson;
+        const pairs = [];
+        let changed = false;
+        Object.keys(obj).forEach((dk) => {
+          const st = obj[dk];
+          if (!st || !Array.isArray(st.images)) return;
+          let dayCh = false;
+          const imgs = st.images.map((x) => {
+            if (typeof x !== "string" || !x.startsWith("data:image")) return x;
+            const tid = imgTmpOf(x) || hashId(x);
+            pairs.push([tid, x]);
+            dayCh = true;
+            changed = true;
+            return "idb:" + tid;
+          });
+          if (dayCh) obj[dk] = { ...st, images: imgs };
+        });
+        if (!changed) return rawJson;
+        putMany(pairs);
+        return JSON.stringify(obj);
+      } catch (e) {
+        return rawJson;
+      }
+    };
+    const hydrateStatsObj = async (statsObj) => {
+      if (!statsObj || typeof statsObj !== "object") return null;
+      const need = Object.values(statsObj).some((st) => st && Array.isArray(st.images) && st.images.some(imgIsIdb));
+      if (!need) return null;
+      const map = await getAll();
+      let changed = false;
+      const next = { ...statsObj };
+      Object.keys(next).forEach((dk) => {
+        const st = next[dk];
+        if (!st || !Array.isArray(st.images) || !st.images.some(imgIsIdb)) return;
+        let dayCh = false;
+        const imgs = st.images.map((x) => {
+          if (!imgIsIdb(x)) return x;
+          const tid = x.slice(4);
+          if (map[tid]) {
+            dayCh = true;
+            changed = true;
+            return map[tid];
+          }
+          return x;
+        });
+        if (dayCh) next[dk] = { ...st, images: imgs };
+      });
+      if (changed) window.__clsMemRaw["macro_stats"] = JSON.stringify(next);
+      return changed ? next : null;
+    };
+    return { putMany, getAll, delMany, slimStatsRaw, hydrateStatsObj };
+  })();
+  window.__clsImgIdb = __clsImgIdb;
   const clsPhotoTimePending = /* @__PURE__ */ new Map();
   const clsPhotoMetaLoad = () => {
     try {
@@ -4271,7 +4411,7 @@ try {
     return { musicMarkNote: markClear(base.musicMarkNote), musicMarkDirty: true };
   };
   const spBarOn = (sp) => !!(sp && sp.loggedIn && sp.mode && sp.playingTrack && !sp.closed);
-  const CLS_BAN = 205;
+  const CLS_BAN = 206;
   const FB_CFG = { apiKey: "AIzaSyASB1j4PZWwWHr8" + "uUEbb7UcBmZiAqdY6rk", authDomain: "calasu-6d785.firebaseapp.com", projectId: "calasu-6d785", storageBucket: "calasu-6d785.firebasestorage.app", messagingSenderId: "759941890669", appId: "1:759941890669:web:a79ca9fb01c936f22fb564" };
   const FB_V = "10.12.2";
   const FB_KEYS = ["macro_foods", "macro_stats", "macro_sleeps", "macro_naps", "macro_sleep_notes", "macro_meal_stars", "macro_meal_photos", "macro_meal_notes", "macro_meal_desc", "macro_dish_photos", "macro_cardio", "macro_workouts", "workout_templates", "work_todos", "work_urgents", "work_basket", "work_scratchpad", "work_focus_task", "story_by_date", "story_kho", "story_mau", "day_music_top", "eatg", "eat_pins", "cls_vault_check"];
@@ -4528,7 +4668,7 @@ try {
     };
     return JSON.stringify(norm(a)) === JSON.stringify(norm(b));
   };
-  const FB_AUTO = "cls_fb_auto", FB_LAST = "cls_fb_last", FB_DIRTY = "cls_fb_dirty";
+  const FB_AUTO = "cls_fb_auto", FB_LAST = "cls_fb_last", FB_LAST_MAP = "cls_fb_last_map", FB_HEAL_206 = "cls_fb_heal_206", FB_DIRTY = "cls_fb_dirty";
   const FB_RAW = ["work_scratchpad", "work_focus_task"];
   const fbS = { on: false, uid: null, base: {}, dirty: /* @__PURE__ */ new Set(), unack: {}, timer: 0, blocked: false, offs: [], applying: false, subs: /* @__PURE__ */ new Set(), st: "", q: Promise.resolve() };
   const fbTell = () => fbS.subs.forEach((f) => {
@@ -4543,6 +4683,38 @@ try {
       fbRawSet.call(window.localStorage, k, v);
     } catch (e) {
       clsNotifyStorageErr(k, e);
+    }
+  };
+  const fbReadFullRaw = (k) => window.__clsMemRaw && window.__clsMemRaw[k] !== void 0 ? window.__clsMemRaw[k] : window.localStorage.getItem(k);
+  const fbLastMapLoad = () => {
+    try {
+      const o = JSON.parse(window.localStorage.getItem(FB_LAST_MAP) || "null");
+      return o && typeof o === "object" ? o : {};
+    } catch (e) {
+      return {};
+    }
+  };
+  const fbLastGet = (key) => {
+    const m = fbLastMapLoad();
+    if (typeof m[key] === "number") return m[key];
+    return Number(window.localStorage.getItem(FB_LAST)) || 0;
+  };
+  const fbLastSet = (key, ms) => {
+    if (!(ms > 0)) return;
+    const m = fbLastMapLoad();
+    if ((Number(m[key]) || 0) < ms) {
+      m[key] = ms;
+      fbLs(FB_LAST_MAP, JSON.stringify(m));
+    }
+    if (ms > (Number(window.localStorage.getItem(FB_LAST)) || 0)) fbLs(FB_LAST, String(ms));
+  };
+  const fbNeedsEatgHeal = () => {
+    try {
+      const foods = JSON.parse(window.localStorage.getItem("macro_foods") || "{}") || {};
+      const eg = JSON.parse(window.localStorage.getItem("eatg") || "{}") || {};
+      return Object.keys(foods).some((dk) => (!eg[dk] || !(eg[dk].c || []).length) && Array.isArray(foods[dk]) && foods[dk].some((f) => f && String(f.id || "").startsWith("g_")));
+    } catch (e) {
+      return false;
     }
   };
   const fbMap = (key, raw) => {
@@ -4572,14 +4744,17 @@ try {
     }
   };
   Storage.prototype.setItem = function(k, v) {
-    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && fbIsLs(this);
-    const old = watch && !fbS.base[k] ? this.getItem(k) : null;
+    const isLocal = fbIsLs(this);
+    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && isLocal;
+    const old = watch && !fbS.base[k] ? fbReadFullRaw(k) : null;
+    if (isLocal && FB_KEYS.includes(k)) window.__clsMemRaw[k] = String(v);
+    const toDisk = isLocal && k === "macro_stats" ? __clsImgIdb.slimStatsRaw(String(v)) : v;
     let err = null;
     try {
-      fbRawSet.call(this, k, v);
+      fbRawSet.call(this, k, toDisk);
     } catch (e) {
       err = e;
-      if (fbIsLs(this)) clsNotifyStorageErr(k, e);
+      if (isLocal) clsNotifyStorageErr(k, e);
     }
     if (watch) {
       if (!fbS.base[k]) fbS.base[k] = fbMap(k, old);
@@ -4590,8 +4765,10 @@ try {
     if (err) throw err;
   };
   Storage.prototype.removeItem = function(k) {
-    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && fbIsLs(this);
-    const old = watch && !fbS.base[k] ? this.getItem(k) : null;
+    const isLocal = fbIsLs(this);
+    const watch = fbS.on && !fbS.applying && FB_KEYS.includes(k) && isLocal;
+    const old = watch && !fbS.base[k] ? fbReadFullRaw(k) : null;
+    if (isLocal && window.__clsMemRaw) delete window.__clsMemRaw[k];
     fbRawDel.call(this, k);
     if (!watch) return;
     if (!fbS.base[k]) fbS.base[k] = fbMap(k, old);
@@ -4619,7 +4796,7 @@ try {
         } catch (e) {
         }
       }
-      const now = fbMap(key, localStorage.getItem(key));
+      const now = fbMap(key, fbReadFullRaw(key));
       Object.keys(now).forEach((id) => {
         const b = base[id];
         if (!b || b.j !== now[id].j) ops.push({ key, id, data: { k: now[id].k || key, j: now[id].j, ...now[id].s ? { s: 1 } : {} } });
@@ -4657,7 +4834,7 @@ try {
     }
   };
   const fbApply = async (key, docs) => {
-    const raw0 = localStorage.getItem(key);
+    const raw0 = fbReadFullRaw(key);
     const base = fbS.base[key] || (fbS.base[key] = fbMap(key, raw0));
     const loc = fbS.dirty.has(key) ? fbMap(key, raw0) : null;
     const take = docs.filter((d) => {
@@ -4725,14 +4902,26 @@ try {
       else base[d.id] = { id: d.id, k: d.k, j: d.j };
     });
     if (raw === raw0) return;
+    if (raw === null) delete window.__clsMemRaw[key];
+    else window.__clsMemRaw[key] = raw;
     fbS.applying = true;
+    let diskErr = null;
     try {
       if (raw === null) localStorage.removeItem(key);
       else localStorage.setItem(key, raw);
     } catch (e) {
+      diskErr = e;
     }
     fbS.applying = false;
-    if (window.__clsFbReload) window.__clsFbReload(key);
+    let parsedMem = void 0;
+    if (raw !== null && !FB_RAW.includes(key)) {
+      try {
+        parsedMem = JSON.parse(raw);
+      } catch (e) {
+      }
+    }
+    if (window.__clsFbReload) window.__clsFbReload(key, parsedMem);
+    if (diskErr) throw diskErr;
   };
   const fbOldBar = (show) => {
     const old = document.getElementById("cls-fb-old");
@@ -4787,9 +4976,16 @@ try {
       if (!fbS.blocked && fbS.dirty.size) fbKick();
     }, () => {
     }));
-    const last = Number(localStorage.getItem(FB_LAST)) || 0;
+    const needHeal206 = localStorage.getItem(FB_HEAL_206) !== "1" || fbNeedsEatgHeal();
+    let healedEatg = false, healedStats = false;
+    const markHealed = () => {
+      if (healedEatg && healedStats) fbLs(FB_HEAL_206, "1");
+    };
     FB_KEYS.forEach((key) => {
-      const q = F.query(F.collection(db, "u", uid, "k", key, "d"), F.where("t", ">", F.Timestamp.fromMillis(last)));
+      let keyLast = fbLastGet(key);
+      if (needHeal206 && key === "eatg") keyLast = 0;
+      else if (needHeal206 && key === "macro_stats") keyLast = Math.max(0, Date.now() - 14 * 864e5);
+      const q = F.query(F.collection(db, "u", uid, "k", key, "d"), F.where("t", ">", F.Timestamp.fromMillis(keyLast)));
       fbS.offs.push(F.onSnapshot(q, (sn) => {
         const docs = [];
         let mx = 0;
@@ -4800,10 +4996,30 @@ try {
           if (t > mx) mx = t;
           docs.push({ id: ch.doc.id, ...x });
         });
-        if (!docs.length) return;
-        fbS.q = fbS.q.then(() => fbS.on && fbS.uid === uid ? fbApply(key, docs) : null).catch(() => {
-        }).then(() => {
-          if (mx > (Number(localStorage.getItem(FB_LAST)) || 0)) fbLs(FB_LAST, String(mx));
+        if (!docs.length) {
+          if (needHeal206 && key === "eatg") {
+            healedEatg = true;
+            markHealed();
+          }
+          if (needHeal206 && key === "macro_stats") {
+            healedStats = true;
+            markHealed();
+          }
+          return;
+        }
+        fbS.q = fbS.q.then(async () => {
+          if (!fbS.on || fbS.uid !== uid) return;
+          await fbApply(key, docs);
+          if (mx > 0) fbLastSet(key, mx);
+          if (needHeal206 && key === "eatg") {
+            healedEatg = true;
+            markHealed();
+          }
+          if (needHeal206 && key === "macro_stats") {
+            healedStats = true;
+            markHealed();
+          }
+        }).catch(() => {
         });
       }, (e) => {
         fbS.st = "Lỗi nghe kho: " + (e.code || e.message);
@@ -4905,7 +5121,7 @@ try {
         const t0 = Date.now();
         const plan = [];
         FB_KEYS.forEach((key) => {
-          const raw = localStorage.getItem(key);
+          const raw = fbReadFullRaw(key);
           if (raw === null) return;
           fbSplitKey(key, raw).forEach((d) => plan.push({ key, d }));
         });
@@ -4941,7 +5157,7 @@ try {
         }
         const sec = ((Date.now() - t0) / 1e3).toFixed(1);
         if (!bad.length) {
-          fbLs(FB_LAST, String(t0));
+          FB_KEYS.forEach((k) => fbLastSet(k, t0));
           fbS.base = {};
         }
         setRes(bad.length ? `Lệch ${bad.length} mục: ${bad.join(", ")}` : `Khớp đủ ${keys.length} mục, ${nDays} thẻ ngày, ${plan.length} thẻ. ${sec} giây.`);
@@ -9182,8 +9398,9 @@ try {
     "30/09/2026": ["1uE7rZsaazvUyzknclI2u6jm-g9U1DCZR", "1AnjwtDro_vyW8Dt2aPNhMfGfNto_-_f3", "1uNgDSaYeQdFupABLu26EphYNbAHhm7hj", "1QFL8upE7-BCbGNDOob_2Oa8cLBTeD_cG", "12MhboaSLuFKJ9h5kFRhoG7VXLI0W6K57"]
   };
   const getValidStatImages = (dKey, rawImages) => {
-    const list = Array.isArray(rawImages) ? rawImages.filter(Boolean) : [];
-    if (list.some((u) => typeof u === "string" && u.startsWith("data:image"))) return list;
+    const raw = Array.isArray(rawImages) ? rawImages.filter(Boolean) : [];
+    const list = raw.filter((u) => !imgIsIdb(u));
+    if (raw.some(imgIsPending)) return list;
     if (dKey && RECOVERED_DRIVE_IMAGES[dKey]) {
       return RECOVERED_DRIVE_IMAGES[dKey].map((id) => `https://lh3.googleusercontent.com/d/${id}`);
     }
@@ -9504,12 +9721,34 @@ try {
     const [workoutTemplates, setWorkoutTemplates] = useState(() => loadSafeJSON("workout_templates"));
     const [statsByDate, setStatsByDate] = useState(() => loadSafeJSON("macro_stats"));
     useEffect(() => {
+      let dead = false;
+      __clsImgIdb.hydrateStatsObj(statsByDate).then((hydrated) => {
+        if (!dead && hydrated) setStatsByDate((prev) => {
+          const out = { ...prev };
+          Object.keys(hydrated).forEach((dk) => {
+            const cur = out[dk];
+            if (!cur || !Array.isArray(cur.images) || !cur.images.some(imgIsIdb)) return;
+            const hMap = /* @__PURE__ */ new Map();
+            (hydrated[dk].images || []).forEach((u) => {
+              const id = imgTmpOf(u);
+              if (id) hMap.set(id, u);
+            });
+            out[dk] = { ...cur, images: cur.images.map((x) => imgIsIdb(x) ? hMap.get(x.slice(4)) || x : x) };
+          });
+          return out;
+        });
+      });
+      return () => {
+        dead = true;
+      };
+    }, []);
+    useEffect(() => {
       setMealPhotosByDate((prev) => {
         let next = prev;
         Object.keys(prev || {}).forEach((d) => {
           const st = statsByDate[d];
           if (!st) return;
-          const ids = new Set(getValidStatImages(d, st.images).map(imgIdOf).filter(Boolean));
+          const ids = new Set([...getValidStatImages(d, st.images), ...(st.images || []).filter(imgIsIdb)].map(imgIdOf).filter(Boolean));
           const day = prev[d] || {};
           if (!Object.values(day).some((l) => (l || []).some((x) => !ids.has(x)))) return;
           next = { ...next, [d]: Object.fromEntries(Object.entries(day).map(([m, l]) => [m, (l || []).filter((x) => ids.has(x))])) };
@@ -9831,7 +10070,7 @@ try {
         Object.keys(prev || {}).forEach((d) => {
           const st = statsByDate[d];
           if (!st) return;
-          const ids = new Set(getValidStatImages(d, st.images).map(imgIdOf).filter(Boolean));
+          const ids = new Set([...getValidStatImages(d, st.images), ...(st.images || []).filter(imgIsIdb)].map(imgIdOf).filter(Boolean));
           const day = prev[d] || {};
           if (!Object.values(day).some((o) => Object.values(o || {}).some((l) => (l || []).some((x) => !ids.has(x))))) return;
           next = { ...next, [d]: Object.fromEntries(Object.entries(day).map(([m, o]) => [m, Object.fromEntries(Object.entries(o || {}).map(([n, l]) => [n, (l || []).filter((x) => ids.has(x))]))])) };
@@ -9845,6 +10084,7 @@ try {
         const id = extractDriveFileId(url);
         if (id && tam) clsPhotoMetaRemap(tam, id);
       });
+      __clsImgIdb.delMany(moi.map((x) => x && x.tam).filter(Boolean));
       setEatG((prev) => {
         let next = prev;
         moi.forEach(({ date, tam, url }) => {
@@ -11093,42 +11333,49 @@ try {
       return () => clearTimeout(t);
     }, [todoCache]);
     useEffect(() => {
-      const J = (k) => loadSafeJSON(k);
+      const J = (k, mem) => mem && typeof mem === "object" && !Array.isArray(mem) ? mem : loadSafeJSON(k);
       const RL = {
-        macro_foods: () => setFoodsByDate(J("macro_foods")),
-        macro_stats: () => setStatsByDate(J("macro_stats")),
-        macro_sleeps: () => setSleepByDate(J("macro_sleeps")),
-        macro_naps: () => setNapByDate(J("macro_naps")),
-        macro_sleep_notes: () => setSleepNotesByDate(J("macro_sleep_notes")),
-        macro_meal_stars: () => setMealStarsByDate(J("macro_meal_stars")),
-        macro_meal_photos: () => setMealPhotosByDate(J("macro_meal_photos")),
-        macro_meal_notes: () => setMealNotesByDate(J("macro_meal_notes")),
-        macro_meal_desc: () => setMealDescByDate(J("macro_meal_desc")),
-        macro_dish_photos: () => setDishPhotosByDate(J("macro_dish_photos")),
-        macro_cardio: () => setCardioByDate(J("macro_cardio")),
-        macro_workouts: () => setWorkoutsByDate(J("macro_workouts")),
-        workout_templates: () => setWorkoutTemplates(J("workout_templates")),
-        work_todos: () => setTodoCacheRaw(J("work_todos")),
-        work_urgents: () => {
+        macro_foods: (m) => setFoodsByDate(J("macro_foods", m)),
+        macro_stats: (m) => {
+          const v = J("macro_stats", m);
+          setStatsByDate(v);
+          __clsImgIdb.hydrateStatsObj(v).then((h) => {
+            if (h) setStatsByDate(h);
+          });
+        },
+        macro_sleeps: (m) => setSleepByDate(J("macro_sleeps", m)),
+        macro_naps: (m) => setNapByDate(J("macro_naps", m)),
+        macro_sleep_notes: (m) => setSleepNotesByDate(J("macro_sleep_notes", m)),
+        macro_meal_stars: (m) => setMealStarsByDate(J("macro_meal_stars", m)),
+        macro_meal_photos: (m) => setMealPhotosByDate(J("macro_meal_photos", m)),
+        macro_meal_notes: (m) => setMealNotesByDate(J("macro_meal_notes", m)),
+        macro_meal_desc: (m) => setMealDescByDate(J("macro_meal_desc", m)),
+        macro_dish_photos: (m) => setDishPhotosByDate(J("macro_dish_photos", m)),
+        macro_cardio: (m) => setCardioByDate(J("macro_cardio", m)),
+        macro_workouts: (m) => setWorkoutsByDate(J("macro_workouts", m)),
+        workout_templates: (m) => setWorkoutTemplates(J("workout_templates", m)),
+        work_todos: (m) => setTodoCacheRaw(J("work_todos", m)),
+        work_urgents: (m) => {
           try {
-            setUrgentList(JSON.parse(localStorage.getItem("work_urgents") || "[]"));
+            const v = Array.isArray(m) ? m : JSON.parse(localStorage.getItem("work_urgents") || "[]");
+            setUrgentList(v);
           } catch (e) {
           }
         },
-        work_basket: () => {
+        work_basket: (m) => {
           try {
-            const v = JSON.parse(localStorage.getItem("work_basket") || "[]");
+            const v = Array.isArray(m) ? m : JSON.parse(localStorage.getItem("work_basket") || "[]");
             setWorkBasket(Array.isArray(v) ? v.map(normBasketItem) : []);
           } catch (e) {
           }
         },
-        work_scratchpad: () => setScratchpad(localStorage.getItem("work_scratchpad") || ""),
-        work_focus_task: () => setFocusTaskId(localStorage.getItem("work_focus_task") || null),
-        story_by_date: () => setStories(J("story_by_date")),
-        story_kho: () => setStoryKho(loadArr("story_kho")),
-        story_mau: () => setStoryMau(loadArr("story_mau")),
-        day_music_top: () => setDayMusic(J("day_music_top")),
-        eatg: () => setEatG(J("eatg")),
+        work_scratchpad: () => setScratchpad(fbReadFullRaw("work_scratchpad") || ""),
+        work_focus_task: () => setFocusTaskId(fbReadFullRaw("work_focus_task") || null),
+        story_by_date: (m) => setStories(J("story_by_date", m)),
+        story_kho: (m) => setStoryKho(Array.isArray(m) ? m : loadArr("story_kho")),
+        story_mau: (m) => setStoryMau(Array.isArray(m) ? m : loadArr("story_mau")),
+        day_music_top: (m) => setDayMusic(J("day_music_top", m)),
+        eatg: (m) => setEatG(J("eatg", m)),
         eat_pins: () => {
           try {
             window.dispatchEvent(new Event("cls-eat-pins"));
@@ -11137,13 +11384,13 @@ try {
         },
         cls_vault_check: () => {
           try {
-            setVaultCheck(localStorage.getItem(VAULT_CHK_KEY) || "");
+            setVaultCheck(fbReadFullRaw(VAULT_CHK_KEY) || "");
           } catch (e) {
           }
         }
       };
-      window.__clsFbReload = (k) => {
-        if (RL[k]) RL[k]();
+      window.__clsFbReload = (k, mem) => {
+        if (RL[k]) RL[k](mem);
       };
       return () => {
         window.__clsFbReload = null;
@@ -12895,9 +13142,20 @@ Hãy tính lại chính xác P/C/F và cập nhật breakdown theo đúng phần
     const egKc0 = (o) => Math.round(4 * (Number(o.p) || 0) + 4 * (Number(o.c) || 0) + 9 * (Number(o.f) || 0));
     const egUrl = (dk, id) => {
       if (!id) return "";
+      const pick = (raw) => !raw || imgIsIdb(raw) ? "" : imgIsPending(raw) ? raw : formatDriveImgUrl(raw, 400);
       const day = getValidStatImages(dk, (statsByDate[dk] || {}).images);
-      const raw = day.find((x) => imgIdOf(x) === id);
-      return raw ? imgIsPending(raw) ? raw : formatDriveImgUrl(raw, 400) : "";
+      const hit = day.find((x) => imgIdOf(x) === id);
+      if (hit) return pick(hit);
+      const allKeys = Object.keys(statsByDate || {});
+      for (let i = 0; i < allKeys.length; i++) {
+        const imgs = (statsByDate[allKeys[i]] || {}).images;
+        if (!Array.isArray(imgs)) continue;
+        const f = imgs.find((x) => imgIdOf(x) === id);
+        if (f) return pick(f);
+      }
+      const sId = String(id);
+      if (!sId.startsWith("tmp_") && !sId.startsWith("idb:") && !sId.startsWith("h_") && sId.length >= 15) return formatDriveImgUrl(sId, 400);
+      return "";
     };
     const egMon = (iso) => {
       const t = /* @__PURE__ */ new Date(iso + "T00:00:00Z"), w = (t.getUTCDay() + 6) % 7;
@@ -12951,7 +13209,8 @@ Hãy tính lại chính xác P/C/F và cập nhật breakdown theo đúng phần
           const L = foodsByDate[dk] || [];
           const iso = egIsoOfDk(dk);
           if (!L.length || !iso) return;
-          const isLeg = iso < egIso(getCalasuToday());
+          const hasEatgOrigin = L.some((f) => f && String(f.id || "").startsWith("g_"));
+          const isLeg = iso < egIso(getCalasuToday()) || hasEatgOrigin;
           if (isLeg) legacy.push(iso);
           const st = mealStarsByDate[dk] || {}, ds = mealDescByDate[dk] || {};
           L.forEach((f, i) => {
